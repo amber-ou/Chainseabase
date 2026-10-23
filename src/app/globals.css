@@ -59,6 +59,7 @@ p { margin: 0; }
 a { color: inherit; }
 button, input, select, textarea { font: inherit; color: inherit; }
 .num { font-variant-numeric: tabular-nums; }
+.table th.num, .table td.num { text-align: right; }
 .mono { font-family: var(--mono); } /* taste-skill-ignore: literal /row-col commands and stable slugs */
 .muted { color: var(--muted); }
 .small { font-size: var(--fs-small); line-height: 18px; }
@@ -255,6 +256,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .board-tabs { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
 .board-tabs .tabs { flex: 1; border-bottom: 0; }
 .board-scroll { overflow-x: auto; padding-bottom: 8px; }
+.board-swipe-hint { display: none; margin-bottom: 8px; }
 .board { display: grid; grid-auto-flow: column; grid-auto-columns: 280px; gap: var(--gap); align-items: start; }
 .column { background: #f7f8fa; border: 1px solid var(--border); border-radius: var(--radius-card); display: flex; flex-direction: column; min-height: 120px; }
 .column[data-drop="true"] { outline: 2px dashed var(--focus); outline-offset: -2px; }
@@ -325,7 +327,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1024px) {
-  .shell { grid-template-columns: minmax(0, 1fr); }
+  /* short pages must not stretch the top bar's row: content starts right under it */
+  .shell { grid-template-columns: minmax(0, 1fr); align-content: start; }
   .sidebar { display: none; }
   .topbar { display: flex; position: sticky; top: 0; z-index: 30; height: 48px; align-items: center; gap: 8px; padding: 0 12px; background: var(--ground); border-bottom: 1px solid var(--border); }
   .topbar .screen-name { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -346,8 +349,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .page-head h1 { font-size: 20px; line-height: 28px; }
   .list-row { flex-wrap: wrap; }
   .list-row .title { flex-basis: 100%; white-space: normal; }
+  .list-row .meta { flex-wrap: wrap; flex-shrink: 1; min-width: 0; }
   .month-cell { min-height: 72px; }
   .table th, .table td { padding: 8px; }
   /* read-only public boards stack on phones instead of scrolling sideways */
   .board-stack-mobile .board { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: minmax(0, 1fr); }
+  /* editable boards keep scrolling sideways in their own container, one whole column per screen */
+  .board-scroll:not(.board-stack-mobile) { scroll-snap-type: x mandatory; }
+  .board-scroll:not(.board-stack-mobile) .board { grid-auto-columns: 100%; }
+  .board-scroll:not(.board-stack-mobile) .column { scroll-snap-align: start; }
+  .board-swipe-hint { display: block; }
 }

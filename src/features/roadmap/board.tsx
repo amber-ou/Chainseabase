@@ -51,59 +51,63 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
   };
 
   return (
-    <div className={`board-scroll${readOnly ? ' board-stack-mobile' : ''}`}>
-      <div className="board" role="list" aria-label="看板欄位">
-        {columns.map((col) => (
-          <section key={col.id} className="column" role="listitem" aria-label={`${col.title}，${col.count} 筆`} data-drop={drop?.col === col.id || undefined}
-            onDragOver={(e) => {
-              if (readOnly || !dragId) return;
-              e.preventDefault();
-              if (drop?.col !== col.id) setDrop({ col: col.id, index: col.cards.length });
-            }}
-            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDrop(null); }}
-            onDrop={(e) => { e.preventDefault(); finishDrop(col.id); }}
-          >
-            <div className="column-head">
-              <span className={`mark mark-${accent}`} aria-hidden="true" />
-              <span className="label">{col.label}</span>
-              <span className="muted num small" aria-label={`共 ${col.count} 筆`}>{col.count}</span>
-              {col.headerExtra}
-            </div>
-            <div className="column-body">
-              {col.cards.map((card, i) => (
-                <div key={card.id}>
-                  {drop?.col === col.id && drop.index === i ? <div className="drop-line" aria-hidden="true" /> : null}
-                  <article className="kcard" data-pending={pendingId === card.id || undefined} draggable={!readOnly}
-                    aria-label={card.title}
-                    onDragStart={(e) => { setDragId(card.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', card.id); }}
-                    onDragEnd={() => { setDragId(null); setDrop(null); }}
-                    onDragOver={(e) => {
-                      if (readOnly || !dragId) return;
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const idx = e.clientY < rect.top + rect.height / 2 ? i : i + 1;
-                      if (drop?.col !== col.id || drop.index !== idx) setDrop({ col: col.id, index: idx });
-                    }}
-                    onDrop={(e) => { e.preventDefault(); e.stopPropagation(); finishDrop(col.id); }}
-                  >
-                    <button type="button" className="kcard-title" style={{ paddingRight: readOnly ? 0 : 28 }} onClick={() => onOpen?.(card.id)}>{card.title}</button>
-                    {cardExtra?.(card)}
-                    <div className="kcard-foot">
-                      <Avatar name={card.author.displayName} url={card.author.avatarUrl} id={card.author.id} size={18} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{card.author.displayName}</span>
-                    </div>
-                    {!readOnly ? <div className="kcard-menu"><ActionMenu label={`移動「${card.title}」`} items={menuFor(card, col, i)} /></div> : null}
-                  </article>
-                </div>
-              ))}
-              {drop?.col === col.id && drop.index >= col.cards.length && col.cards.length > 0 ? <div className="drop-line" aria-hidden="true" /> : null}
-              {col.cards.length === 0 ? <p className="small muted" style={{ padding: '8px 4px' }}>{readOnly ? '沒有卡片' : '拖曳卡片到這裡'}</p> : null}
-              {col.count > col.cards.length ? <p className="small muted" style={{ padding: '0 4px' }}>另有 {col.count - col.cards.length} 筆未顯示</p> : null}
-            </div>
-          </section>
-        ))}
+    <>
+      {readOnly ? null : <p className="board-swipe-hint small muted" aria-hidden="true">左右滑動查看其他欄位（共 {columns.length} 欄）</p>}
+      {/* focusable so keyboard users can scroll the columns horizontally (WCAG 2.1.1) */}
+      <div className={`board-scroll${readOnly ? ' board-stack-mobile' : ''}`} tabIndex={0} role="region" aria-label="看板，可左右捲動">
+        <div className="board" role="list" aria-label="看板欄位">
+          {columns.map((col) => (
+            <section key={col.id} className="column" role="listitem" aria-label={`${col.title}，${col.count} 筆`} data-drop={drop?.col === col.id || undefined}
+              onDragOver={(e) => {
+                if (readOnly || !dragId) return;
+                e.preventDefault();
+                if (drop?.col !== col.id) setDrop({ col: col.id, index: col.cards.length });
+              }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDrop(null); }}
+              onDrop={(e) => { e.preventDefault(); finishDrop(col.id); }}
+            >
+              <div className="column-head">
+                <span className={`mark mark-${accent}`} aria-hidden="true" />
+                <span className="label">{col.label}</span>
+                <span className="muted num small" aria-label={`共 ${col.count} 筆`}>{col.count}</span>
+                {col.headerExtra}
+              </div>
+              <div className="column-body">
+                {col.cards.map((card, i) => (
+                  <div key={card.id}>
+                    {drop?.col === col.id && drop.index === i ? <div className="drop-line" aria-hidden="true" /> : null}
+                    <article className="kcard" data-pending={pendingId === card.id || undefined} draggable={!readOnly}
+                      aria-label={card.title}
+                      onDragStart={(e) => { setDragId(card.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', card.id); }}
+                      onDragEnd={() => { setDragId(null); setDrop(null); }}
+                      onDragOver={(e) => {
+                        if (readOnly || !dragId) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const idx = e.clientY < rect.top + rect.height / 2 ? i : i + 1;
+                        if (drop?.col !== col.id || drop.index !== idx) setDrop({ col: col.id, index: idx });
+                      }}
+                      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); finishDrop(col.id); }}
+                    >
+                      <button type="button" className="kcard-title" style={{ paddingRight: readOnly ? 0 : 28 }} onClick={() => onOpen?.(card.id)}>{card.title}</button>
+                      {cardExtra?.(card)}
+                      <div className="kcard-foot">
+                        <Avatar name={card.author.displayName} url={card.author.avatarUrl} id={card.author.id} size={18} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{card.author.displayName}</span>
+                      </div>
+                      {!readOnly ? <div className="kcard-menu"><ActionMenu label={`移動「${card.title}」`} items={menuFor(card, col, i)} /></div> : null}
+                    </article>
+                  </div>
+                ))}
+                {drop?.col === col.id && drop.index >= col.cards.length && col.cards.length > 0 ? <div className="drop-line" aria-hidden="true" /> : null}
+                {col.cards.length === 0 ? <p className="small muted" style={{ padding: '8px 4px' }}>{readOnly ? '沒有卡片' : '拖曳卡片到這裡'}</p> : null}
+                {col.count > col.cards.length ? <p className="small muted" style={{ padding: '0 4px' }}>另有 {col.count - col.cards.length} 筆未顯示</p> : null}
+              </div>
+            </section>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

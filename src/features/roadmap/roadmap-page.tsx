@@ -152,7 +152,7 @@ function RoadmapBoard({ roadmapId, onOpen, onSettings, onRoadmapsChanged }: { ro
       {region}
       <div className="toolbar">
         <span className="muted">{rm.description}</span>
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <span style={{ marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', minWidth: 0 }}>
           {board.refreshing ? <Spinner label="更新中" /> : null}
           {rm.portalPublished ? <span className="chip chip-positive">已發布到前台</span> : null}
           <label className="sr-only" htmlFor="sort-mode">排序方式</label>

@@ -31,7 +31,7 @@ const HIDE_CONSEQUENCE: Record<string, string> = {
 
 function ScheduleTable({ rows, selected, onSelect }: { rows: Row[]; selected: { row: number; col: number } | null; onSelect: (row: number, col: number) => void }) {
   return (
-    <div className="schedule-scroll">
+    <div className="schedule-scroll" tabIndex={0} role="region" aria-label="Schedule 表格，可左右捲動">
       <table className="schedule-table">
         <caption className="sr-only">Schedule：表頭為第 1 列，內容從第 2 列開始</caption>
         <thead>
