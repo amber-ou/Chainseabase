@@ -176,3 +176,30 @@ test('A10/A05: a tester gets a permission screen on the admin site', async ({ pa
   await page.goto(`${ADMIN}/products`);
   await expect(page.getByText('沒有後台權限')).toBeVisible();
 });
+
+test('A08: a slow response from the previous product never overwrites the newly selected product', async ({ page }) => {
+  await login(page, 'admin', 'lead@e2e.test', '專案負責人');
+  const base = await openFirstProduct(page, 'feedback');
+  const firstId = base.split('/').pop()!;
+  const name = unique('產品乙');
+  const created = await page.evaluate(async (n) => {
+    const r = await fetch('/api/v1/products', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: n }) });
+    return (await r.json()).data as { id: string };
+  }, name);
+  const onlyInFirst = unique('只在產品1');
+  await page.evaluate(async ({ p, t }) => {
+    await fetch(`/api/v1/products/${p}/feedback`, { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': crypto.randomUUID() }, body: JSON.stringify({ title: t }) });
+  }, { p: firstId, t: onlyInFirst });
+  // delay every feedback list response of the first product
+  await page.route(new RegExp(`/api/v1/products/${firstId}/feedback\\?`), async (route) => {
+    await new Promise((r) => setTimeout(r, 2500));
+    await route.continue();
+  });
+  await page.goto(`${base}/feedback`);
+  await page.getByLabel('切換產品').first().selectOption(created.id);
+  await page.waitForURL(new RegExp(`/products/${created.id}/feedback`));
+  await expect(page.getByText('這個產品還沒有 Feedback')).toBeVisible();
+  await page.waitForTimeout(3500);
+  await expect(page.getByText(onlyInFirst)).toHaveCount(0);
+  await expect(page.getByText('這個產品還沒有 Feedback')).toBeVisible();
+});

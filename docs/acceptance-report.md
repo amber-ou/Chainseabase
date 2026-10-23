@@ -19,7 +19,7 @@
 | `npm test`（Vitest：單元＋真實 PostgreSQL 整合） | 13 個檔案、129 tests：129 passed、0 failed、0 skipped |
 | `npm run build` | 通過（Next.js 16.4.2 production build） |
 | `npm run security:scan` | 通過（client bundle＋Git 追蹤檔案） |
-| `npm run test:e2e`（Playwright：1440／768／390） | 37 tests：37 passed、0 failed、0 skipped |
+| `npm run test:e2e`（Playwright：1440／768／390） | 38 tests：38 passed、0 failed、0 skipped |
 | taste skill `lint.mjs --app`（固定 commit 6010f91） | `src/` 0 FAIL、0 WARN（保留理由見 V04） |
 | taste skill `inspect.mjs --app`（公開頁面 1440／768／390） | 前台 Feedback、前台 Roadmap、登入頁：0 FAIL；WARN 僅「內容短造成空白」類，理由見 V04 |
 | `npm run db:restore-drill`（本機 dev → drill） | 41 張表、行數一致、私人資料摘要一致 |
@@ -38,7 +38,7 @@
 | A05 | 通過 | 測試者呼叫後台 API 403、跨產品互動 403、前台 host 不提供內部端點；E2E 後台顯示無權限 |
 | A06 | 通過 | 兩人同時降級／移除，advisory lock 保證保留一位團隊成員 |
 | A07 | 通過 | 移除後舊 session 下一次請求 401，作者保留 |
-| A08 | 部分 | 伺服器拒絕跨產品 ID（通過）；前端以 request 序號丟棄遲到回應、切換產品時重建畫面並提示未儲存草稿（程式審查，未有自動化慢回應測試） |
+| A08 | 通過 | 伺服器拒絕跨產品 ID；E2E 延遲舊產品回應 2.5 秒後切換產品，新產品畫面不被覆蓋；切換時有未儲存草稿會先提示 |
 | A09 | 通過 | 新增／改名保留 ID 與 slug，無刪除端點 |
 | A10 | 通過 | 他人 Personal／私人 Tag 回 404，回應不含 token |
 | A11 | 通過 | 寄信失敗重試、同一連結、無重複邀請、log 不含 token（fake 寄信） |

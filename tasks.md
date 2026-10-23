@@ -6,7 +6,7 @@
 
 - 完成：文件、M1–M5、M7-01 的程式與自動化驗證；M6 程式與 mock 測試；M7-02 自動化響應式／鍵盤檢查與 taste lint／inspector（公開頁）。
 - 待外部條件：真實 Google 登入（EXT-02）、Resend 寄信（EXT-03）、Google 日曆 sandbox 實測（EXT-02、EXT-04）、Vercel／Supabase staging 與正式環境（EXT-01、EXT-05）。
-- 最新檢查（2026-10-23，雲端開發容器）：lint、typecheck、build、security scan 通過；Vitest 129 passed／0 failed／0 skipped；Playwright 37 passed／0 failed／0 skipped。完整對照見 [驗收追蹤報告](docs/acceptance-report.md)。
+- 最新檢查（2026-10-23，雲端開發容器）：lint、typecheck、build、security scan 通過；Vitest 129 passed／0 failed／0 skipped；Playwright 38 passed／0 failed／0 skipped。完整對照見 [驗收追蹤報告](docs/acceptance-report.md)。
 - 下一個可執行步驟：取得 EXT-01／EXT-02 後建立 staging（Vercel＋Supabase），依 [operations.md](operations.md) 設定環境變數，執行 Google 登入與 sandbox 日曆實測（C03／C05–C10／C12–C15），再補 Resend 寄件網域驗證。
 
 ## 任務清單
@@ -118,8 +118,8 @@
 任務：M1-05 產品新增／命名／切換、兩站路由與安全 host
 狀態：完成
 交付檔案：src/modules/products/service.ts、src/proxy.ts、src/features/admin/shell.tsx、src/features/dashboard/dashboard.tsx
-實際檢查與結果：A08（伺服器部分）、A09 通過；E2E 驗證前台 host 不提供後台頁、後台 host 不提供前台頁（404）
-未完成或阻擋：A08 前端遲到回應丟棄為程式審查，未有自動化慢回應測試
+實際檢查與結果：A08（含 E2E 延遲回應切換產品）、A09 通過；E2E 驗證前台 host 不提供後台頁、後台 host 不提供前台頁（404）
+未完成或阻擋：無
 ```
 
 ```text
