@@ -1,4 +1,4 @@
-# Claude Code 開發啟動指令
+# Claude Code 開發啟動指令（GitHub 位置與完整開發要求整合版）
 
 儲存庫：<https://github.com/amber-ou/Chainseabase>
 
@@ -19,11 +19,14 @@ claude
 ## 貼給 Claude Code 的指令
 
 ```text
-請開發 GitHub 儲存庫 amber-ou/Chainseabase。
+請依照已確認的文件，實際開發 GitHub 儲存庫 amber-ou/Chainseabase。
 儲存庫網址：https://github.com/amber-ou/Chainseabase
 已確認的開發文件在 main 分支，位於本 checkout 的根目錄與 docs/。
+完整啟動指令也保存在根目錄 START-DEVELOPMENT.md。
 
 本次任務是實際寫出可執行、可測試的應用程式，不是重新規劃或只寫文件。
+若目前尚未有此儲存庫，在合適位置 clone 後進入 Chainseabase 目錄；
+若已經有 checkout，沿用現有目錄，不重複建立或覆寫。
 先確認目前 checkout 的 origin 與檔案位置，查看 Git 狀態並保留既有修改。
 若 main 有更新，先安全取得最新文件，不要 reset 或覆寫既有工作。
 
@@ -55,7 +58,9 @@ claude
 若仍是只有文件的初始專案，從 M1-01 開始。
 若已有程式，先驗證實際進度，不重建或覆寫已完成的實作。
 
-先建立 Next.js／TypeScript、固定相依與 lockfile、可重跑 migrations／seed、
+目標是約 30 人使用的公司內部雲端平台；採 Next.js／TypeScript、
+Supabase PostgreSQL／Storage、Vercel、Resend，以及 Google OAuth／Calendar API。
+先建立 Next.js／TypeScript、固定相依與 lockfile、可重跑 PostgreSQL migrations／seed、
 開發／build／typecheck／單元／整合／E2E 腳本及不含秘密的 .env.example。
 把實際成功執行的啟動與測試指令補入 README.md 和 CLAUDE.md。
 
@@ -85,6 +90,9 @@ claude
 依驗收案例建立適當測試，重點驗證權限隔離、跨產品引用、多人併發、唯一分欄、
 Personal 私密性、Schedule 移除規則，以及日曆失敗／重試。
 修復問題，不刪除斷言、降低需求或以假成功與靜態 mock 代替正式功能。
+示範資料僅用於開發與測試，不植入正式初始化。
+每個階段執行相關檢查，交付前執行完整 build、typecheck 與適用測試，
+確認測試確實執行且完成；第三方未實測的部分明確列為 unrun 或受阻。
 
 五、外部條件
 
