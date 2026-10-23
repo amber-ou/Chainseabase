@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'claude/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: chainsea
+          POSTGRES_PASSWORD: chainsea
+          POSTGRES_DB: chainseabase_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U chainsea" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_test
+      E2E_DATABASE_URL: postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_e2e
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Create E2E database
+        run: PGPASSWORD=chainsea psql -h 127.0.0.1 -U chainsea -d chainseabase_test -c 'create database chainseabase_e2e'
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Unit and PostgreSQL integration tests
+        run: npm test
+      - name: Migrations apply cleanly and re-run idempotently
+        run: |
+          DIRECT_DATABASE_URL=$E2E_DATABASE_URL npm run db:migrate
+          DIRECT_DATABASE_URL=$E2E_DATABASE_URL npm run db:migrate
+      - run: npm run build
+      - name: Secret scan (client bundle + tracked files)
+        run: npm run security:scan
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: E2E (1440 / 768 / 390)
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 14

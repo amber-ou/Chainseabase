@@ -154,7 +154,10 @@ export async function handleApi(req: Request, router: Router): Promise<Response>
   const requestId = req.headers.get('x-request-id')?.slice(0, 64) || randomUUID();
   const url = new URL(req.url);
   const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? url.host;
-  const site = siteForHost(host);
+  // scheduled runners (Vercel Cron) and health probes may call the deployment URL directly;
+  // both are host-independent (the job runner still requires its bearer secret)
+  const hostIndependent = /^\/api\/v1\/(jobs\/run|health)$/.test(url.pathname);
+  const site = siteForHost(host) ?? (hostIndependent ? 'admin' : null);
   const started = Date.now();
   const cookies: string[] = [];
   let status = 500;

@@ -155,7 +155,7 @@ sequenceDiagram
 5. 使用專用測試帳號驗證正式 OAuth callback 與日曆最小讀寫；真實邀請／日曆寫入僅在已授權範圍執行。
 6. 發布失敗時回退相容應用版本；資料庫不可盲目 down migration，依備份與遷移計畫處理。
 
-目前尚無 package.json 或實作程式，因此不列假想 `npm test`／部署指令為已驗證流程。實作階段需補上精確命令與鎖定版本。
+實際指令與已驗證範圍見 [README](../README.md) 與 [operations.md](../operations.md)；雲端部署尚未執行。
 
 ## 監控與驗收前準備
 

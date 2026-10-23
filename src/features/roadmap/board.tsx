@@ -51,7 +51,7 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
   };
 
   return (
-    <div className="board-scroll">
+    <div className={`board-scroll${readOnly ? ' board-stack-mobile' : ''}`}>
       <div className="board" role="list" aria-label="看板欄位">
         {columns.map((col) => (
           <section key={col.id} className="column" role="listitem" aria-label={`${col.title}，${col.count} 筆`} data-drop={drop?.col === col.id || undefined}

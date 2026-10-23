@@ -42,4 +42,4 @@
 - 設計來源：[taste skill](https://github.com/leonxlnx/taste-skill)，固定 commit `6010f91a9935f1c167dfc500fb1a475681892e6b`，使用 `design-taste-frontend` 的 app-screen 流程。
 - 已執行設計方向產生，選擇 `achromatic-ledger`，seed `20261023`；[原始方向資料](design/taste-direction.json)。
 - 本輪官方網站 HTTP 查閱曾遭環境代理 403；不將文件中的第三方能力規劃視為當前帳號、方案或 OAuth 審核狀態的驗證。
-- 應用尚未存在，因此尚未執行功能測試、Calendar API 實機讀寫、瀏覽器畫面檢查或部署驗收。
+- 應用已實作並有自動化測試；Calendar API 實機讀寫、Google 登入、寄信與部署驗收仍待外部設定，見 [驗收追蹤報告](acceptance-report.md)。

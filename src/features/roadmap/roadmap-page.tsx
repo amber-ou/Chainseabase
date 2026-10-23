@@ -60,7 +60,16 @@ export function RoadmapPage() {
         <CreateRoadmapModal taxonomy={tax.data} onClose={() => setCreating(false)} onCreated={async (id) => { setCreating(false); await roadmaps.reload(); select(id); }} />
       ) : null}
       {settings && selectedId ? (
-        <RoadmapSettings roadmapId={selectedId} onClose={() => setSettings(false)} onChanged={() => void roadmaps.reload()} onDeleted={async () => { setSettings(false); await roadmaps.reload(); router.replace(pathname); }} />
+        <RoadmapSettings roadmapId={selectedId} onClose={() => setSettings(false)} onChanged={() => void roadmaps.reload()} onDeleted={async () => { setSettings(false); await roadmaps.reload(); router.replace(pathname); }}
+          onMoveTab={async (dir) => {
+            const ids = (roadmaps.data ?? []).map((r) => r.id);
+            const i = ids.indexOf(selectedId);
+            const j = i + dir;
+            if (i < 0 || j < 0 || j >= ids.length) return;
+            [ids[i], ids[j]] = [ids[j], ids[i]];
+            await api.put(`/products/${product.id}/roadmaps/order`, { body: { roadmapIds: ids, expectedRevision: roadmaps.meta.productRevision } });
+            await roadmaps.reload();
+          }} />
       ) : null}
       {openCard && tax.data ? <FeedbackModal mode="edit" feedbackId={openCard} taxonomy={tax.data} onClose={() => setOpenCard(null)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} /> : null}
     </>
@@ -204,7 +213,7 @@ function CreateRoadmapModal({ taxonomy, onClose, onCreated }: { taxonomy: Taxono
   );
 }
 
-function RoadmapSettings({ roadmapId, onClose, onChanged, onDeleted }: { roadmapId: string; onClose: () => void; onChanged: () => void; onDeleted: () => void }) {
+function RoadmapSettings({ roadmapId, onClose, onChanged, onDeleted, onMoveTab }: { roadmapId: string; onClose: () => void; onChanged: () => void; onDeleted: () => void; onMoveTab: (dir: -1 | 1) => Promise<void> }) {
   const { product } = useProduct();
   const board = useResource<BoardData>(`/products/${product.id}/roadmaps/${roadmapId}/board?limit=1`);
   const [name, setName] = useState<string | null>(null);
@@ -262,6 +271,11 @@ function RoadmapSettings({ roadmapId, onClose, onChanged, onDeleted }: { roadmap
       {error ? <div className="banner banner-error" role="alert">{error}</div> : null}
       <p className="small muted">分欄維度：{rm.dimension === 'tag_group' ? `Tag 群組「${rm.tagGroupName}」` : DIMENSION_LABEL[rm.dimension]}（不可修改；要換維度請另建看板）</p>
       <Field label="名稱">{(p) => <input {...p} className="input" maxLength={60} value={name ?? rm.name} onChange={(e) => setName(e.target.value)} />}</Field>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <span className="field-label">Tab 順序</span>
+        <Button size="sm" onClick={() => onMoveTab(-1).catch((e) => setError(errorMessage(e)))}>往前移</Button>
+        <Button size="sm" onClick={() => onMoveTab(1).catch((e) => setError(errorMessage(e)))}>往後移</Button>
+      </div>
       <Field label="描述">{(p) => <input {...p} className="input" maxLength={500} value={description ?? rm.description} onChange={(e) => setDescription(e.target.value)} />}</Field>
       {rm.dimension === 'status' ? (
         <Switch checked={rm.portalPublished} onChange={publish} label="發布到前台（只顯示公開卡片，不可拖曳）" />

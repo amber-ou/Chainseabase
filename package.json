@@ -15,13 +15,15 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:bootstrap": "tsx scripts/bootstrap.ts",
     "db:seed-dev": "tsx scripts/seed-dev.ts",
-    "db:reset-test": "tsx scripts/reset-test-db.ts",
     "jobs:run": "tsx scripts/run-jobs.ts",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm test && npm run build && npm run security:scan",
+    "security:scan": "tsx scripts/check-secrets.ts",
+    "db:restore-drill": "tsx scripts/restore-drill.ts",
+    "load-test": "tsx scripts/load-test.ts"
   },
   "dependencies": {
     "@fontsource/noto-sans-tc": "5.3.1",

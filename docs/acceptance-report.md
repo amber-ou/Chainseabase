@@ -1,0 +1,139 @@
+# 驗收追蹤報告（實作第一輪）
+
+對照 [交付與驗收](07-delivery-and-acceptance.md) 的 99 項案例，記錄目前實際的驗證方式與結果。**本報告只記錄已執行的結果；未執行或只用模擬服務驗證的項目明確標示，不視為完整通過。**
+
+## 執行紀錄
+
+| 項目 | 內容 |
+| --- | --- |
+| 日期 | 2026-10-23（Asia/Taipei） |
+| 環境 | 雲端開發容器：Node 22.22.0、PostgreSQL 16.15（本機）、Chromium（Playwright 1.63） |
+| 程式版本 | 分支 `claude/keen-lamport-4qb974`（見 Git 紀錄） |
+| 資料集 | 測試自建：產品甲／乙、團隊甲／乙、受邀產品甲的測試者、未受邀帳號、UIUX／前端／後端、版本 single、用途 multiple、未分組 Tag（`tests/helpers/harness.ts`）；E2E 使用隔離資料庫 `chainseabase_e2e` |
+| 第三方 | Google OAuth／Calendar、Resend、Supabase Storage **皆為 fake／本機替身**；未連線任何真實帳號 |
+
+| 指令（儲存庫根目錄） | 結果 |
+| --- | --- |
+| `npm run lint` | 通過，0 error／0 warning |
+| `npm run typecheck` | 通過 |
+| `npm test`（Vitest：單元＋真實 PostgreSQL 整合） | 13 個檔案、129 tests：129 passed、0 failed、0 skipped |
+| `npm run build` | 通過（Next.js 16.4.2 production build） |
+| `npm run security:scan` | 通過（client bundle＋Git 追蹤檔案） |
+| `npm run test:e2e`（Playwright：1440／768／390） | 37 tests：37 passed、0 failed、0 skipped |
+| taste skill `lint.mjs --app`（固定 commit 6010f91） | `src/` 0 FAIL、0 WARN（保留理由見 V04） |
+| taste skill `inspect.mjs --app`（公開頁面 1440／768／390） | 前台 Feedback、前台 Roadmap、登入頁：0 FAIL；WARN 僅「內容短造成空白」類，理由見 V04 |
+| `npm run db:restore-drill`（本機 dev → drill） | 41 張表、行數一致、私人資料摘要一致 |
+| `npm run load-test`（本機 production build，30 人 × 30 秒） | 見 O05 |
+
+狀態說明：**通過**＝自動化測試已執行並通過；**通過（mock）**＝以第三方替身驗證本平台邏輯，仍需 sandbox 實測；**部分**＝主要行為已驗證、仍有人工或外部步驟；**未執行**＝尚未驗證。
+
+## AUTH／PROD／權限
+
+| ID | 狀態 | 證據 |
+| --- | --- | --- |
+| A01 | 通過 | `identity.test.ts` 重跑與併發 bootstrap，只有一份產品1／預設值／首位團隊資格 |
+| A02 | 通過 | 整合＋E2E（`portal.spec.ts`）：未受邀帳號只能瀏覽，顯示缺少互動資格 |
+| A03 | 通過 | Email 不符時 403 且邀請未被消耗 |
+| A04 | 通過 | 首次接受授權、重送回 alreadyAccepted、撤銷／過期 410 |
+| A05 | 通過 | 測試者呼叫後台 API 403、跨產品互動 403、前台 host 不提供內部端點；E2E 後台顯示無權限 |
+| A06 | 通過 | 兩人同時降級／移除，advisory lock 保證保留一位團隊成員 |
+| A07 | 通過 | 移除後舊 session 下一次請求 401，作者保留 |
+| A08 | 部分 | 伺服器拒絕跨產品 ID（通過）；前端以 request 序號丟棄遲到回應、切換產品時重建畫面並提示未儲存草稿（程式審查，未有自動化慢回應測試） |
+| A09 | 通過 | 新增／改名保留 ID 與 slug，無刪除端點 |
+| A10 | 通過 | 他人 Personal／私人 Tag 回 404，回應不含 token |
+| A11 | 通過 | 寄信失敗重試、同一連結、無重複邀請、log 不含 token（fake 寄信） |
+| A12 | 通過 | 降為 tester 未指定產品＝無產品；Person tag 撤除、後台 session 失效 |
+
+真實 Google 登入（EXT-02）與真實寄信（EXT-03）：**未執行**。
+
+## Feedback／Setting／前台
+
+| ID | 狀態 | 證據 |
+| --- | --- | --- |
+| F01 | 通過 | 整合（預設值、禁止代填 author/createdAt）＋E2E（Modal 預設欄位） |
+| F02 | 通過 | E2E 連續新增保留分類、清空標題與 Schedule；整合驗證冪等與失敗保留 |
+| F03 | 通過 | 版本 Dropdown、Tag、Roadmap 三入口同一資料 |
+| F04 | 通過 | single 拒絕、multiple 接受、併發只成功一筆、DB trigger 擋直接寫入 |
+| F05 | 通過 | 未安排清除實際職掌、無通知、保留名稱不可建立 |
+| F06 | 通過 | 顯示影響、需替代、遷移與欄位同交易 |
+| F07 | 通過 | multiple→single 需先清理、被看板使用不可改 multiple、版本群組固定 |
+| F08 | 通過 | 受邀者成功且公開；匿名／未受邀／他產品拒絕（整合＋E2E） |
+| F09 | 通過 | 公開 DTO 欄位白名單，回應不含 Person tag／版本／Email／Schedule |
+| F10 | 通過 | 改回內部後直接網址、搜尋、通知、作者編輯皆不可得；回應 no-store |
+| F11 | 通過 | 公開 Feedback 的一般留言公開、Schedule 不公開；後台留言框標示公開 |
+| F12 | 通過 | 投票／按讚 PUT 冪等、DELETE 歸零（整合＋E2E） |
+| F13 | 通過 | 測試者不可改他人內容或 mass assign |
+| F14 | 通過 | 繁中片段、`%`／`_`／引號參數化搜尋，範圍正確 |
+| F15 | 通過 | 原文保存；前台 Markdown 不渲染 HTML、連結協定白名單（單元＋E2E） |
+
+## Schedule
+
+| ID | 狀態 | 證據 |
+| --- | --- | --- |
+| S01 | 通過 | 五欄、一列、表頭不可為目標；E2E 點格帶入 `/2-3` |
+| S02–S08 | 通過 | `schedule.test.ts`、`tests/unit/schedule.test.ts`；S02–S05 另有 E2E |
+| S09 | 通過 | 注入 DB 失敗後全部 rollback，同 key 重試只成功一次 |
+| S10 | 通過 | 同 revision 併發寫入／清空，一筆成功一筆 409 |
+| S11 | 通過 | E2E：草稿取消後不建立任何資料；草稿只存於前端 |
+| S12 | 通過 | 草稿於建立交易重播，作者／時間由伺服器、引用正確；失敗全不提交 |
+| S13–S16 | 通過 | 整合測試 |
+| S17 | 通過 | API 區分寫入／清空筆數；E2E 驗證「已套用至草稿」「已寫入 1 筆」「已清空 2 筆」與 aria-live |
+
+## Roadmap
+
+| ID | 狀態 | 證據 |
+| --- | --- | --- |
+| R01–R05 | 通過 | `roadmap.test.ts`；R05 列舉 15 筆 × 4 張看板恰一欄 |
+| R06 | 通過 | 整合＋E2E（鍵盤可操作的選單移動） |
+| R07–R13 | 通過 | 整合；另有 property-based 不變量（`tests/unit/roadmap.test.ts`） |
+| R14 | 通過 | 只列發布的狀態看板、只含公開卡片與公開數量、前台無寫入端點 |
+
+## Personal／Notification
+
+| ID | 狀態 | 證據 |
+| --- | --- | --- |
+| P01–P08 | 通過 | `personal-notifications.test.ts`；P03／P05 另有 E2E（自動儲存狀態） |
+| N01–N06 | 通過 | 同上；worker 重跑不重複、測試者不收 Schedule 通知 |
+
+## Calendar（目前僅 fake provider）
+
+| ID | 狀態 | 證據 |
+| --- | --- | --- |
+| C01 | 通過 | 未授權時其他功能正常、日曆提示連結 |
+| C02 | 通過（mock） | 錯誤帳號、缺 scope 拒絕且不覆蓋有效憑證 |
+| C03 | 通過（mock） | writer／reader／未分享分別讀寫／唯讀／拒絕；**sandbox 未執行** |
+| C04 | 通過 | 只用產品綁定日曆，偽造 calendarId／過期 bindingRevision 拒絕 |
+| C05–C10 | 通過（mock） | fake 日曆 CRUD、全天 exclusive end、DST、本次／整系列、master ETag；**C10 Google 實際例外行為未在 sandbox 記錄** |
+| C11 | 通過（mock） | 複雜規則、特殊類型、含與會者活動受保護 |
+| C12–C15 | 通過（mock） | 回應遺失重試只一筆、ETag 衝突、401/429/逾時、無新 refresh token 保留舊值 |
+| C16 | 部分 | API 完整分頁（mock）；前景 60 秒輪詢、背景暫停由 `useVisiblePolling` 實作（未自動化） |
+| C17 | 通過 | 解除個人連線／產品綁定不刪活動，他人授權不受影響 |
+| C18 | 通過 | 他產品 Feedback 拒絕，關聯不改 Feedback／Schedule |
+
+依驗收文件，C03／C05–C10／C12–C15 **仍需在 sandbox 日曆實測**後才能把 M6 標為完成（需 EXT-02、EXT-04）。
+
+## 視覺、可及性與營運
+
+| ID | 狀態 | 證據 |
+| --- | --- | --- |
+| V01 | 通過 | E2E 在 1440／768／390 檢查 6 個後台頁、前台頁與 Schedule：無整頁橫向溢出、手機折疊選單；截圖附於 Playwright 報告 |
+| V02 | 部分 | E2E：Modal Escape／焦點循環、看板選單鍵盤移動；Dropdown／Tabs 使用原生控制與方向鍵。螢幕閱讀器實機測試**未執行** |
+| V03 | 部分 | 成功／錯誤／儲存中均有文字＋圖示與 aria-live（E2E 驗證 Schedule 與看板宣告）；其餘狀態為程式審查 |
+| V04 | 部分 | taste lint 0 FAIL／0 WARN（mono 只用於指令座標與 slug、陰影只用於 Modal／選單浮層、時鐘補零已標註）；inspector 對公開頁 0 FAIL。後台頁需登入，inspector 無法帶入 session，改以 Playwright 截圖人工檢查 |
+| O01 | 部分 | 單元：production 拒絕 fake provider、測試登入、缺 secret；staging／production 實際分離待 EXT-01 |
+| O02 | 通過 | 租約過期後續跑、通知不重複、超過次數停止重試 |
+| O03 | 部分 | 本機 pg_dump／pg_restore 演練一致；**Supabase 正式備份還原未執行** |
+| O04 | 通過 | `security:scan` 掃描 client bundle 與 Git；log 遮罩測試；API 錯誤不含 SQL |
+| O05 | 部分 | 本機 30 人 × 30 秒：所有資料 API p95 ≤ 237 ms；同一看板連續拖曳時看板 revision 序列化造成大量 409（無資料損壞）。**staging 未執行** |
+
+### O05 本機負載結果（2026-10-23，production build，非 staging）
+
+| 操作 | 次數 | p50 ms | p95 ms | max ms | 狀態 |
+| --- | --- | --- | --- | --- | --- |
+| feedback.list | 960 | 140 | 231 | 388 | 200 × 960 |
+| roadmap.board | 960 | 154 | 237 | 293 | 200 × 960 |
+| schedule.command | 960 | 139 | 203 | 316 | 201 × 960 |
+| roadmap.move | 960 | 112 | 175 | 231 | 200 × 32、409 × 928 |
+| notifications.list | 960 | 91 | 155 | 193 | 200 × 960 |
+
+負載後檢查：無重複 rank、單選群組無違規、960 筆指令對應 960 筆格子項目。

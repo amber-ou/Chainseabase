@@ -1,39 +1,87 @@
 # Chainseabase
 
-公司內部使用的多產品需求與回饋管理平台，目標約 30 位使用者。提供獨立公開前台、團隊後台、Feedback、Roadmap、Personal、Schedule 與 Google 共用日曆讀寫。
+公司內部使用的多產品需求與回饋管理平台，目標約 30 位使用者。一個 Next.js 應用提供兩個網站入口：團隊後台（Product／Feedback／Roadmap／Personal／User／Notification／Setting 與 Google 日曆）與獨立的公開前台，共用服務層與 PostgreSQL。
 
-目前為**開發文件階段**，尚未實作應用程式、安裝應用依賴或部署服務。
+**目前狀態**：M1–M7 的應用程式已實作並以單元、真實 PostgreSQL 整合與 Playwright E2E 驗證；Google 登入／日曆、Resend、Supabase Storage 已有真實 adapter，但**尚未以真實帳號實測**（測試使用替身）。尚未部署任何雲端環境。進度與證據見 [tasks.md](tasks.md) 與 [驗收追蹤報告](docs/acceptance-report.md)。
 
-交給 Claude Code 開發時，先閱讀根目錄的 [START-DEVELOPMENT.md](START-DEVELOPMENT.md)，其中包含 GitHub 位置、文件路徑與可直接貼上的開發指令。
+## 技術組成
 
-## 開發文件
-
-從 [文件索引與閱讀順序](docs/README.md) 開始。
-
-### 八類文件入口
-
-| 文件 | 用途 |
+| 項目 | 選擇（鎖定版本見 `package.json`／`package-lock.json`） |
 | --- | --- |
-| [PRD.md](PRD.md) | 產品目的、使用情境與第一版範圍。 |
-| [specs/](specs/README.md) | 功能規格與驗收對照。 |
-| [data-permissions.md](data-permissions.md) | 資料關係、角色與產品／私人隔離。 |
-| [ui-ux.md](ui-ux.md) | 畫面、設計方向與互動狀態。 |
-| [architecture.md](architecture.md) | 技術架構、API 與一致性入口。 |
-| [CLAUDE.md](CLAUDE.md) | Claude 專案工作規則。 |
-| [tasks.md](tasks.md) | 具依賴關係與狀態的開發任務。 |
-| [operations.md](operations.md) | 部署、維運與上線檢核。 |
+| 執行環境 | Node.js ≥ 22.12（開發驗證於 22.22.0）、npm 10 |
+| 框架 | Next.js 16.4.2（App Router、Turbopack）、React 19.3、TypeScript 5.9 |
+| 資料庫 | PostgreSQL 16（正式：Supabase），`postgres` 3.4 driver、版本化 SQL migration |
+| 驗證 | Zod 4（runtime 輸入驗證）、jose（Google ID token 驗證、OAuth 暫存 cookie 簽章） |
+| 測試 | Vitest 5（單元＋整合）、fast-check（property-based）、Playwright 1.63（E2E） |
+| 第三方 | Google OAuth／Calendar REST、Resend REST、Supabase Storage REST（皆有 fake 替身） |
 
-根目錄是摘要與工作入口；以下 `docs/` 保留詳細規格，避免複製出兩套互動定義。解壓縮文件包後從本檔開始閱讀，Markdown 架構圖需使用支援 Mermaid 的閱讀器顯示。
+## 快速開始（本機開發）
 
-### 詳細規格
+以下指令都在**儲存庫根目錄**執行。
 
-- [產品需求與權限](docs/01-product-requirements.md)
-- [系統架構與資料模型](docs/02-architecture-and-data.md)
-- [核心互動與一致性規則](docs/03-interaction-rules.md)
-- [API 契約](docs/04-api-contracts.md)
-- [Design System 與畫面規格](docs/05-design-system.md)
-- [Google Calendar 與雲端部署](docs/06-calendar-and-deployment.md)
-- [交付階段與驗收案例](docs/07-delivery-and-acceptance.md)
-- [決策紀錄與範圍界線](docs/08-decisions.md)
+```bash
+# 1. 安裝固定版本相依
+npm ci
 
-文件以繁體中文撰寫；介面預設時區為 `Asia/Taipei`，一般時間戳儲存為 UTC。正式程式碼的啟動、測試與部署指令將隨實作補上，不以尚未存在的指令宣稱可執行。
+# 2. 準備 PostgreSQL 16 與資料庫（範例使用本機帳號 chainsea/chainsea）
+createdb chainseabase_dev
+
+# 3. 建立本機環境檔（不提交 Git）
+cp .env.example .env.local
+#   至少設定 DATABASE_URL、ADMIN_ORIGIN、PORTAL_ORIGIN、AUTH_SESSION_SECRET、TOKEN_ENCRYPTION_KEY
+#   沒有 Google 帳號時可加上 E2E_TEST_LOGIN=enabled 使用「測試登入」（僅開發／E2E，正式環境自動停用）
+
+# 4. 建立資料表（可重複執行）與正式初始化（產品1、預設分類、首位團隊 Email）
+npm run db:migrate
+BOOTSTRAP_TEAM_EMAIL=you@company.com npm run db:bootstrap
+
+# 5.（選用）只在本機資料庫植入示範資料
+ALLOW_DEV_SEED=1 npm run db:seed-dev
+
+# 6. 啟動
+npm run dev
+```
+
+開啟 <http://admin.localhost:3000>（後台）與 <http://portal.localhost:3000>（前台）。兩個 host 由 `ADMIN_ORIGIN`／`PORTAL_ORIGIN` 白名單決定，session cookie 各自 host-only。Chromium／Firefox 會把 `*.localhost` 解析到本機；若工具無法解析，可改用 `http://127.0.0.1:3000` 與 `http://localhost:3000` 作為兩個 origin。
+
+示範資料的測試帳號：`lead@dev.local`（團隊）、`dev@dev.local`、`qa@dev.local`、`tester@dev.local`（測試成員）；在登入頁的「測試登入」輸入 Email 即可。
+
+## 指令
+
+| 用途 | 指令（儲存庫根目錄） | 備註 |
+| --- | --- | --- |
+| 安裝 | `npm ci` | 依 lockfile 安裝 |
+| 開發伺服器 | `npm run dev` | port 3000 |
+| Lint | `npm run lint` | ESLint 10.13（eslint-config-next 16.4.2） |
+| 型別檢查 | `npm run typecheck` | `tsc --noEmit` |
+| 單元＋整合測試 | `npm test` | 需要 PostgreSQL；預設 `postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_test`，可用 `TEST_DATABASE_URL` 覆寫（名稱必須含 `test`，每次執行會重建 schema） |
+| 只跑單元／整合 | `npm run test:unit`／`npm run test:integration` | |
+| E2E | `npm run test:e2e` | 需要空的 `chainseabase_e2e` 資料庫（或 `E2E_DATABASE_URL`，名稱必須含 `e2e`）；會先 build 再於 port 3100 啟動，執行 1440／768／390 三種寬度 |
+| Production build | `npm run build`，啟動 `npm start` | |
+| 秘密掃描 | `npm run security:scan` | build 之後執行；掃描 client bundle 與 Git 追蹤檔 |
+| 全部檢查 | `npm run check` | lint → typecheck → test → build → security:scan |
+| Migration | `npm run db:migrate` | 使用 `DIRECT_DATABASE_URL`（若有）否則 `DATABASE_URL` |
+| 正式初始化 | `npm run db:bootstrap` | 冪等；團隊已存在時不再建立首位團隊授權 |
+| 示範資料 | `ALLOW_DEV_SEED=1 npm run db:seed-dev` | 只允許名稱含 dev／e2e／test 的資料庫 |
+| 背景工作 | `npm run jobs:run` | 處理通知與邀請信 outbox；正式環境由排程呼叫 `/api/v1/jobs/run` |
+| 還原演練 | `SOURCE_DATABASE_URL=… TARGET_DATABASE_URL=…drill… npm run db:restore-drill` | 目標資料庫名稱必須含 `drill` |
+| 負載測試 | `LOAD_BASE_URL=… LOAD_DATABASE_URL=… npm run load-test` | 只允許 e2e／load／staging 資料庫 |
+
+## 專案結構
+
+```text
+src/app/            # 前後台頁面與 /api/v1 單一路由入口（route handler → src/server/api）
+src/features/       # 各頁面 UI（feedback、schedule、roadmap、personal、calendar、portal…）
+src/components/     # 共用元件（Modal、Tabs、MultiSelect、Menu、Markdown、狀態元件）
+src/modules/        # 領域服務：identity、products、feedback、schedule、roadmap、personal、notifications、calendar
+src/server/         # 設定、DB、HTTP 路由、session、授權、冪等、outbox、第三方 adapters
+db/migrations/      # 版本化 SQL（含限制、trigger）
+scripts/            # migrate、bootstrap、seed、jobs、restore drill、load test、secret scan
+tests/              # unit、integration（真實 PostgreSQL）、e2e（Playwright）
+```
+
+## 文件
+
+從 [START-DEVELOPMENT.md](START-DEVELOPMENT.md) 與 [文件索引](docs/README.md) 開始。產品與規格：[PRD.md](PRD.md)、[specs/](specs/README.md)、[data-permissions.md](data-permissions.md)、[ui-ux.md](ui-ux.md)、[architecture.md](architecture.md)；工作規則：[CLAUDE.md](CLAUDE.md)；任務與證據：[tasks.md](tasks.md)；部署與維運：[operations.md](operations.md)；驗收結果：[docs/acceptance-report.md](docs/acceptance-report.md)。
+
+介面為繁體中文，顯示時區 `Asia/Taipei`，資料庫時間戳為 UTC。

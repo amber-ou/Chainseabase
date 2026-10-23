@@ -55,10 +55,12 @@ export function PortalFeedbackPage() {
       ) : (
         <div className="list">
           {(list.data ?? []).map((f) => (
-            <div key={f.id} className="list-row" style={{ cursor: 'default' }}>
+            <div key={f.id} className="portal-row">
               <VoteButton productId={product.id} feedback={f} canInteract={product.viewer.canInteract} onRequire={requireInteraction} onChanged={() => void list.reload()} />
-              <button type="button" className="title" style={{ background: 'none', border: 0, textAlign: 'left', cursor: 'pointer', padding: 0 }} onClick={() => open(f.id)}>{f.title}</button>
-              <span className="meta"><span className="chip">{f.status.name}</span><span className="num">留言 {f.commentCount}</span><Avatar name={f.author.displayName} url={f.author.avatarUrl} id={f.author.id} size={20} /><span>{relativeTime(f.createdAt)}</span></span>
+              <div className="portal-row-main">
+                <button type="button" className="portal-row-title" onClick={() => open(f.id)}>{f.title}</button>
+                <span className="meta"><span className="chip">{f.status.name}</span><span className="num">留言 {f.commentCount}</span><Avatar name={f.author.displayName} url={f.author.avatarUrl} id={f.author.id} size={20} /><span>{f.author.displayName}</span><span>{relativeTime(f.createdAt)}</span></span>
+              </div>
             </div>
           ))}
         </div>

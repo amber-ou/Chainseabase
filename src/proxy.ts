@@ -9,8 +9,8 @@ export function proxy(req: NextRequest) {
   const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
   const site = siteForHost(host);
   const path = req.nextUrl.pathname;
+  if (path.startsWith('/api/')) return NextResponse.next(); // the API router enforces its own host rules
   if (!site) return new NextResponse('Unknown host', { status: 421 });
-  if (path.startsWith('/api/')) return NextResponse.next();
   const shared = path === '/login' || path === '/invite' || path === '/';
   const adminOnly = path.startsWith('/products');
   const portalOnly = path.startsWith('/p/');

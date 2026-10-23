@@ -16,7 +16,7 @@
 | UI／UX、響應式與可及性 | [Design System](../docs/05-design-system.md) | — | V01–V04 |
 | 雲端與維運 | [部署與維運](../docs/06-calendar-and-deployment.md) | [API 慣例](../docs/04-api-contracts.md) | O01–O05 |
 
-案例的操作與預期結果統一在 [交付與驗收](../docs/07-delivery-and-acceptance.md)。目前全部為待執行案例。
+案例的操作與預期結果統一在 [交付與驗收](../docs/07-delivery-and-acceptance.md)。目前的實際驗證狀態見 [驗收追蹤報告](../docs/acceptance-report.md)。
 
 ## 實作前要守住的規則
 

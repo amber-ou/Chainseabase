@@ -1,6 +1,6 @@
 # API 契約
 
-本文件為待實作契約，不表示端點已存在。基底 `/api/v1`；Google callback 與 auth library 路由可獨立，但必須遵守相同權限與 host 限制。
+本契約已實作於 `src/server/api/`（實作補充見文末）。基底 `/api/v1`；Google callback 路由同樣在此基底下，遵守相同權限與 host 限制。
 
 ## 通用格式
 
@@ -261,3 +261,28 @@ before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 nul
 ```
 
 回傳 Google event ID、ETag、更新時間及可操作性；不回傳底層 OAuth token。Calendar 專用 code 包含 CALENDAR_REAUTH_REQUIRED、CALENDAR_READ_ONLY、EVENT_CONFLICT、UNSUPPORTED_EVENT_TYPE。外部 412 映射為 409 EVENT_CONFLICT。
+
+## 實作補充（與上表一起閱讀）
+
+以下為實作時補上的端點與確定的細節，不改變上方規則：
+
+| 方法／路徑 | 說明 |
+| --- | --- |
+| GET `/site` | 目前 host 對應的網站與 provider 模式（real／fake），不含秘密。 |
+| GET `/health` | 健康檢查（含資料庫）。 |
+| GET／POST `/jobs/run` | outbox 工作入口，需 `Authorization: Bearer <JOB_RUNNER_SECRET 或 CRON_SECRET>`；錯誤 secret 回 404。 |
+| POST `/me/avatar-upload` | 直接上傳圖片本體（content-type 為 `image/jpeg`、`image/png` 或 `image/webp`，≤ 2 MB）；伺服器驗證實際內容、重新編碼為 256px WebP 並移除中繼資料。GET `/avatars/:userId` 由伺服器讀取 private bucket。 |
+| GET `/products/:p/roadmaps/:r/board?limit=` | 一次取得所有欄位、伺服器計算的筆數與每欄第一頁卡片。 |
+| GET `/products/:p/personal/feedback/:f/tags` | 本人對該 Feedback 的私人 Tag 與 revision（首次為 0）。 |
+| GET `/products/:p/calendar/events/:eventId` | 取得單一活動；整系列編輯先以此讀 master 與其 ETag。 |
+| GET／PUT `/portal/products/:p/notifications…` | 測試成員在前台的本人通知（只含可存取的公開內容）。 |
+| GET `/public/products` | 前台首頁的產品入口清單（名稱與 slug）。 |
+| POST `/test-support/login`、`/test-support/calendar/connect` | **僅開發／E2E**：需 `E2E_TEST_LOGIN=enabled`，production 設定下永遠回 404。 |
+
+其他確定行為：
+
+- 一般留言排序以伺服器接受順序（插入序號）為準；清單 cursor 為不透明字串。
+- 普通 Schedule 留言的刪除以 `If-Match: "<comment revision>"` 加查詢參數 `scheduleRevision` 驗證兩個版本。
+- 刪除分類選項時 body 帶 `expectedRevision`（product revision）與 `replacementId` 或 `strategy: "detach"`。
+- Calendar 寫入若 Google 結果不明，回 **202** `{ state: "unknown", mutationId }`；以相同 Idempotency-Key 重試會先核對 Google（建立以固定 event ID、更新以 `extendedProperties.private.csbLastMutation`）再決定，不盲目重放。
+- 所有寫入要求 `Origin` 等於該網站 origin（CSRF 防護）；未列在 schema 的欄位一律 400（禁止 mass assignment）。

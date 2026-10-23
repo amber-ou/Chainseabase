@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { headers } from 'next/headers';
 import { GeistSans } from 'geist/font/sans';
-import { GeistMono } from 'geist/font/mono';
+import { GeistMono } from 'geist/font/mono'; // taste-skill-ignore: commands/coordinates only
 import '@fontsource/noto-sans-tc/400.css';
 import '@fontsource/noto-sans-tc/500.css';
 import './globals.css';
@@ -32,7 +32,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     providers: { calendar: cfg.calendarProvider, email: cfg.emailProvider, storage: cfg.storageProvider },
   };
   return (
-    <html lang="zh-Hant-TW" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="zh-Hant-TW" className={`${GeistSans.variable} ${GeistMono.variable}`}>{/* taste-skill-ignore: mono variable for literal commands */}
       <body>
         <a className="skip-link" href="#main">跳到主要內容</a>
         <SiteProvider initial={info}>

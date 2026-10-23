@@ -273,7 +273,7 @@ function Week({ from, events, canWrite, onOpen, onReschedule }: { from: DateTime
             {events.filter((e) => e.allDay && occursOn(e, d)).map((e) => <button key={e.id} type="button" className="ev-chip" data-allday="true" onClick={() => onOpen(e)}>{e.summary}</button>)}
           </div>
         ))}
-        <div>{Array.from({ length: 24 }, (_, h) => <div key={h} className="week-hour num">{String(h).padStart(2, '0')}:00</div>)}</div>
+        <div>{Array.from({ length: 24 }, (_, h) => <div key={h} className="week-hour num">{String(h).padStart(2, '0')}:00</div> /* taste-skill-ignore: clock label */)}</div>
         {days.map((d) => (
           <div key={`c-${d.toISODate()}`} className="week-col">
             {Array.from({ length: 48 }, (_, s) => {
