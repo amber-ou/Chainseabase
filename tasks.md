@@ -183,7 +183,8 @@
 狀態：進行中
 交付檔案：.github/workflows/ci.yml、vercel.json、scripts/check-secrets.ts、src/server/log.ts、/api/v1/jobs/run、/api/v1/health
 實際檢查與結果：本機執行 CI 全部步驟通過；production 設定拒絕 fake provider 與測試登入（單元測試）
-未完成或阻擋：EXT-01 staging／production 專案與 secrets 注入；GitHub Actions 首次執行結果見推送後的 CI
+實際檢查補充：GitHub Actions CI run #1（https://github.com/amber-ou/Chainseabase/actions/runs/39971068949，commit 6ee36a8）全部步驟 success，含 PostgreSQL 整合、build、秘密掃描與 E2E
+未完成或阻擋：EXT-01 staging／production 專案與 secrets 注入
 ```
 
 ```text
