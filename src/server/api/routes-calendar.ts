@@ -170,6 +170,8 @@ export function registerCalendarRoutes(r: Router) {
 
   r.get('/health', ['admin', 'portal'], async () => {
     await getSql()`select 1`;
-    return { data: { ok: true } };
+    // modes only (real/fake), never credentials: lets staging prove it is not running on fakes
+    const cfg = getConfig();
+    return { data: { ok: true, environment: cfg.deploymentEnv, providers: { calendar: cfg.calendarProvider, email: cfg.emailProvider, storage: cfg.storageProvider } } };
   });
 }

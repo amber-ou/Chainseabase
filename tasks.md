@@ -4,10 +4,11 @@
 
 ## 目前進度
 
-- 完成：文件、M1–M5、M7-01 的程式與自動化驗證；M6 程式與 mock 測試；M7-02 自動化響應式／鍵盤檢查與 taste lint／inspector（公開頁）。
+- 完成：文件、M1–M5、M7-01 的程式與自動化驗證；M6 程式與 mock 測試（C16 輪詢已自動化）；M7-02 自動化響應式／鍵盤／axe 可及性檢查與 taste lint／inspector（前台與後台頁）。
+- 上線前收尾（第二輪）：Roadmap 拖曳併發改為以卡片與目標欄為範圍（M4-02），本機負載重新驗證（M8-02）；staging 建置清單與 `APP_ENV=staging` 防呆（M8-01）。
 - 待外部條件：真實 Google 登入（EXT-02）、Resend 寄信（EXT-03）、Google 日曆 sandbox 實測（EXT-02、EXT-04）、Vercel／Supabase staging 與正式環境（EXT-01、EXT-05）。
-- 最新檢查（2026-10-23，雲端開發容器）：lint、typecheck、build、security scan 通過；Vitest 129 passed／0 failed／0 skipped；Playwright 38 passed／0 failed／0 skipped。完整對照見 [驗收追蹤報告](docs/acceptance-report.md)。
-- 下一個可執行步驟：取得 EXT-01／EXT-02 後建立 staging（Vercel＋Supabase），依 [operations.md](operations.md) 設定環境變數，執行 Google 登入與 sandbox 日曆實測（C03／C05–C10／C12–C15），再補 Resend 寄件網域驗證。
+- 最新檢查（2026-10-23，雲端開發容器）：lint、typecheck、build、security scan 通過；Vitest 139 passed／0 failed／0 skipped；Playwright 55 passed／0 failed／0 skipped。完整對照見 [驗收追蹤報告](docs/acceptance-report.md)。
+- 下一個可執行步驟：依 [Staging 建置清單](docs/staging-setup.md) 完成 EXT-01～EXT-04（部署分支 `staging`），以第 7 節驗證 `/api/v1/health` 為 staging＋全部 real 後，執行 Google 登入、邀請、sandbox 日曆實測（C03／C05–C10／C12–C15）與 staging 負載；螢幕閱讀器人工測試另行安排。
 
 ## 任務清單
 
@@ -41,7 +42,7 @@
 | M6-03 | 重複活動本次／整系列、例外與不支援型別保護。 | M6-02 | OPS；C08–C11 | 待外部條件 |
 | M6-04 | Dashboard 日曆、編輯 Modal、拖曳改期、分頁與刷新。 | M6-03、M2-02 | UI、OPS；C05–C06、C16、C18 | 待外部條件 |
 | M7-01 | 公開前台完整流程與匿名／測試／團隊 E2E。 | M2-04、M4-03、M5-03 | REQ、API；F08–F13、R14 | 完成 |
-| M7-02 | 響應式、鍵盤、focus、狀態、taste inspector 與截圖修正。 | M3-03、M4-02、M5-02、M6-04、M7-01 | UI；V01–V04 | 進行中 |
+| M7-02 | 響應式、鍵盤、focus、狀態、taste inspector 與截圖修正。 | M3-03、M4-02、M5-02、M6-04、M7-01 | UI；V01–V04 | 進行中（自動化完成；螢幕閱讀器與人工鍵盤實測未執行） |
 | M8-01 | CI、staging 隔離、secret 管理、工作程序與觀測。 | M1-01、M5-03；EXT-01、EXT-03 | OPS；O01–O02、O04 | 進行中 |
 | M8-02 | 備份／復原演練、約 30 人負載與相容 migration 驗證。 | M8-01、M7-02 | OPS；O03、O05 | 進行中 |
 | M8-03 | 完整驗收報告、發布／回退計畫與正式部署。 | M8-02；全部外部條件、實際發布授權 | 全部適用驗收 | 待外部條件 |
@@ -193,4 +194,41 @@
 交付檔案：scripts/restore-drill.ts、scripts/load-test.ts
 實際檢查與結果：本機 pg_dump→pg_restore 演練一致（41 表）；本機 30 人 × 30 秒負載 p95 ≤ 237 ms，見 docs/acceptance-report.md
 未完成或阻擋：Supabase 正式備份還原與 staging 負載需 EXT-01
+```
+
+### 第二輪：上線前收尾（2026-10-23）
+
+```text
+任務：M4-02 Roadmap 拖曳併發範圍（高衝突率修正）
+狀態：完成
+負責人：Claude Code
+交付檔案／commit：db/migrations/0002_roadmap_placement_revision.sql、src/modules/roadmap/service.ts、ranking.ts、rank.ts、src/modules/feedback/service.ts、src/server/api/routes-work.ts、src/features/roadmap/roadmap-page.tsx、docs/04-api-contracts.md、docs/03-interaction-rules.md、docs/02-architecture-and-data.md（commit 1bd9e4c 起）
+根因：每次移動都檢查並遞增整張看板 revision，不同人移動不同卡片也互相 409（舊版 30 人負載 960 次移動 928 次 409）。
+修正：看板 revision 只代表結構；同卡衝突以卡片 placement_revision＋（跨欄時）Feedback revision 檢查，回 409 card_changed、不自動重試；不同卡片以目標欄列鎖序列化，不再互斥；相鄰卡離開該欄或先後顛倒才回 409 order_changed；重編號不會把同時移出的卡拉回原欄；其他頁面改欄與移動共用欄鎖；跨欄移動不再對同看板重複放置。
+實際檢查與結果：npx vitest run tests/integration/roadmap.test.ts tests/unit/roadmap.test.ts → roadmap 整合 23 passed（新增 9 個併發案例，含兩交易交錯的重編號回歸測試；移除修正後該測試失敗）、單元 6 passed；npm test 139 passed；E2E 鍵盤選單移動通過
+未完成或阻擋：無
+```
+
+```text
+任務：M8-02 負載重新驗證（本機 production build，非 staging）
+狀態：進行中
+交付檔案：scripts/load-test.ts（normal／contention 兩情境、order_changed 重新載入後再放一次、card_changed 不重試、每情境後檢查不變量）
+實際檢查與結果：LOAD_SCENARIO=both LOAD_SECONDS=60 npm run load-test（30 人）；同腳本對舊版 commit aa2d44f 做對照。正常頻率移動首次成功 99.1%（舊版 72.4%），重試後 100%（舊版 94.2%）；高競爭不同卡片首次 67.8%（舊版 4.2%），重試後 88.0%（舊版 6.8%）；兩情境不變量全部通過。數字見 docs/acceptance-report.md O05
+未完成或阻擋：staging 負載需 EXT-01；Supabase 備份還原未演練
+```
+
+```text
+任務：M6-04／M7-02 不依賴外部帳號的收尾
+狀態：M6-04 仍待外部條件；M7-02 進行中
+交付檔案：tests/e2e/calendar.spec.ts（C16）、tests/e2e/a11y.spec.ts、package.json（axe-core 4.14.0 固定版本，lockfile 原已包含）、src/features/roadmap/board.tsx、src/features/schedule/schedule-tab.tsx、src/app/globals.css
+實際檢查與結果：C16（fake provider）以 Playwright 假時鐘驗證前景 60 秒輪詢、背景暫停 3 分鐘無請求、回前景與重新聚焦立即更新；axe-core（WCAG 2.1 A／AA）後台 6 頁、Feedback Modal＋Schedule、登入與前台頁在 1440 與 390 皆 0 violation（修正：看板與 Schedule 捲動容器可聚焦）；taste inspector 透過本機注入測試 session 的反向代理檢查後台 6 頁 1440／768／390：0 FAIL（修正：手機短頁頂部空白、看板工具列溢出、Feedback 列中繼資料溢出、數字欄靠右、手機看板一欄一屏）
+未完成或阻擋：螢幕閱讀器實機與人工鍵盤走查未執行；C16 真實 Google 日曆輪詢待 EXT-02／EXT-04
+```
+
+```text
+任務：M8-01 staging 設定準備
+狀態：進行中
+交付檔案：docs/staging-setup.md、operations.md、.env.example、src/server/config.ts、/api/v1/health
+實際檢查與結果：config.test.ts 4 passed（APP_ENV=staging 拒絕 fake provider 與測試登入、缺憑證只列變數名稱）；operations.test.ts health 回報 environment 與 provider 模式
+未完成或阻擋：EXT-01～EXT-04 尚未提供；未建立任何雲端資源、未寄送真實邀請、未寫入任何真實日曆
 ```

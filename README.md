@@ -65,7 +65,7 @@ npm run dev
 | 示範資料 | `ALLOW_DEV_SEED=1 npm run db:seed-dev` | 只允許名稱含 dev／e2e／test 的資料庫 |
 | 背景工作 | `npm run jobs:run` | 處理通知與邀請信 outbox；正式環境由排程呼叫 `/api/v1/jobs/run` |
 | 還原演練 | `SOURCE_DATABASE_URL=… TARGET_DATABASE_URL=…drill… npm run db:restore-drill` | 目標資料庫名稱必須含 `drill` |
-| 負載測試 | `LOAD_BASE_URL=… LOAD_DATABASE_URL=… npm run load-test` | 只允許 e2e／load／staging 資料庫 |
+| 負載測試 | `LOAD_BASE_URL=… LOAD_DATABASE_URL=… npm run load-test` | `LOAD_SCENARIO=normal｜contention｜both`（預設 both）、`LOAD_USERS`、`LOAD_SECONDS`、`LOAD_THINK_MS=2000-6000`；只允許名稱含 e2e／load／staging 的資料庫，或 `LOAD_ENV_CONFIRM=staging` 且伺服器 `/health` 回報 staging；結束時檢查看板不變量，違反時 exit 2 |
 
 ## 專案結構
 

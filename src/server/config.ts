@@ -28,6 +28,9 @@ export interface AppConfig {
   storageProvider: ProviderMode;
   e2eTestLogin: boolean;
   isProductionDeployment: boolean;
+  /** production or APP_ENV=staging: no fake providers, no test login, secrets required. */
+  strictDeployment: boolean;
+  deploymentEnv: 'production' | 'staging' | 'development';
 }
 
 function env(name: string): string | null {
@@ -53,6 +56,9 @@ let cached: AppConfig | null = null;
 export function getConfig(): AppConfig {
   if (cached) return cached;
   const isProductionDeployment = process.env.VERCEL_ENV === 'production' || env('APP_ENV') === 'production';
+  // staging runs the production guards so its results can never be a silent mock
+  const strictDeployment = isProductionDeployment || env('APP_ENV') === 'staging';
+  const deploymentEnv = isProductionDeployment ? 'production' : strictDeployment ? 'staging' : 'development';
   const googleClientId = env('GOOGLE_CLIENT_ID');
   const googleClientSecret = env('GOOGLE_CLIENT_SECRET');
   const resendApiKey = env('RESEND_API_KEY');
@@ -62,7 +68,7 @@ export function getConfig(): AppConfig {
     databaseUrl: env('DATABASE_URL') ?? 'postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_dev',
     adminOrigin: origin('ADMIN_ORIGIN', 'http://admin.localhost:3000'),
     portalOrigin: origin('PORTAL_ORIGIN', 'http://portal.localhost:3000'),
-    sessionSecret: env('AUTH_SESSION_SECRET') ?? (isProductionDeployment ? '' : 'dev-only-session-secret-change-me-0123456789'),
+    sessionSecret: env('AUTH_SESSION_SECRET') ?? (strictDeployment ? '' : 'dev-only-session-secret-change-me-0123456789'),
     tokenEncryptionKey: env('TOKEN_ENCRYPTION_KEY'),
     tokenEncryptionKeyVersion: Number(env('TOKEN_ENCRYPTION_KEY_VERSION') ?? '1'),
     tokenEncryptionPreviousKeys: env('TOKEN_ENCRYPTION_PREVIOUS_KEYS') ?? '',
@@ -78,16 +84,24 @@ export function getConfig(): AppConfig {
     calendarProvider: mode('CALENDAR_PROVIDER', Boolean(googleClientId && googleClientSecret)),
     emailProvider: mode('EMAIL_PROVIDER', Boolean(resendApiKey)),
     storageProvider: mode('STORAGE_PROVIDER', Boolean(supabaseUrl && supabaseServiceRoleKey)),
-    e2eTestLogin: env('E2E_TEST_LOGIN') === 'enabled' && !isProductionDeployment,
+    e2eTestLogin: env('E2E_TEST_LOGIN') === 'enabled' && !strictDeployment,
     isProductionDeployment,
+    strictDeployment,
+    deploymentEnv,
   };
-  if (isProductionDeployment) {
+  if (strictDeployment) {
     const missing: string[] = [];
     if (!cfg.sessionSecret || cfg.sessionSecret.length < 32) missing.push('AUTH_SESSION_SECRET');
     if (cfg.calendarProvider === 'fake' || cfg.emailProvider === 'fake' || cfg.storageProvider === 'fake') {
-      missing.push('fake providers are not allowed in production');
+      missing.push(`fake providers are not allowed in ${deploymentEnv}`);
     }
-    if (missing.length) throw new Error(`Invalid production configuration: ${missing.join(', ')}`);
+    // names only, never values
+    const need = (ok: boolean, names: string) => { if (!ok) missing.push(names); };
+    if (cfg.calendarProvider === 'real') need(Boolean(googleClientId && googleClientSecret && cfg.tokenEncryptionKey), 'GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/TOKEN_ENCRYPTION_KEY');
+    if (cfg.emailProvider === 'real') need(Boolean(resendApiKey && cfg.resendFromEmail), 'RESEND_API_KEY/RESEND_FROM_EMAIL');
+    if (cfg.storageProvider === 'real') need(Boolean(supabaseUrl && supabaseServiceRoleKey), 'SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY');
+    need(Boolean(cfg.jobRunnerSecret), 'CRON_SECRET');
+    if (missing.length) throw new Error(`Invalid ${deploymentEnv} configuration: ${missing.join(', ')}`);
   }
   cached = cfg;
   return cfg;

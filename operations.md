@@ -7,7 +7,7 @@
 | 環境 | 用途 | 資料與第三方服務 |
 | --- | --- | --- |
 | 開發 | 本機／雲端開發與單元、整合、E2E。 | 本機 PostgreSQL；`CALENDAR_PROVIDER/EMAIL_PROVIDER/STORAGE_PROVIDER=fake`；可開 `E2E_TEST_LOGIN=enabled`。 |
-| Staging | 固定網域的整合、OAuth、寄信、日曆與 E2E。 | 獨立 Supabase 專案、測試 Google OAuth client／sandbox 日曆、只寄測試收件人。 |
+| Staging | 固定網域的整合、OAuth、寄信、日曆實測。部署分支 `staging`，逐步設定見 [Staging 建置清單](docs/staging-setup.md)。 | 獨立 Supabase 專案、測試 Google OAuth client／sandbox 日曆、只寄測試收件人。設定 `APP_ENV=staging` 時與正式相同：拒絕 fake provider 與測試登入、缺必要變數即啟動失敗。 |
 | Production | 公司正式使用。 | 正式 Supabase、正式 OAuth client、已驗證寄件網域。設定 `APP_ENV=production`（或 Vercel production）時，應用會**拒絕啟動 fake provider、拒絕測試登入、要求 AUTH_SESSION_SECRET**。 |
 
 Preview 部署不可共用正式 secrets：在 Vercel 把正式變數只設在 Production scope，Preview 指向 staging 或不設定。
@@ -22,7 +22,7 @@ Preview 部署不可共用正式 secrets：在 Vercel 把正式變數只設在 P
 | EXT-04 產品日曆 | Google Calendar 設定與共用 | Calendar 讀寫與 ACL 驗收 | 為每個產品建立共用日曆，分享給成員：要編輯者給「變更活動」，只讀者給「查看所有活動詳細資料」。sandbox 另建一份測試日曆，含 writer／reader／未分享帳號。 |
 | EXT-05 正式初始化 | Vercel／本機 shell（連 production DB） | 首位團隊、上線 | 設定 `BOOTSTRAP_TEAM_EMAIL`；執行 `npm run db:migrate` 與 `npm run db:bootstrap`；首位團隊以該 Google 帳號登入後取得團隊權限。 |
 
-必填 secrets（只放在 Vercel／CI 加密設定，**不要貼到聊天或 Git**）：`AUTH_SESSION_SECRET`（≥ 32 字元隨機值）、`TOKEN_ENCRYPTION_KEY`（32 bytes base64）、`GOOGLE_CLIENT_SECRET`、`RESEND_API_KEY`、`SUPABASE_SERVICE_ROLE_KEY`、`DATABASE_URL`、`DIRECT_DATABASE_URL`、`CRON_SECRET`（Vercel Cron 會以 `Authorization: Bearer $CRON_SECRET` 呼叫工作入口）。名稱與說明見 [.env.example](.env.example)。
+必填 secrets（只放在 Vercel／CI 加密設定，**不要貼到聊天或 Git**）：`AUTH_SESSION_SECRET`（≥ 32 字元隨機值）、`TOKEN_ENCRYPTION_KEY`（32 bytes base64）、`GOOGLE_CLIENT_SECRET`、`RESEND_API_KEY`、`SUPABASE_SERVICE_ROLE_KEY`、`DATABASE_URL`、`DIRECT_DATABASE_URL`、`CRON_SECRET`（Vercel Cron 會以 `Authorization: Bearer $CRON_SECRET` 呼叫工作入口；Vercel 上不要另設 `JOB_RUNNER_SECRET`，兩者並存時以後者為準）。名稱與說明見 [.env.example](.env.example)；staging 的完整變數表、callback URI 與驗證方法見 [Staging 建置清單](docs/staging-setup.md)。
 
 產生隨機值（在自己的終端機執行）：
 
@@ -35,8 +35,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"     
 
 1. PR 觸發 GitHub Actions（`.github/workflows/ci.yml`）：lint、typecheck、單元＋PostgreSQL 整合、migration 重跑、build、秘密掃描、Playwright E2E。全部通過才合併。
 2. Migration 先在 staging：`DIRECT_DATABASE_URL=<staging direct> npm run db:migrate`。正式採 expand／contract：只加欄位／表與相容預設，移除舊欄位放下一個版本。有資料風險的 migration 前先建立備份（見下）。
-3. 部署 Vercel（staging 網域）→ `GET /api/v1/health` 應回 `{"data":{"ok":true}}` → 以測試帳號實測 Google 登入、邀請、sandbox 日曆讀寫。
-4. Vercel Cron 每 5 分鐘呼叫 `/api/v1/jobs/run`（`vercel.json`）。Hobby 方案只允許每日排程；需要分鐘級需 Pro 方案或外部排程器以同一 bearer secret 呼叫 `POST /api/v1/jobs/run`。請求完成後應用也會立即處理同請求產生的工作，排程只負責重試與補跑。
+3. 部署 Vercel（staging 網域，分支 `staging`）→ `GET /api/v1/health` 應回 `{"data":{"ok":true,"environment":"staging","providers":{"calendar":"real","email":"real","storage":"real"}}}`（任一 `fake` 即非真實整合）→ 以測試帳號實測 Google 登入、邀請、sandbox 日曆讀寫（[Staging 建置清單](docs/staging-setup.md) 第 7 節）。
+4. Vercel Cron 每 5 分鐘呼叫 `/api/v1/jobs/run`（`vercel.json`；Vercel Cron 只在 Production 部署執行，staging 需手動或外部排程）。Hobby 方案只允許每日排程；需要分鐘級需 Pro 方案或外部排程器以同一 bearer secret 呼叫 `POST /api/v1/jobs/run`。請求完成後應用也會立即處理同請求產生的工作，排程只負責重試與補跑。
 5. Production：取得當次發布授權後，在 production DB 執行 migration，再 promote 部署；驗證 health、登入、最小日曆讀寫。
 6. 回退：Vercel 立即 promote 上一個部署；**不要執行 down migration**，資料依備份與修正 migration 處理。
 

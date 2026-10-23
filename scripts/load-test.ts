@@ -12,7 +12,7 @@
  * is never retried. After each scenario the board invariants are checked in the database.
  *
  * Users/sessions are created directly in LOAD_DATABASE_URL (name must contain e2e, load or
- * staging) — never run against production.
+ * staging, or the server must confirm it is staging; see assertSafeTarget) — never production.
  */
 import { randomUUID } from 'node:crypto';
 import { createSql, setSql } from '../src/server/db';
@@ -26,9 +26,17 @@ const SCENARIO = process.env.LOAD_SCENARIO ?? 'both';
 const [THINK_MIN, THINK_MAX] = (process.env.LOAD_THINK_MS ?? '2000-6000').split('-').map(Number);
 const SHARED_RATIO = Number(process.env.LOAD_SHARED_RATIO ?? 0.2);
 const HOT_CARDS = 3;
-if (!/(e2e|load|staging)/.test(new URL(DB).pathname)) {
-  console.error('Refusing: LOAD_DATABASE_URL must be an e2e/load/staging database.');
-  process.exit(1);
+// Supabase names its database "postgres": a staging target is accepted only with an explicit
+// LOAD_ENV_CONFIRM=staging and when the server itself reports environment "staging" on /health.
+async function assertSafeTarget() {
+  if (/(e2e|load|staging)/.test(new URL(DB).pathname)) return;
+  const health = process.env.LOAD_ENV_CONFIRM === 'staging'
+    ? await fetch(`${BASE}/api/v1/health`).then((r) => r.json()).catch(() => null)
+    : null;
+  if (health?.data?.environment !== 'staging') {
+    console.error('Refusing: LOAD_DATABASE_URL must be an e2e/load/staging database, or set LOAD_ENV_CONFIRM=staging against a server whose /health reports environment "staging".');
+    process.exit(1);
+  }
 }
 
 const sql = createSql(DB, 4);
@@ -240,6 +248,7 @@ async function runScenario(name: 'normal' | 'contention') {
 }
 
 async function main() {
+  await assertSafeTarget();
   const scenarios = SCENARIO === 'both' ? (['normal', 'contention'] as const) : [SCENARIO as 'normal' | 'contention'];
   const results = [];
   for (const s of scenarios) results.push(await runScenario(s));

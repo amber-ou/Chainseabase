@@ -1,4 +1,4 @@
-# 驗收追蹤報告（實作第一輪）
+# 驗收追蹤報告（實作第二輪：上線前收尾）
 
 對照 [交付與驗收](07-delivery-and-acceptance.md) 的 99 項案例，記錄目前實際的驗證方式與結果。**本報告只記錄已執行的結果；未執行或只用模擬服務驗證的項目明確標示，不視為完整通過。**
 
@@ -16,14 +16,14 @@
 | --- | --- |
 | `npm run lint` | 通過，0 error／0 warning |
 | `npm run typecheck` | 通過 |
-| `npm test`（Vitest：單元＋真實 PostgreSQL 整合） | 13 個檔案、129 tests：129 passed、0 failed、0 skipped |
+| `npm test`（Vitest：單元＋真實 PostgreSQL 整合） | 13 個檔案、139 tests：139 passed、0 failed、0 skipped |
 | `npm run build` | 通過（Next.js 16.4.2 production build） |
-| `npm run security:scan` | 通過（client bundle＋Git 追蹤檔案） |
-| `npm run test:e2e`（Playwright：1440／768／390） | 38 tests：38 passed、0 failed、0 skipped |
+| `npm run security:scan` | 通過（client bundle＋Git 追蹤檔案，635 個檔案） |
+| `npm run test:e2e`（Playwright：1440／768／390） | 55 tests：55 passed、0 failed、0 skipped（含 axe 可及性 16、C16 輪詢 1） |
 | taste skill `lint.mjs --app`（固定 commit 6010f91） | `src/` 0 FAIL、0 WARN（保留理由見 V04） |
-| taste skill `inspect.mjs --app`（公開頁面 1440／768／390） | 前台 Feedback、前台 Roadmap、登入頁：0 FAIL；WARN 僅「內容短造成空白」類，理由見 V04 |
+| taste skill `inspect.mjs --app`（1440／768／390） | 前台 Feedback、前台 Roadmap、登入頁、後台 Product／Feedback／Roadmap／Personal／User／Setting：全部 0 FAIL；WARN 理由見 V04 |
 | `npm run db:restore-drill`（本機 dev → drill） | 41 張表、行數一致、私人資料摘要一致 |
-| `npm run load-test`（本機 production build，30 人 × 30 秒） | 見 O05 |
+| `npm run load-test`（本機 production build，30 人 × 60 秒，normal＋contention） | 見 O05 |
 
 狀態說明：**通過**＝自動化測試已執行並通過；**通過（mock）**＝以第三方替身驗證本平台邏輯，仍需 sandbox 實測；**部分**＝主要行為已驗證、仍有人工或外部步驟；**未執行**＝尚未驗證。
 
@@ -85,7 +85,8 @@
 | --- | --- | --- |
 | R01–R05 | 通過 | `roadmap.test.ts`；R05 列舉 15 筆 × 4 張看板恰一欄 |
 | R06 | 通過 | 整合＋E2E（鍵盤可操作的選單移動） |
-| R07–R13 | 通過 | 整合；另有 property-based 不變量（`tests/unit/roadmap.test.ts`） |
+| R07–R12 | 通過 | 整合；另有 property-based 不變量（`tests/unit/roadmap.test.ts`） |
+| R13 | 通過 | 同卡併發：第二個寫入回 409 `card_changed`，不重複、不覆蓋；不同卡同時移動全部成功、無重複 rank 或並列 rank；相鄰卡失效回 409 `order_changed`；重編號與移出交錯的回歸測試（`Roadmap move concurrency scope`，9 個案例）。負載下不變量見 O05 |
 | R14 | 通過 | 只列發布的狀態看板、只含公開卡片與公開數量、前台無寫入端點 |
 
 ## Personal／Notification
@@ -106,7 +107,7 @@
 | C05–C10 | 通過（mock） | fake 日曆 CRUD、全天 exclusive end、DST、本次／整系列、master ETag；**C10 Google 實際例外行為未在 sandbox 記錄** |
 | C11 | 通過（mock） | 複雜規則、特殊類型、含與會者活動受保護 |
 | C12–C15 | 通過（mock） | 回應遺失重試只一筆、ETag 衝突、401/429/逾時、無新 refresh token 保留舊值 |
-| C16 | 部分 | API 完整分頁（mock）；前景 60 秒輪詢、背景暫停由 `useVisiblePolling` 實作（未自動化） |
+| C16 | 通過（mock） | API 完整分頁（mock）；E2E（Playwright 假時鐘）驗證前景 60 秒刷新、背景 3 分鐘無請求、回前景與重新聚焦立即刷新。真實 Google 日曆的他人變更出現時間待 sandbox |
 | C17 | 通過 | 解除個人連線／產品綁定不刪活動，他人授權不受影響 |
 | C18 | 通過 | 他產品 Feedback 拒絕，關聯不改 Feedback／Schedule |
 
@@ -117,23 +118,53 @@
 | ID | 狀態 | 證據 |
 | --- | --- | --- |
 | V01 | 通過 | E2E 在 1440／768／390 檢查 6 個後台頁、前台頁與 Schedule：無整頁橫向溢出、手機折疊選單；截圖附於 Playwright 報告 |
-| V02 | 部分 | E2E：Modal Escape／焦點循環、看板選單鍵盤移動；Dropdown／Tabs 使用原生控制與方向鍵。螢幕閱讀器實機測試**未執行** |
+| V02 | 部分 | E2E：Modal Escape／焦點循環、看板選單鍵盤移動；Dropdown／Tabs 使用原生控制與方向鍵；axe-core WCAG 2.1 A／AA（`a11y.spec.ts`）後台 6 頁、Modal＋Schedule、前台與登入頁在 1440／390 皆 0 violation（修正看板／Schedule 捲動容器不可聚焦）。螢幕閱讀器實機測試與人工鍵盤走查**未執行** |
 | V03 | 部分 | 成功／錯誤／儲存中均有文字＋圖示與 aria-live（E2E 驗證 Schedule 與看板宣告）；其餘狀態為程式審查 |
-| V04 | 部分 | taste lint 0 FAIL／0 WARN（mono 只用於指令座標與 slug、陰影只用於 Modal／選單浮層、時鐘補零已標註）；inspector 對公開頁 0 FAIL。後台頁需登入，inspector 無法帶入 session，改以 Playwright 截圖人工檢查 |
-| O01 | 部分 | 單元：production 拒絕 fake provider、測試登入、缺 secret；staging／production 實際分離待 EXT-01 |
+| V04 | 部分 | taste lint 0 FAIL／0 WARN（mono 只用於指令座標與 slug、陰影只用於 Modal／選單浮層、時鐘補零已標註）；inspector 以本機反向代理注入測試 session 後檢查後台 6 頁與前台 3 頁：全部 0 FAIL。修正：手機短頁頂部空白、看板工具列溢出、Feedback 列中繼資料溢出、數字欄靠右、手機看板改為一欄一屏仍在容器內橫向捲動。保留 WARN：內容少造成的空白（開發資料量小）、看板各欄卡片數不同的不等高（看板本質）。人工視覺審查未正式簽核 |
+| O01 | 部分 | 單元：production 與 `APP_ENV=staging` 皆拒絕 fake provider、測試登入、缺 secret（只列名稱）；`/api/v1/health` 回報環境與 provider 模式；staging／production 實際分離待 EXT-01（步驟見 [Staging 建置清單](staging-setup.md)） |
 | O02 | 通過 | 租約過期後續跑、通知不重複、超過次數停止重試 |
 | O03 | 部分 | 本機 pg_dump／pg_restore 演練一致；**Supabase 正式備份還原未執行** |
 | O04 | 通過 | `security:scan` 掃描 client bundle 與 Git；log 遮罩測試；API 錯誤不含 SQL |
-| O05 | 部分 | 本機 30 人 × 30 秒：所有資料 API p95 ≤ 237 ms；同一看板連續拖曳時看板 revision 序列化造成大量 409（無資料損壞）。**staging 未執行** |
+| O05 | 部分 | 本機 30 人：正常頻率所有 API p95 ≤ 49 ms，移動首次成功 99.1%、重試後 100%；高競爭同欄拖曳不同卡片重試後 88.0%（舊版 6.8%），剩餘 409 為相鄰卡真的被移動；不變量全數通過。**staging 未執行** |
 
 ### O05 本機負載結果（2026-10-23，production build，非 staging）
 
-| 操作 | 次數 | p50 ms | p95 ms | max ms | 狀態 |
-| --- | --- | --- | --- | --- | --- |
-| feedback.list | 960 | 140 | 231 | 388 | 200 × 960 |
-| roadmap.board | 960 | 154 | 237 | 293 | 200 × 960 |
-| schedule.command | 960 | 139 | 203 | 316 | 201 × 960 |
-| roadmap.move | 960 | 112 | 175 | 231 | 200 × 32、409 × 928 |
-| notifications.list | 960 | 91 | 155 | 193 | 200 × 960 |
+條件：`npm run load-test`，30 位團隊成員、每情境 60 秒、本機 PostgreSQL 16 與 `next start`（同一容器）。延遲只計成功請求。重試規則與 UI 一致：409 `order_changed` 重新載入看板後在同一位置再放一次（最多一次）；409 `card_changed` 不重試。舊版對照為 commit aa2d44f（移動檢查整張看板 revision，409 無 reason，腳本一律視為可重放一次），同腳本、同資料庫初始狀態。
 
-負載後檢查：無重複 rank、單選群組無違規、960 筆指令對應 960 筆格子項目。
+**正常操作頻率**（每人每輪：列表、Schedule 讀取＋指令、看板、移動自己的卡到隨機欄位與位置、通知；每輪間隔 2–6 秒）
+
+| 操作 | 次數 | 成功率 | 409 | p50 ms | p95 ms | max ms |
+| --- | --- | --- | --- | --- | --- | --- |
+| feedback.list | 434 | 100% | 0 | 16 | 25 | 61 |
+| schedule.get | 434 | 100% | 0 | 9 | 15 | 32 |
+| schedule.command | 434 | 100% | 0 | 21 | 38 | 54 |
+| roadmap.board | 434 | 100% | 0 | 15 | 24 | 65 |
+| roadmap.move（首次） | 434 | 99.1% | 0.9%（order_changed 4、card_changed 0） | 24 | 49 | 106 |
+| roadmap.move（重新放置） | 4 | 100% | 0 | 26 | 27 | 27 |
+| notifications.list | 434 | 100% | 0 | 9 | 15 | 43 |
+
+| 移動結果（每次拖曳意圖） | 意圖 | 首次成功 | 重試後成功 | 最終成功率 | 仍衝突 |
+| --- | --- | --- | --- | --- | --- |
+| 本版 | 434 | 430 | 4 | **100%** | 0 |
+| 舊版 aa2d44f | 431 | 312 | 94 | 94.2% | 25（首次 409 比例 27.6%） |
+
+**高競爭**（無間隔，只做拖曳；70% 落在同一欄、位置集中在前 6 格；20% 拖曳 3 張多人共用的熱門卡）
+
+| 操作 | 次數 | 成功率 | 409 order_changed | 409 card_changed | p50 ms | p95 ms | max ms |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| roadmap.board | 3370 | 100% | 0 | 0 | 220 | 290 | 379 |
+| move 不同卡片（首次） | 2712 | 67.8% | 873 | 0 | 182 | 269 | 371 |
+| move 不同卡片（重新放置） | 873 | 62.7% | 326 | 0 | 196 | 267 | 339 |
+| move 共用熱門卡（首次） | 658 | 40.0% | 117 | 278 | 184 | 269 | 380 |
+| move 共用熱門卡（重新放置） | 117 | 40.2% | 29 | 41 | 207 | 265 | 324 |
+
+| 移動結果（每次拖曳意圖） | 不同卡片：本版 | 不同卡片：舊版 | 共用熱門卡：本版 | 共用熱門卡：舊版 |
+| --- | --- | --- | --- | --- |
+| 意圖 | 2712 | 2577 | 658 | 650 |
+| 最終成功率 | **88.0%** | 6.8% | 47.1% | 5.8% |
+| 首次 409 比例 | 32.2% | 95.8% | 60.0% | 96.5% |
+| 同卡衝突（不重試，使用者重新載入） | 0 | — | 319 | — |
+
+解讀：不同卡片不再因整張看板 revision 互斥；高競爭下剩餘的 `order_changed` 是使用者選的相鄰卡在讀取看板到送出之間真的被別人移走或換序（約每秒 50 次拖曳集中在同一欄前 6 格的極端情境），依規則不自動套用。共用熱門卡的 `card_changed` 是真正的同卡衝突，維持 409。
+
+負載後不變量（兩情境、本版與舊版皆檢查）：未刪除 Feedback 數＝排序紀錄數＝看板計數＝看板卡片數（30／63），看板無重複卡片、分類錯誤 0（每筆排序紀錄的欄位與 Feedback 狀態一致）、同欄 rank 並列 0、重複建立 0；本版每張卡的 placement revision 增量＝成功移動次數（不一致 0）。

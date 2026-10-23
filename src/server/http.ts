@@ -257,7 +257,7 @@ export async function handleApi(req: Request, router: Router): Promise<Response>
     status = err.status;
     return jsonResponse(err.status, errorBody(err, requestId), requestId, err.headers ?? {}, cookies);
   } finally {
-    if (getConfig().isProductionDeployment || process.env.LOG_REQUESTS === '1') {
+    if (getConfig().strictDeployment || process.env.LOG_REQUESTS === '1') {
       logInfo('api.request', { requestId, method: req.method, path: url.pathname, status, ms: Date.now() - started });
     }
   }

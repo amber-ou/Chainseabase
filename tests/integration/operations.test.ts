@@ -61,7 +61,9 @@ describe('operations', () => {
   });
 
   it('health endpoint answers on both hosts', async () => {
-    expect(expectOk(await api.get('/health'))).toEqual({ ok: true });
-    expect(expectOk(await api.get('/health', { site: 'portal' }))).toEqual({ ok: true });
+    // provider modes are reported (tests run on fakes in development), never credentials
+    const expected = { ok: true, environment: 'development', providers: { calendar: 'fake', email: 'fake', storage: 'fake' } };
+    expect(expectOk(await api.get('/health'))).toEqual(expected);
+    expect(expectOk(await api.get('/health', { site: 'portal' }))).toEqual(expected);
   });
 });
