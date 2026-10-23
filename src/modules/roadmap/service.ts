@@ -164,8 +164,9 @@ async function computeBoard(db: Db, productId: string, rm: RoadmapRow, publicOnl
   const columns = await loadColumnDefs(db, rm.id);
   const facts = await loadFacts(db, productId, rm.tagGroupId, { publicOnly });
   const ranks = new Map(
-    (await db<{ feedbackId: string; columnId: string; rank: number }[]>`select feedback_id, column_id, rank from roadmap_ranks where roadmap_id = ${rm.id}`)
-      .map((r) => [r.feedbackId, r]),
+    (await db<{ feedbackId: string; columnId: string; rank: number; placementRevision: number }[]>`
+      select feedback_id, column_id, rank, placement_revision from roadmap_ranks where roadmap_id = ${rm.id}
+    `).map((r) => [r.feedbackId, r]),
   );
   const byColumn = new Map<string, FactsRow[]>(columns.map((c) => [c.id, []]));
   for (const f of facts) byColumn.get(columnOrThrow(f, rm.dimension, columns))!.push(f);
@@ -180,7 +181,8 @@ async function computeBoard(db: Db, productId: string, rm: RoadmapRow, publicOnl
       ordered.set(columnId, [...unranked, ...ranked].map((c) => c.id));
     }
   }
-  return { columns, ordered };
+  const placementRevision = (feedbackId: string) => ranks.get(feedbackId)?.placementRevision ?? 0;
+  return { columns, ordered, ranks, placementRevision };
 }
 
 function offsetCursor(offset: number) { return Buffer.from(String(offset)).toString('base64url'); }
@@ -195,7 +197,7 @@ export async function getBoard(
   opts: { limitPerColumn: number; publicOnly?: boolean; viewerId?: string | null; viewerCanInteract?: boolean; viewerIsTeam?: boolean },
 ) {
   const rm = await getRoadmapRow(db, productId, roadmapId, { publicOnly: opts.publicOnly });
-  const { columns, ordered } = await computeBoard(db, productId, rm, Boolean(opts.publicOnly));
+  const { columns, ordered, placementRevision } = await computeBoard(db, productId, rm, Boolean(opts.publicOnly));
   const firstIds = columns.flatMap((c) => ordered.get(c.id)!.slice(0, opts.limitPerColumn));
   const cards = opts.publicOnly
     ? await loadPublicFeedbackDtos(db, productId, firstIds, opts.viewerId ?? null, Boolean(opts.viewerCanInteract), Boolean(opts.viewerIsTeam))
@@ -212,7 +214,9 @@ export async function getBoard(
         optionId: c.statusId ?? c.categoryId ?? c.tagId,
         isUnclassified: c.isUnclassified,
         count: ids.length,
-        cards: ids.slice(0, opts.limitPerColumn).map((id) => cardMap.get(id)).filter(Boolean),
+        // internal boards carry each card's placement revision for optimistic move checks
+        cards: ids.slice(0, opts.limitPerColumn).map((id) => cardMap.get(id)).filter(Boolean)
+          .map((card) => (opts.publicOnly ? card : { ...card, placementRevision: placementRevision(card!.id) })),
         nextCursor: ids.length > opts.limitPerColumn ? offsetCursor(opts.limitPerColumn) : null,
       };
     }),
@@ -224,7 +228,7 @@ export async function getColumnPage(
   opts: { cursor?: string; limit: number; publicOnly?: boolean; viewerId?: string | null; viewerCanInteract?: boolean; viewerIsTeam?: boolean },
 ) {
   const rm = await getRoadmapRow(db, productId, roadmapId, { publicOnly: opts.publicOnly });
-  const { ordered } = await computeBoard(db, productId, rm, Boolean(opts.publicOnly));
+  const { ordered, placementRevision } = await computeBoard(db, productId, rm, Boolean(opts.publicOnly));
   const ids = ordered.get(columnId);
   if (!ids) throw new AppError('NOT_FOUND');
   const offset = readOffset(opts.cursor);
@@ -232,7 +236,10 @@ export async function getColumnPage(
   const items = opts.publicOnly
     ? await loadPublicFeedbackDtos(db, productId, pageIds, opts.viewerId ?? null, Boolean(opts.viewerCanInteract), Boolean(opts.viewerIsTeam))
     : await loadFeedbackDtos(db, productId, pageIds);
-  return { items, total: ids.length, nextCursor: offset + opts.limit < ids.length ? offsetCursor(offset + opts.limit) : null };
+  return {
+    items: opts.publicOnly ? items : items.map((card) => ({ ...card, placementRevision: placementRevision(card.id) })),
+    total: ids.length, nextCursor: offset + opts.limit < ids.length ? offsetCursor(offset + opts.limit) : null,
+  };
 }
 
 export interface MoveInput {
@@ -240,36 +247,64 @@ export interface MoveInput {
   targetColumnId: string;
   beforeFeedbackId: string | null;
   afterFeedbackId: string | null;
+  /** Checked when the move changes the card's column (the Feedback field changes). */
   expectedFeedbackRevision: number;
-  expectedRoadmapRevision: number;
+  /** The card's placement revision on this board as last seen (0 when it has no explicit rank). */
+  expectedPlacementRevision: number;
 }
 
 /**
  * One card move: changes only this roadmap's dimension (if the column differs)
  * and the order, atomically. Same-column moves never touch Feedback fields.
+ *
+ * Concurrency scope:
+ * - board structure: moves do not require the board revision; they only bump it
+ *   when they switch the board to freedom ordering (the first manual move);
+ * - same card: the Feedback row lock plus expectedFeedbackRevision (cross-column)
+ *   and expectedPlacementRevision (any move) reject a stale second writer with 409;
+ * - different cards: the target column row is locked while the neighbours are
+ *   validated and the rank is written, so moves of other cards never conflict;
+ *   cards landing between the same two neighbours meanwhile are fine, only a neighbour
+ *   that left the column or a pair that swapped order is a 409 (details.reason=order_changed).
  */
 export async function moveCard(tx: Db, actor: Actor, productId: string, roadmapId: string, input: MoveInput) {
-  let rm = await getRoadmapRow(tx, productId, roadmapId, { lock: true });
-  assertRevision(rm.revision, input.expectedRoadmapRevision);
+  const peek = await getRoadmapRow(tx, productId, roadmapId);
+  // first manual move initializes ranks and flips the sort mode: exclusive board lock;
+  // afterwards moves share the board lock and serialize per target column only
+  const exclusive = !peek.ranksInitialized || peek.sortMode !== 'freedom';
+  let rm = exclusive
+    ? await getRoadmapRow(tx, productId, roadmapId, { lock: true })
+    : await lockRoadmapShared(tx, productId, roadmapId);
   const fb = await lockFeedback(tx, productId, input.feedbackId);
   if (!fb) throw new AppError('NOT_FOUND');
   const columns = await loadColumnDefs(tx, rm.id);
   const target = columns.find((c) => c.id === input.targetColumnId);
   if (!target) throw new AppError('NOT_FOUND');
+  // serialize writers into the same target column (neighbour validation + rank assignment);
+  // lock order is always feedback row → column row
+  await tx`select id from roadmap_columns where id = ${target.id} for update`;
+  const [current] = await tx<{ placementRevision: number }[]>`
+    select placement_revision from roadmap_ranks where roadmap_id = ${rm.id} and feedback_id = ${fb.id}
+  `;
+  if ((current?.placementRevision ?? 0) !== input.expectedPlacementRevision) {
+    throw new AppError('REVISION_CONFLICT', '這張卡片剛被其他人移動，請重新載入看板後再操作。', { details: { reason: 'card_changed' } });
+  }
   const [facts] = await loadFacts(tx, productId, rm.tagGroupId, { feedbackIds: [input.feedbackId] });
   const currentColumnId = columnOrThrow(facts, rm.dimension, columns);
   let feedbackRevision = fb.revision;
   if (currentColumnId !== target.id) {
-    assertRevision(fb.revision, input.expectedFeedbackRevision);
+    if (fb.revision !== input.expectedFeedbackRevision) {
+      throw new AppError('REVISION_CONFLICT', '這筆 Feedback 剛被其他人修改，請重新載入看板後再操作。', { details: { reason: 'card_changed' } });
+    }
     let patch: Parameters<typeof updateFeedback>[4];
     if (rm.dimension === 'status') patch = { statusId: target.statusId!, expectedRevision: fb.revision };
     else if (rm.dimension === 'category') patch = { categoryId: target.categoryId!, expectedRevision: fb.revision };
     else {
-      const current = (await tx<{ tagId: string; groupId: string | null }[]>`select tag_id, group_id from feedback_tags where feedback_id = ${fb.id}`);
-      const kept = current.filter((t) => t.groupId !== rm.tagGroupId).map((t) => t.tagId);
+      const tags = (await tx<{ tagId: string; groupId: string | null }[]>`select tag_id, group_id from feedback_tags where feedback_id = ${fb.id}`);
+      const kept = tags.filter((t) => t.groupId !== rm.tagGroupId).map((t) => t.tagId);
       patch = { tagIds: target.tagId ? [...kept, target.tagId] : kept, expectedRevision: fb.revision };
     }
-    const updated = await updateFeedback(tx, actor, productId, fb.id, patch);
+    const updated = await updateFeedback(tx, actor, productId, fb.id, patch, rm.id);
     feedbackRevision = updated.revision;
   }
   if (!rm.ranksInitialized) {
@@ -279,14 +314,19 @@ export async function moveCard(tx: Db, actor: Actor, productId: string, roadmapI
   const board = await computeBoard(tx, productId, { ...rm, sortMode: 'freedom' }, false);
   const order = board.ordered.get(target.id)!.filter((id) => id !== fb.id);
   const index = resolveInsertIndex(order, input, fb.id);
-  if (index === 'invalid') throw invalid('落點無效，請重新載入看板。', { beforeFeedbackId: '必須是目標欄位的相鄰卡片' });
-  const rankRows = new Map(
-    (await tx<{ feedbackId: string; rank: number; columnId: string }[]>`select feedback_id, rank, column_id from roadmap_ranks where roadmap_id = ${rm.id}`)
-      .map((r) => [r.feedbackId, r]),
-  );
+  if (index === 'invalid') {
+    const neighbours = [input.beforeFeedbackId, input.afterFeedbackId].filter(Boolean) as string[];
+    if (neighbours.includes(fb.id)) throw invalid('落點不能是卡片自己。', { beforeFeedbackId: '不能以自己為相鄰卡片' });
+    const known = neighbours.length
+      ? await tx`select id from feedback where product_id = ${productId} and deleted_at is null and id in ${tx(neighbours)}`
+      : [];
+    if (known.length !== neighbours.length) throw invalid('落點卡片不存在。', { beforeFeedbackId: '相鄰卡片不存在' });
+    // the neighbours exist but left the column or swapped order: a real ordering conflict, never auto-applied
+    throw new AppError('REVISION_CONFLICT', '欄位順序剛被其他人調整，請重新載入看板後再放置。', { details: { reason: 'order_changed' } });
+  }
   const rankOf = (id: string | undefined) => {
     if (!id) return null;
-    const r = rankRows.get(id);
+    const r = board.ranks.get(id);
     return r && r.columnId === target.id ? r.rank : null;
   };
   const aboveId = index > 0 ? order[index - 1] : undefined;
@@ -295,14 +335,24 @@ export async function moveCard(tx: Db, actor: Actor, productId: string, roadmapI
   const below = rankOf(belowId);
   const rank = (aboveId && above === null) || (belowId && below === null) ? null : rankBetween(above, below);
   if (rank === null) {
-    // renumber the whole target column with the moved card inserted
+    // renumber the whole target column with the moved card inserted (relative order of others unchanged)
     const full = [...order.slice(0, index), fb.id, ...order.slice(index)];
     const ranks = sequentialRanks(full.length);
     for (let i = 0; i < full.length; i++) {
-      await tx`
-        insert into roadmap_ranks (roadmap_id, feedback_id, column_id, rank) values (${rm.id}, ${full[i]}, ${target.id}, ${ranks[i]})
-        on conflict (roadmap_id, feedback_id) do update set column_id = excluded.column_id, rank = excluded.rank
-      `;
+      if (full[i] === fb.id) {
+        await tx`
+          insert into roadmap_ranks (roadmap_id, feedback_id, column_id, rank) values (${rm.id}, ${fb.id}, ${target.id}, ${ranks[i]})
+          on conflict (roadmap_id, feedback_id) do update set column_id = excluded.column_id, rank = excluded.rank
+        `;
+      } else {
+        // another card may have been moved out of this column concurrently (its own
+        // transaction locks only its target column): never pull it back here
+        await tx`
+          insert into roadmap_ranks (roadmap_id, feedback_id, column_id, rank) values (${rm.id}, ${full[i]}, ${target.id}, ${ranks[i]})
+          on conflict (roadmap_id, feedback_id) do update set rank = excluded.rank
+          where roadmap_ranks.column_id = excluded.column_id
+        `;
+      }
     }
   } else {
     await tx`
@@ -310,8 +360,20 @@ export async function moveCard(tx: Db, actor: Actor, productId: string, roadmapI
       on conflict (roadmap_id, feedback_id) do update set column_id = excluded.column_id, rank = excluded.rank
     `;
   }
-  const [r] = await tx<{ revision: number }[]>`
-    update roadmaps set sort_mode = 'freedom', revision = revision + 1 where id = ${rm.id} returning revision
+  const [placed] = await tx<{ placementRevision: number }[]>`
+    update roadmap_ranks set placement_revision = placement_revision + 1
+    where roadmap_id = ${rm.id} and feedback_id = ${fb.id} returning placement_revision
   `;
-  return { roadmapRevision: r.revision, feedbackRevision, columnId: target.id, previousColumnId: currentColumnId };
+  let roadmapRevision = rm.revision;
+  if (rm.sortMode !== 'freedom') {
+    const [r] = await tx<{ revision: number }[]>`update roadmaps set sort_mode = 'freedom', revision = revision + 1 where id = ${rm.id} returning revision`;
+    roadmapRevision = r.revision;
+  }
+  return { roadmapRevision, feedbackRevision, placementRevision: placed.placementRevision, columnId: target.id, previousColumnId: currentColumnId };
+}
+
+async function lockRoadmapShared(tx: Db, productId: string, roadmapId: string) {
+  const [r] = await tx<RoadmapRow[]>`select * from roadmaps where id = ${roadmapId} and product_id = ${productId} for share`;
+  if (!r) throw new AppError('NOT_FOUND');
+  return r;
 }

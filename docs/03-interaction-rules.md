@@ -142,7 +142,9 @@ column(feedback, roadmap):
 
 版本看板更新的是版本群組唯一 Tag；Feedback 的版本欄位為同一資料的投影，不能短暫分歧。
 
-拖曳交易包含 Feedback revision、看板 revision、單維度變更、排序更新與事件。任一失敗全部不變；客戶端顯示 pending，成功後同步相關列表／看板。同欄拖曳只改順序，不改 Feedback revision 或業務欄位。
+拖曳交易包含卡片排序 revision、跨欄時的 Feedback revision、單維度變更、排序更新與事件。任一失敗全部不變；客戶端顯示 pending，成功後同步相關列表／看板。同欄拖曳只改順序，不改 Feedback revision 或業務欄位。
+
+併發只限縮在真正衝突的範圍：看板 revision 只代表結構（欄位、排序模式、設定），拖曳不檢查它；同一張卡被他人先移動或修改時回 409 並重新載入，不自動重試；不同人移動不同卡片互不阻擋，只有指定的相鄰卡已離開該欄或先後顛倒時才回 409，請使用者重新放置。詳見 [API 契約](04-api-contracts.md) 的 Roadmap 移動。
 
 ### 排序
 

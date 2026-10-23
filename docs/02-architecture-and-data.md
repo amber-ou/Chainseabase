@@ -166,9 +166,9 @@ erDiagram
 
 | 資料表 | 重要欄位 | 限制 |
 | --- | --- | --- |
-| roadmaps | id、product_id、name、description、dimension、tag_group_id nullable、sort_mode、is_default、portal_published、revision | dimension=status/category/tag_group；tag_group 必須 single；建立後 dimension 固定；sort=create_time/freedom。 |
+| roadmaps | id、product_id、name、description、dimension、tag_group_id nullable、sort_mode、is_default、portal_published、revision | dimension=status/category/tag_group；tag_group 必須 single；建立後 dimension 固定；sort=create_time/freedom；revision 只版本化結構與設定，卡片移動不遞增（首次切 freedom 除外）。 |
 | roadmap_columns | id、roadmap_id、label、order、status_id nullable、category_id nullable、tag_id nullable、is_unclassified | 選項對應型別符合 dimension；同選項唯一；每 Tag 看板恰一未歸類欄。 |
-| roadmap_ranks | roadmap_id、column_id、feedback_id、rank | 每 roadmap＋feedback 最多一筆有效排序；實際欄位仍由 Feedback 資料推導，不以 rank 決定欄位。 |
+| roadmap_ranks | roadmap_id、column_id、feedback_id、rank、placement_revision | 每 roadmap＋feedback 最多一筆有效排序；實際欄位仍由 Feedback 資料推導，不以 rank 決定欄位；placement_revision 是單卡排序版本，供移動做樂觀檢查（重編號不遞增）。 |
 | personal_views | id、owner_id、product_id、subject_user_id、sort_mode、revision | owner＋product＋subject 唯一；subject 只能是有效團隊成員。 |
 | personal_columns | id、view_id、name、order、is_default | 每 view 一個固定預設欄，至少一欄。 |
 | personal_placements | view_id、feedback_id、column_id、rank | view＋feedback 唯一；欄位須屬同 view；卡片須仍屬 subject 責任清單。 |

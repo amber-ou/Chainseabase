@@ -187,11 +187,23 @@ scheduleDraft.actions 由初始第 2 列按順序重播，支援 row.add、comme
   "beforeFeedbackId": null,
   "afterFeedbackId": "<neighbor-id>",
   "expectedFeedbackRevision": 6,
-  "expectedRoadmapRevision": 3
+  "expectedPlacementRevision": 2
 }
 ```
 
-before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 null 代表空欄或放最頂端，需在契約中依目標欄是否為空明確解讀為頂端。兩者同時提供必須為目標欄相鄰卡，且不得是自己。伺服器判定目標實際維度，禁止額外 body 欄位偷偷改類別／Tag。
+before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 null 一律解讀為目標欄最頂端（空欄即唯一位置）。客戶端送出畫面上相鄰的兩張卡，且不得是自己。伺服器判定目標實際維度，禁止額外 body 欄位偷偷改類別／Tag。
+
+**併發範圍（移動不檢查整張看板 revision）**
+
+| 情境 | 保護方式 | 結果 |
+| --- | --- | --- |
+| 看板結構變更（欄位名稱、欄位順序、排序模式、名稱／描述、公開） | `roadmaps.revision`（`expectedRevision`／`If-Match`）；移動不送也不檢查此值 | 結構編輯彼此衝突回 409；移動只有在第一次把看板切成 freedom 時讓 revision +1 |
+| 同一筆 Feedback 被同時修改 | Feedback 列鎖；跨欄時檢查 `expectedFeedbackRevision`（同欄不檢查，因不改 Feedback 欄位）；每次移動檢查卡片自己的 `expectedPlacementRevision`（看板卡片與欄分頁回應中的 `placementRevision`，尚無排序紀錄為 0） | 409 `details.reason = "card_changed"`；客戶端重新載入，**不自動重試** |
+| 不同卡片的排序操作 | 目標欄列鎖序列化同欄寫入（鎖順序：Feedback 列 → 目標欄列）；看板列以共用鎖讀取 | 不同卡片互不衝突；他人卡片剛好落在同一對相鄰卡之間時，仍視為「放在兩卡之間」並緊接 after 卡之後 |
+| 落點已失效 | 相鄰卡離開目標欄，或 before／after 的先後已顛倒 | 409 `details.reason = "order_changed"`，不自動套用；客戶端重新載入後由使用者再放一次 |
+| 落點不合法 | 相鄰卡是自己或不存在 | 400 VALIDATION_FAILED |
+
+成功回應：`{ roadmapRevision, feedbackRevision, placementRevision, columnId, previousColumnId }`。`placementRevision` 只出現在內部看板與欄分頁回應，公開投影不含。
 
 ## Personal
 
@@ -272,7 +284,7 @@ before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 nul
 | GET `/health` | 健康檢查（含資料庫）。 |
 | GET／POST `/jobs/run` | outbox 工作入口，需 `Authorization: Bearer <JOB_RUNNER_SECRET 或 CRON_SECRET>`；錯誤 secret 回 404。 |
 | POST `/me/avatar-upload` | 直接上傳圖片本體（content-type 為 `image/jpeg`、`image/png` 或 `image/webp`，≤ 2 MB）；伺服器驗證實際內容、重新編碼為 256px WebP 並移除中繼資料。GET `/avatars/:userId` 由伺服器讀取 private bucket。 |
-| GET `/products/:p/roadmaps/:r/board?limit=` | 一次取得所有欄位、伺服器計算的筆數與每欄第一頁卡片。 |
+| GET `/products/:p/roadmaps/:r/board?limit=` | 一次取得所有欄位、伺服器計算的筆數與每欄第一頁卡片（內部卡片附 `placementRevision`，供移動檢查）。 |
 | GET `/products/:p/personal/feedback/:f/tags` | 本人對該 Feedback 的私人 Tag 與 revision（首次為 0）。 |
 | GET `/products/:p/calendar/events/:eventId` | 取得單一活動；整系列編輯先以此讀 master 與其 ETag。 |
 | GET／PUT `/portal/products/:p/notifications…` | 測試成員在前台的本人通知（只含可存取的公開內容）。 |

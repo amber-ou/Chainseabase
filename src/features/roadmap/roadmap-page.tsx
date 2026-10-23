@@ -14,7 +14,8 @@ import type { Feedback, Taxonomy } from '@/features/feedback/types';
 import { Board, type BoardColumn } from './board';
 
 interface Roadmap { id: string; name: string; description: string; dimension: 'status' | 'category' | 'tag_group'; tagGroupId: string | null; tagGroupName: string | null; sortMode: 'create_time' | 'freedom'; isDefault: boolean; portalPublished: boolean; revision: number }
-interface BoardData { roadmap: Roadmap; columns: { id: string; label: string; count: number; isUnclassified: boolean; cards: Feedback[] }[] }
+type BoardCard = Feedback & { placementRevision: number };
+interface BoardData { roadmap: Roadmap; columns: { id: string; label: string; count: number; isUnclassified: boolean; cards: BoardCard[] }[] }
 
 const DIMENSION_LABEL: Record<string, string> = { status: '狀態', category: '類別', tag_group: 'Tag 群組' };
 
@@ -118,7 +119,7 @@ function RoadmapBoard({ roadmapId, onOpen, onSettings, onRoadmapsChanged }: { ro
     try {
       await api.post(`/products/${product.id}/roadmaps/${rm.id}/moves`, {
         key: newKey(),
-        body: { feedbackId: cardId, targetColumnId, beforeFeedbackId: beforeId, afterFeedbackId: afterId, expectedFeedbackRevision: card.revision, expectedRoadmapRevision: rm.revision },
+        body: { feedbackId: cardId, targetColumnId, beforeFeedbackId: beforeId, afterFeedbackId: afterId, expectedFeedbackRevision: card.revision, expectedPlacementRevision: card.placementRevision },
       });
       announce(`已將「${card.title}」移到「${target.label}」`);
       if (rm.sortMode === 'create_time') toast('info', '已切換為自由排序');
@@ -126,7 +127,10 @@ function RoadmapBoard({ roadmapId, onOpen, onSettings, onRoadmapsChanged }: { ro
       onRoadmapsChanged();
     } catch (e) {
       board.setData(prev);
-      const msg = e instanceof ApiError && e.status === 409 ? '看板或卡片已被其他人更新，已重新載入，請再試一次。' : errorMessage(e);
+      // conflicts are shown, never retried automatically: the user decides the new drop position
+      const msg = e instanceof ApiError && e.status === 409
+        ? (e.body.details?.reason === 'order_changed' ? '欄位順序剛被其他人調整，已重新載入，請再放置一次。' : e.body.details?.reason === 'card_changed' ? '這張卡片剛被其他人移動或修改，已重新載入。' : `${e.message} 已重新載入。`)
+        : errorMessage(e);
       setError(msg);
       announce(`移動失敗：${msg}`);
       void board.reload();

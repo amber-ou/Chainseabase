@@ -152,8 +152,11 @@ export interface UpdateFeedbackInput extends ClassificationInput {
   expectedRevision: number;
 }
 
-/** Shared write path for every internal feedback edit (modal, roadmap, settings). */
-export async function updateFeedback(tx: Db, actor: Actor, productId: string, feedbackId: string, input: UpdateFeedbackInput): Promise<FeedbackDto> {
+/**
+ * Shared write path for every internal feedback edit (modal, roadmap, settings).
+ * `placedByRoadmapId`: a roadmap move places the card on its own board itself.
+ */
+export async function updateFeedback(tx: Db, actor: Actor, productId: string, feedbackId: string, input: UpdateFeedbackInput, placedByRoadmapId?: string): Promise<FeedbackDto> {
   const current = await lockFeedback(tx, productId, feedbackId);
   if (!current) throw new AppError('NOT_FOUND');
   assertRevision(current.revision, input.expectedRevision);
@@ -182,7 +185,7 @@ export async function updateFeedback(tx: Db, actor: Actor, productId: string, fe
     if (people.changed) await syncPersonalPlacements(tx, productId);
   }
   await tx`update feedback set revision = revision + 1, updated_at = now() where id = ${feedbackId}`;
-  if (classificationChanged) await placeFeedbackInRankedRoadmaps(tx, productId, feedbackId);
+  if (classificationChanged) await placeFeedbackInRankedRoadmaps(tx, productId, feedbackId, placedByRoadmapId);
   await emitNotificationEvent(tx, {
     productId, actorId: actor.id, feedbackId, type: 'feedback.updated',
     intents: newlyResponsible.map((recipientId) => ({ recipientId, reason: 'assigned' as const })),

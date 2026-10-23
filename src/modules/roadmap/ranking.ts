@@ -60,11 +60,14 @@ export async function placeFeedbackInRankedRoadmaps(tx: Db, productId: string, f
     const columnId = columnOrThrow(facts, rm.dimension, columns);
     const [existing] = await tx<{ columnId: string }[]>`select column_id from roadmap_ranks where roadmap_id = ${rm.id} and feedback_id = ${feedbackId}`;
     if (existing?.columnId === columnId) continue;
+    // same column lock as card moves, so concurrent arrivals never share a top rank
+    await tx`select id from roadmap_columns where id = ${columnId} for update`;
     const [{ minRank }] = await tx<{ minRank: number | null }[]>`select min(rank) as min_rank from roadmap_ranks where column_id = ${columnId}`;
     const rank = minRank === null ? 0 : minRank - RANK_STEP;
     await tx`
-      insert into roadmap_ranks (roadmap_id, feedback_id, column_id, rank) values (${rm.id}, ${feedbackId}, ${columnId}, ${rank})
-      on conflict (roadmap_id, feedback_id) do update set column_id = excluded.column_id, rank = excluded.rank
+      insert into roadmap_ranks (roadmap_id, feedback_id, column_id, rank, placement_revision) values (${rm.id}, ${feedbackId}, ${columnId}, ${rank}, 1)
+      on conflict (roadmap_id, feedback_id) do update
+        set column_id = excluded.column_id, rank = excluded.rank, placement_revision = roadmap_ranks.placement_revision + 1
     `;
   }
 }

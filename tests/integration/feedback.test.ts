@@ -61,7 +61,8 @@ describe('Feedback defaults, versions and tags', () => {
     const board = expectOk(await api.get(`/products/${w.productA.id}/roadmaps/${rm.id}/board`, { as: w.teamA }));
     const col11 = board.columns.find((c: any) => c.label === 'v1.1');
     expectOk(await api.post(`/products/${w.productA.id}/roadmaps/${rm.id}/moves`, { as: w.teamA, key: true, body: {
-      feedbackId: fb.id, targetColumnId: col11.id, expectedFeedbackRevision: u.revision, expectedRoadmapRevision: board.roadmap.revision,
+      feedbackId: fb.id, targetColumnId: col11.id, expectedFeedbackRevision: u.revision,
+      expectedPlacementRevision: board.columns.flatMap((c: any) => c.cards).find((c: any) => c.id === fb.id).placementRevision,
     } }));
     const after = expectOk(await api.get(`/products/${w.productA.id}/feedback/${fb.id}`, { as: w.teamA }));
     expect(after.version.name).toBe('v1.1');

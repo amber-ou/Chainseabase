@@ -1,5 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { getSql } from '@/server/db';
+import type { Actor } from '@/modules/feedback/service';
+import { moveCard } from '@/modules/roadmap/service';
 import { api, createFeedback, expectOk, installFakes, refreshTax, resetDb, seedWorld, type World } from '../helpers/harness';
 
 let w: World;
@@ -25,13 +27,17 @@ function colOf(b: any, feedbackId: string) {
   const cols = b.columns.filter((c: any) => c.cards.some((x: any) => x.id === feedbackId));
   return cols;
 }
-async function move(rmId: string, feedbackId: string, targetColumnId: string, opts: { before?: string | null; after?: string | null; as?: any } = {}) {
+function placementOf(b: any, feedbackId: string): number {
+  for (const c of b.columns) for (const x of c.cards) if (x.id === feedbackId) return x.placementRevision;
+  throw new Error(`card ${feedbackId} not on board`);
+}
+async function moveBody(rmId: string, feedbackId: string, targetColumnId: string, opts: { before?: string | null; after?: string | null } = {}) {
   const b = await board(rmId);
   const f = await fb(feedbackId);
-  return api.post(`${P()}/roadmaps/${rmId}/moves`, {
-    as: opts.as ?? w.teamA, key: true,
-    body: { feedbackId, targetColumnId, beforeFeedbackId: opts.before ?? null, afterFeedbackId: opts.after ?? null, expectedFeedbackRevision: f.revision, expectedRoadmapRevision: b.roadmap.revision },
-  });
+  return { feedbackId, targetColumnId, beforeFeedbackId: opts.before ?? null, afterFeedbackId: opts.after ?? null, expectedFeedbackRevision: f.revision, expectedPlacementRevision: placementOf(b, feedbackId) };
+}
+async function move(rmId: string, feedbackId: string, targetColumnId: string, opts: { before?: string | null; after?: string | null; as?: any } = {}) {
+  return api.post(`${P()}/roadmaps/${rmId}/moves`, { as: opts.as ?? w.teamA, key: true, body: await moveBody(rmId, feedbackId, targetColumnId, opts) });
 }
 
 describe('Roadmap single-dimension boards', () => {
@@ -154,8 +160,13 @@ describe('Roadmap single-dimension boards', () => {
     // between C and B
     expectOk(await move(def.id, a.id, pool.id, { after: c.id, before: b.id }));
     expect((await board(def.id)).columns[0].cards.map((x: any) => x.title)).toEqual(['C', 'A', 'B']);
-    // non-adjacent neighbours are rejected
-    expect((await move(def.id, a.id, pool.id, { after: b.id, before: c.id })).status).toBe(400);
+    // a neighbour pair in the opposite order means the column changed under the client: an ordering conflict
+    const stale = await move(def.id, a.id, pool.id, { after: b.id, before: c.id });
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.details.reason).toBe('order_changed');
+    // a neighbour that does not exist / the card itself is a bad request
+    expect((await move(def.id, a.id, pool.id, { before: a.id })).status).toBe(400);
+    expect((await move(def.id, a.id, pool.id, { before: '00000000-0000-4000-8000-000000000000' })).status).toBe(400);
     bd = await board(def.id);
     expectOk(await api.patch(`${P()}/roadmaps/${def.id}`, { as: w.teamA, body: { sortMode: 'create_time', expectedRevision: bd.roadmap.revision } }));
     bd = await board(def.id);
@@ -174,7 +185,7 @@ describe('Roadmap single-dimension boards', () => {
     expect(col.cards).toHaveLength(2);
     const f = await fb(created[0].id);
     expectOk(await api.post(`${P()}/roadmaps/${def.id}/moves`, { as: w.teamA, key: true, body: {
-      feedbackId: created[0].id, targetColumnId: col.id, beforeFeedbackId: null, afterFeedbackId: null, expectedFeedbackRevision: f.revision, expectedRoadmapRevision: small.roadmap.revision,
+      feedbackId: created[0].id, targetColumnId: col.id, beforeFeedbackId: null, afterFeedbackId: null, expectedFeedbackRevision: f.revision, expectedPlacementRevision: 0,
     } }));
     const full = await board(def.id);
     expect(full.columns.find((c: any) => c.label === '進行中').cards.map((x: any) => x.title)).toEqual(['T0', 'T5', 'T4', 'T3', 'T2', 'T1']);
@@ -212,12 +223,13 @@ describe('Roadmap single-dimension boards', () => {
     const b = await board(def.id);
     const target1 = b.columns.find((c: any) => c.label === '進行中').id;
     const target2 = b.columns.find((c: any) => c.label === '延後').id;
-    const body = (t: string) => ({ feedbackId: f.id, targetColumnId: t, beforeFeedbackId: null, afterFeedbackId: null, expectedFeedbackRevision: f.revision, expectedRoadmapRevision: b.roadmap.revision });
+    const body = (t: string) => ({ feedbackId: f.id, targetColumnId: t, beforeFeedbackId: null, afterFeedbackId: null, expectedFeedbackRevision: f.revision, expectedPlacementRevision: placementOf(b, f.id) });
     const [x, y] = await Promise.all([
       api.post(`${P()}/roadmaps/${def.id}/moves`, { as: w.teamA, key: true, body: body(target1) }),
       api.post(`${P()}/roadmaps/${def.id}/moves`, { as: w.teamB, key: true, body: body(target2) }),
     ]);
     expect([x.status, y.status].sort()).toEqual([200, 409]);
+    expect((x.status === 409 ? x : y).body.error.details.reason).toBe('card_changed');
     expect(colOf(await board(def.id), f.id)).toHaveLength(1);
     // a corrupt row (two single-select tags) stops the drag with an explicit error
     const ver = expectOk(await api.post(`${P()}/roadmaps`, { as: w.teamA, body: { name: '版本', dimension: 'tag_group', tagGroupId: w.versionGroup } }), 201);
@@ -262,5 +274,174 @@ describe('Roadmap single-dimension boards', () => {
     const order = expectOk(await api.put(`${P()}/roadmaps/order`, { as: w.teamA, body: { roadmapIds: list.map((r: any) => r.id), expectedRevision: p.revision } }));
     expect(order.productRevision).toBe(p.revision + 1);
     expect((await api.put(`${P()}/roadmaps/order`, { as: w.teamA, body: { roadmapIds: [], expectedRevision: order.productRevision } })).status).toBe(400);
+  });
+});
+
+describe('Roadmap move concurrency scope', () => {
+  async function setup(n: number) {
+    const [def] = await roadmaps();
+    const cards = [];
+    for (let i = 0; i < n; i++) cards.push(await createFeedback(w, { title: `C${i}` }));
+    return { def, cards };
+  }
+
+  it('moves of different cards on the same board succeed concurrently and keep exactly one column each', async () => {
+    const { def, cards } = await setup(8);
+    const b = await board(def.id);
+    const cols = b.columns.map((c: any) => c.id);
+    // everyone read the same board snapshot, then moves a different card
+    const bodies = cards.map((c, i) => ({
+      feedbackId: c.id, targetColumnId: cols[i % cols.length], beforeFeedbackId: null, afterFeedbackId: null,
+      expectedFeedbackRevision: c.revision, expectedPlacementRevision: placementOf(b, c.id),
+    }));
+    const results = await Promise.all(bodies.map((body, i) => api.post(`${P()}/roadmaps/${def.id}/moves`, { as: i % 2 ? w.teamA : w.teamB, key: true, body })));
+    expect(results.map((r) => r.status)).toEqual(results.map(() => 200));
+    const after = await board(def.id);
+    for (const c of cards) expect(colOf(after, c.id)).toHaveLength(1);
+    const [{ dup }] = await getSql()`select count(*)::int as dup from (select feedback_id from roadmap_ranks where roadmap_id = ${def.id} group by feedback_id having count(*) > 1) x`;
+    expect(dup).toBe(0);
+    const [{ ties }] = await getSql()`select count(*)::int as ties from (select column_id, rank from roadmap_ranks where roadmap_id = ${def.id} group by column_id, rank having count(*) > 1) x`;
+    expect(ties).toBe(0);
+  });
+
+  it('concurrent reorders of different cards between the same neighbours both land, order stays consistent', async () => {
+    const { def, cards } = await setup(4); // pool order: C3 C2 C1 C0
+    const pool = (await board(def.id)).columns[0];
+    expectOk(await move(def.id, cards[0].id, pool.id, { before: cards[3].id })); // switch to freedom: C0 C3 C2 C1
+    const b = await board(def.id);
+    const order = b.columns[0].cards.map((c: any) => c.id);
+    // both clients drop a different card at the top
+    const [x, y] = await Promise.all([cards[1], cards[2]].map((c, i) => api.post(`${P()}/roadmaps/${def.id}/moves`, {
+      as: i ? w.teamA : w.teamB, key: true,
+      body: { feedbackId: c.id, targetColumnId: pool.id, beforeFeedbackId: null, afterFeedbackId: null, expectedFeedbackRevision: c.revision, expectedPlacementRevision: placementOf(b, c.id) },
+    })));
+    expect([x.status, y.status]).toEqual([200, 200]);
+    const final = (await board(def.id)).columns[0].cards.map((c: any) => c.id);
+    expect(final).toHaveLength(order.length);
+    expect(new Set(final).size).toBe(final.length);
+    expect(final.slice(0, 2).sort()).toEqual([cards[1].id, cards[2].id].sort());
+    expect(final.slice(2)).toEqual([cards[0].id, cards[3].id]);
+  });
+
+  it('a drop between two neighbours still lands when another card was placed between them meanwhile', async () => {
+    const { def, cards } = await setup(4);
+    const pool = (await board(def.id)).columns[0];
+    expectOk(await move(def.id, cards[0].id, pool.id)); // C0 C3 C2 C1
+    const snapshot = await board(def.id);
+    const between = (c: any) => ({ feedbackId: c.id, targetColumnId: pool.id, afterFeedbackId: cards[0].id, beforeFeedbackId: cards[3].id, expectedFeedbackRevision: c.revision, expectedPlacementRevision: placementOf(snapshot, c.id) });
+    expectOk(await api.post(`${P()}/roadmaps/${def.id}/moves`, { as: w.teamB, key: true, body: between(cards[1]) })); // C0 C1 C3 C2
+    // A still sees C0 and C3 as adjacent: the drop is still between them, right after C0
+    expectOk(await api.post(`${P()}/roadmaps/${def.id}/moves`, { as: w.teamA, key: true, body: between(cards[2]) }));
+    expect((await board(def.id)).columns[0].cards.map((c: any) => c.id)).toEqual([cards[0].id, cards[2].id, cards[1].id, cards[3].id]);
+  });
+
+  it('a stale neighbour pair is a real ordering conflict (409 order_changed), not silently applied', async () => {
+    const { def, cards } = await setup(4);
+    const pool = (await board(def.id)).columns[0];
+    expectOk(await move(def.id, cards[0].id, pool.id)); // C0 C3 C2 C1
+    const snapshot = await board(def.id);
+    // client A wants C0 between C2 and C1; meanwhile B moves C1 to the top
+    const bodyA = { feedbackId: cards[0].id, targetColumnId: pool.id, afterFeedbackId: cards[2].id, beforeFeedbackId: cards[1].id, expectedFeedbackRevision: cards[0].revision, expectedPlacementRevision: placementOf(snapshot, cards[0].id) };
+    expectOk(await move(def.id, cards[1].id, pool.id, { as: w.teamB }));
+    const r = await api.post(`${P()}/roadmaps/${def.id}/moves`, { as: w.teamA, key: true, body: bodyA });
+    expect(r.status).toBe(409);
+    expect(r.body.error.details.reason).toBe('order_changed');
+    expect((await board(def.id)).columns[0].cards.map((c: any) => c.id)).toEqual([cards[1].id, cards[0].id, cards[3].id, cards[2].id]);
+  });
+
+  it('the same card reordered twice from the same snapshot: the second is a card conflict', async () => {
+    const { def, cards } = await setup(3);
+    const pool = (await board(def.id)).columns[0];
+    expectOk(await move(def.id, cards[0].id, pool.id));
+    const snap = await board(def.id);
+    const body = (before: string | null, after: string | null) => ({ feedbackId: cards[1].id, targetColumnId: pool.id, beforeFeedbackId: before, afterFeedbackId: after, expectedFeedbackRevision: cards[1].revision, expectedPlacementRevision: placementOf(snap, cards[1].id) });
+    expectOk(await api.post(`${P()}/roadmaps/${def.id}/moves`, { as: w.teamA, key: true, body: body(null, null) }));
+    const second = await api.post(`${P()}/roadmaps/${def.id}/moves`, { as: w.teamB, key: true, body: body(null, cards[2].id) });
+    expect(second.status).toBe(409);
+    expect(second.body.error.details.reason).toBe('card_changed');
+  });
+
+  it('moves do not bump the board structure revision; structure edits do not block moves', async () => {
+    const { def, cards } = await setup(3);
+    const pool = (await board(def.id)).columns[0];
+    const first = expectOk(await move(def.id, cards[0].id, pool.id)); // switches to freedom: structure +1
+    expect(first.roadmapRevision).toBe(def.revision + 1);
+    const before = (await board(def.id)).roadmap.revision;
+    expectOk(await move(def.id, cards[1].id, pool.id));
+    expectOk(await move(def.id, cards[2].id, pool.id, { as: w.teamB }));
+    expect((await board(def.id)).roadmap.revision).toBe(before);
+    // a settings edit with the revision read before the moves still applies
+    expectOk(await api.patch(`${P()}/roadmaps/${def.id}/columns/${pool.id}`, { as: w.teamB, body: { label: '待辦池', expectedRevision: before } }));
+    // and a move made from a snapshot taken before that structure edit still applies
+    expectOk(await move(def.id, cards[0].id, pool.id, { before: cards[2].id }));
+    // a stale structure edit still conflicts with another structure edit
+    expect((await api.patch(`${P()}/roadmaps/${def.id}`, { as: w.teamA, body: { name: 'x', expectedRevision: before } })).status).toBe(409);
+  });
+
+  it('renumbering a column never pulls back a card that a concurrent transaction moved out', async () => {
+    const { def, cards } = await setup(4); // pool order: C3 C2 C1 C0
+    const [pool, doing] = (await board(def.id)).columns;
+    expectOk(await move(def.id, cards[0].id, pool.id)); // freedom: C0 C3 C2 C1
+    // exhaust the gaps so the next insertion renumbers the whole pool column
+    const ids = [cards[0].id, cards[3].id, cards[2].id, cards[1].id];
+    for (let i = 0; i < ids.length; i++) await getSql()`update roadmap_ranks set rank = ${i * 1e-7} where roadmap_id = ${def.id} and feedback_id = ${ids[i]}`;
+    const snap = await board(def.id);
+    const [actor] = await getSql()<Actor[]>`select id, display_name, avatar_path, google_picture_url, revision from users where id = ${w.teamB.id}`;
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    // transaction 1 moves C3 out of the pool (locks only the 進行中 column) and stays open
+    let moved!: () => void;
+    const movedOut = new Promise<void>((r) => { moved = r; });
+    const tx1 = getSql().begin(async (tx) => {
+      await moveCard(tx, actor, w.productA.id, def.id, {
+        feedbackId: cards[3].id, targetColumnId: doing.id, beforeFeedbackId: null, afterFeedbackId: null,
+        expectedFeedbackRevision: cards[3].revision, expectedPlacementRevision: placementOf(snap, cards[3].id),
+      });
+      moved();
+      await held;
+    });
+    await movedOut;
+    // meanwhile C1 is dropped right after C0: the pool renumber includes the (still uncommitted) C3
+    const req = api.post(`${P()}/roadmaps/${def.id}/moves`, {
+      as: w.teamA, key: true,
+      body: { feedbackId: cards[1].id, targetColumnId: pool.id, afterFeedbackId: cards[0].id, beforeFeedbackId: null, expectedFeedbackRevision: cards[1].revision, expectedPlacementRevision: placementOf(snap, cards[1].id) },
+    });
+    for (let i = 0; i < 100; i++) {
+      const [{ waiting }] = await getSql()`select count(*)::int as waiting from pg_stat_activity where wait_event_type = 'Lock' and datname = current_database()`;
+      if (waiting > 0) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    release();
+    await tx1;
+    expectOk(await req);
+    const [c3] = await getSql()`select column_id from roadmap_ranks where roadmap_id = ${def.id} and feedback_id = ${cards[3].id}`;
+    expect(c3.columnId).toBe(doing.id);
+    const after = await board(def.id);
+    expect(after.columns[0].cards.map((c: any) => c.id)).toEqual([cards[0].id, cards[1].id, cards[2].id]);
+    expect(after.columns[1].cards.map((c: any) => c.id)).toEqual([cards[3].id]);
+    const [{ ties }] = await getSql()`select count(*)::int as ties from (select column_id, rank from roadmap_ranks where roadmap_id = ${def.id} group by column_id, rank having count(*) > 1) x`;
+    expect(ties).toBe(0);
+  });
+
+  it('each successful move advances the card placement revision by exactly one (same and cross column)', async () => {
+    const { def, cards } = await setup(2);
+    const [pool, doing] = (await board(def.id)).columns;
+    expectOk(await move(def.id, cards[0].id, pool.id)); // initializes ranks
+    const p0 = placementOf(await board(def.id), cards[1].id);
+    const cross = expectOk(await move(def.id, cards[1].id, doing.id));
+    expect(cross.placementRevision).toBe(p0 + 1);
+    const same = expectOk(await move(def.id, cards[1].id, doing.id));
+    expect(same.placementRevision).toBe(p0 + 2);
+    expect(placementOf(await board(def.id), cards[1].id)).toBe(p0 + 2);
+  });
+
+  it('placement revisions are exposed only on internal boards', async () => {
+    const { def } = await setup(1);
+    const b = await board(def.id);
+    expect(typeof b.columns[0].cards[0].placementRevision).toBe('number');
+    expectOk(await api.patch(`${P()}/roadmaps/${def.id}`, { as: w.teamA, body: { portalPublished: true, expectedRevision: b.roadmap.revision } }));
+    await getSql()`update feedback set visibility = 'public'`;
+    const pub = expectOk(await api.get(`/public/products/${w.productA.slug}/roadmaps/${def.id}`, { site: 'portal' }));
+    expect(JSON.stringify(pub)).not.toContain('placementRevision');
   });
 });

@@ -70,8 +70,10 @@ describe('rank helpers', () => {
     expect(rankBetween(5, 5)).toBeNull();
     expect(sequentialRanks(3)).toEqual([0, 1024, 2048]);
   });
-  it('resolveInsertIndex follows before/after semantics and rejects non-adjacent or self neighbours', () => {
+  it('resolveInsertIndex follows before/after semantics and rejects reordered, missing or self neighbours', () => {
     const ids = ['a', 'b', 'c'];
+    // a card landed between the pair since the client's view: still "between a and c", right after a
+    expect(resolveInsertIndex(ids, { beforeFeedbackId: 'c', afterFeedbackId: 'a' }, 'x')).toBe(1);
     expect(resolveInsertIndex(ids, { beforeFeedbackId: null, afterFeedbackId: null }, 'x')).toBe(0);
     expect(resolveInsertIndex(ids, { beforeFeedbackId: 'b', afterFeedbackId: null }, 'x')).toBe(1);
     expect(resolveInsertIndex(ids, { beforeFeedbackId: null, afterFeedbackId: 'c' }, 'x')).toBe(3);

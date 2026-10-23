@@ -28,7 +28,9 @@ export interface PlacementInput { beforeFeedbackId: string | null; afterFeedback
  * Resolve the insertion index in `orderedIds` (moved item already excluded).
  * before = the moved card goes immediately before that card;
  * after  = the moved card goes immediately after that card;
- * both null = top of the column. When both are given they must be adjacent.
+ * both null = top of the column. Clients send the pair that was adjacent in their view;
+ * if other cards landed between them since, the drop still means "between the two"
+ * and goes right after `after`. A pair that is no longer in that order is invalid.
  */
 export function resolveInsertIndex(orderedIds: string[], p: PlacementInput, movedId: string): number | 'invalid' {
   if (p.beforeFeedbackId === movedId || p.afterFeedbackId === movedId) return 'invalid';
@@ -36,7 +38,7 @@ export function resolveInsertIndex(orderedIds: string[], p: PlacementInput, move
   const ai = p.afterFeedbackId ? orderedIds.indexOf(p.afterFeedbackId) : -1;
   if (p.beforeFeedbackId && bi < 0) return 'invalid';
   if (p.afterFeedbackId && ai < 0) return 'invalid';
-  if (p.beforeFeedbackId && p.afterFeedbackId) return ai + 1 === bi ? bi : 'invalid';
+  if (p.beforeFeedbackId && p.afterFeedbackId) return ai < bi ? ai + 1 : 'invalid';
   if (p.beforeFeedbackId) return bi;
   if (p.afterFeedbackId) return ai + 1;
   return 0;

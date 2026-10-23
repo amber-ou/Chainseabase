@@ -163,8 +163,9 @@ export function registerWorkRoutes(r: Router) {
   r.post('/products/:p/roadmaps/:r/moves', ['admin'], async (ctx) => {
     const { user, productId } = await teamProduct(ctx);
     const roadmapId = uuidParam(ctx, 'r');
-    // no extra fields: a move can never sneak in category/tag changes
-    const body = await ctx.body(z.object({ ...zMove, expectedFeedbackRevision: zRevision, expectedRoadmapRevision: zRevision }).strict());
+    // no extra fields: a move can never sneak in category/tag changes. The board (structure)
+    // revision is not part of a move; the card's own versions scope the conflict check.
+    const body = await ctx.body(z.object({ ...zMove, expectedFeedbackRevision: zRevision, expectedPlacementRevision: zRevision }).strict());
     return mutate(ctx, { keyRequired: true, body }, async (tx) => ({ data: await moveRoadmapCard(tx, user, productId, roadmapId, body) }));
   });
 
