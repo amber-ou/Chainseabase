@@ -8,6 +8,7 @@ import { requireTeam, requireUser } from '../authz';
 import { clearSessionCookie, createSession, revokeSession, sessionCookie } from '../session';
 import { getGoogleOAuth, LOGIN_SCOPES, CALENDAR_SCOPES } from '../adapters/google-oauth';
 import { getAvatarStorage } from '../adapters/storage';
+import { FakeCalendarApi, getCalendarApi } from '../adapters/google-calendar';
 import { clearTransientCookie, newTransient, pkceChallenge, readTransient, safeReturnTo, transientCookie, upsertGoogleUser } from '@/modules/identity/auth';
 import { acceptInvitation, createInvitation, listInvitations, resendInvitation, revokeInvitation } from '@/modules/identity/invitations';
 import { changeRole, meDto, removeMembership, updateMe } from '@/modules/identity/users';
@@ -82,6 +83,23 @@ export function registerIdentityRoutes(r: Router) {
     });
     ctx.cookies.push(sessionCookie(ctx.site, token));
     return { data: { ok: true, testOnly: true } };
+  });
+
+  // ---- Test-only: connect the in-memory fake calendar (dev/E2E; never Google, never production) ----
+  r.post('/test-support/calendar/connect', ['admin'], async (ctx) => {
+    const cfg = getConfig();
+    if (!cfg.e2eTestLogin || cfg.calendarProvider !== 'fake') throw new AppError('NOT_FOUND');
+    const user = requireTeam(ctx);
+    const fake = getCalendarApi();
+    if (!(fake instanceof FakeCalendarApi)) throw new AppError('NOT_FOUND');
+    const sub = user.googleSub ?? `dev-${user.id}`;
+    const body = await ctx.body(z.object({ calendarId: z.string().min(3).max(200).default('dev-product-calendar@fake.local'), role: z.enum(['owner', 'writer', 'reader']).default('writer') }).strict());
+    if (!fake.calendars.has(body.calendarId)) fake.addCalendar(body.calendarId, 'Chainseabase 模擬日曆', 'Asia/Taipei', {});
+    fake.calendars.get(body.calendarId)!.acl.set(sub, body.role);
+    await withTx((tx) => saveCalendarGrant(tx, user.id, sub, {
+      idToken: null, accessToken: `fake-access-${sub}-dev`, refreshToken: `fake-refresh-${sub}`, expiresIn: 3600, scope: ['openid', 'email', ...CALENDAR_SCOPES],
+    }));
+    return { data: { connected: true, calendarId: body.calendarId, fake: true } };
   });
 
   // ---- Site/session info ----

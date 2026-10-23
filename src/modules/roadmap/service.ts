@@ -293,7 +293,7 @@ export async function moveCard(tx: Db, actor: Actor, productId: string, roadmapI
   const belowId = order[index];
   const above = rankOf(aboveId);
   const below = rankOf(belowId);
-  let rank = (aboveId && above === null) || (belowId && below === null) ? null : rankBetween(above, below);
+  const rank = (aboveId && above === null) || (belowId && below === null) ? null : rankBetween(above, below);
   if (rank === null) {
     // renumber the whole target column with the moved card inserted
     const full = [...order.slice(0, index), fb.id, ...order.slice(index)];

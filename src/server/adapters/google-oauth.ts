@@ -151,10 +151,15 @@ export class FakeGoogleOAuthClient implements GoogleOAuthClient {
   }
   async refreshAccessToken(refreshToken: string) {
     const r = this.refreshTokens.get(refreshToken);
+    // stateless dev/E2E tokens survive a server restart
+    const dev = /^fake-refresh-(.+)$/.exec(refreshToken);
+    if (!r && dev && !this.revokedDev.has(refreshToken)) return { accessToken: `fake-access-${dev[1]}-dev`, expiresIn: 3600, scope: ['openid', 'email', ...CALENDAR_SCOPES] };
     if (!r || r.revoked) throw new OAuthGrantError(true, 'fake_invalid_grant');
     return { accessToken: r.accessToken, expiresIn: 3600, scope: r.scope };
   }
+  revokedDev = new Set<string>();
   async revokeToken(token: string) {
+    if (token.startsWith('fake-refresh-')) this.revokedDev.add(token);
     const r = this.refreshTokens.get(token);
     if (r) r.revoked = true;
   }
@@ -166,6 +171,8 @@ export function getGoogleOAuth(): GoogleOAuthClient {
   if (!g.__csbGoogleOAuth) {
     const cfg = getConfig();
     if (cfg.googleClientId && cfg.googleClientSecret) g.__csbGoogleOAuth = new RealGoogleOAuthClient(cfg.googleClientId, cfg.googleClientSecret);
+    // local development / E2E only: the fake calendar needs a token refresher (never in production)
+    else if (cfg.e2eTestLogin && cfg.calendarProvider === 'fake') g.__csbGoogleOAuth = new FakeGoogleOAuthClient();
     else throw new AppError('NOT_CONFIGURED', 'Google 登入尚未設定（缺少 GOOGLE_CLIENT_ID／GOOGLE_CLIENT_SECRET）。');
   }
   return g.__csbGoogleOAuth;
