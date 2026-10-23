@@ -263,14 +263,15 @@ create table comments (
   author_id uuid not null references users (id),
   reply_to_id uuid references comments (id),
   quoted_author_id uuid references users (id),
-  created_at timestamptz not null default now(),
+  seq bigserial not null,
+  created_at timestamptz not null default clock_timestamp(),
   edited_at timestamptz,
   deleted_at timestamptz,
   revision integer not null default 1,
   foreign key (feedback_id, product_id) references feedback (id, product_id),
   check (stream = 'schedule' or kind = 'normal')
 );
-create index comments_stream_idx on comments (feedback_id, stream, created_at, id);
+create index comments_stream_idx on comments (feedback_id, stream, seq);
 create index comments_author_idx on comments (product_id, author_id);
 
 create function comments_reply_check() returns trigger language plpgsql as $$
@@ -323,7 +324,7 @@ create table schedule_rows (
   product_id uuid not null,
   display_row integer not null check (display_row >= 2),
   created_by uuid not null references users (id),
-  created_at timestamptz not null default now(),
+  created_at timestamptz not null default clock_timestamp(),
   unique (feedback_id, display_row)
 );
 
@@ -344,7 +345,7 @@ create table schedule_operations (
   affected_entry_ids uuid[] not null default '{}',
   payload jsonb not null default '{}',
   seq bigserial not null,
-  created_at timestamptz not null default now(),
+  created_at timestamptz not null default clock_timestamp(),
   hidden_at timestamptz,
   hidden_by uuid references users (id),
   hidden_by_operation_id uuid references schedule_operations (id)
@@ -363,7 +364,7 @@ create table schedule_entries (
   body text not null check (char_length(body) between 1 and 5000),
   operation_id uuid not null unique references schedule_operations (id),
   seq bigserial not null,
-  created_at timestamptz not null default now(),
+  created_at timestamptz not null default clock_timestamp(),
   removed_at timestamptz,
   removed_reason text check (removed_reason in ('clear', 'history_hide')),
   removed_by_operation_id uuid references schedule_operations (id),

@@ -1,7 +1,7 @@
 import type { Db } from '@/server/db';
 import { AppError, assertRevision, invalid } from '@/server/errors';
 import { emitNotificationEvent } from '@/server/events';
-import { iso, encodeCursor, decodeCursor } from '@/modules/shared/text';
+import { iso } from '@/modules/shared/text';
 import { userRef, type UserRef } from '@/modules/shared/users';
 import { coordinate } from '@/modules/schedule/parser';
 import { recordScheduleCommentOperation, type ScheduleActor } from '@/modules/schedule/service';
@@ -31,6 +31,7 @@ interface Row {
   replyToId: string | null; parentDeleted: Date | null; parentBody: string | null; parentAuthor: string | null;
   opId: string | null; opType: string | null; opHidden: Date | null; opAffected: string[] | null; displayRow: number | null; columnIndex: number | null;
   entryRemovedReason: string | null;
+  seq: number;
 }
 
 function toDto(r: Row): CommentDto {
@@ -63,10 +64,11 @@ function toDto(r: Row): CommentDto {
 }
 
 async function queryComments(db: Db, where: ReturnType<Db>, viewerId: string | null, cursor: string | undefined, limit: number) {
-  const c = decodeCursor(cursor);
+  // server acceptance order (insertion sequence), ascending
+  const afterSeq = cursor && /^\d{1,15}$/.test(cursor) ? Number(cursor) : null;
   const rows = await db<Row[]>`
     select c.id, c.feedback_id, c.stream, c.kind, c.body, c.author_id, u.display_name, u.avatar_path, u.google_picture_url,
-           u.revision as user_revision, c.created_at, c.edited_at, c.revision, c.reply_to_id,
+           u.revision as user_revision, c.created_at, c.edited_at, c.revision, c.reply_to_id, c.seq,
            (select count(*)::int from comment_likes l where l.comment_id = c.id) as like_count,
            exists (select 1 from comment_likes l where l.comment_id = c.id and l.user_id = ${viewerId}) as liked_by_me,
            p.deleted_at as parent_deleted, p.body as parent_body, pu.display_name as parent_author,
@@ -80,14 +82,14 @@ async function queryComments(db: Db, where: ReturnType<Db>, viewerId: string | n
     left join schedule_operations o on o.comment_id = c.id and o.type in ('command.append', 'command.clear')
     left join schedule_rows r on r.id = o.row_id
     where ${where} and c.deleted_at is null
-    ${c ? db`and (c.created_at, c.id) > (${c.createdAt}::timestamptz, ${c.id}::uuid)` : db``}
-    order by c.created_at, c.id
+    ${afterSeq !== null ? db`and c.seq > ${afterSeq}` : db``}
+    order by c.seq
     limit ${limit + 1}
   `;
   const page = rows.slice(0, limit);
   return {
     items: page.map(toDto),
-    nextCursor: rows.length > limit ? encodeCursor(page[page.length - 1].createdAt, page[page.length - 1].id) : null,
+    nextCursor: rows.length > limit ? String(page[page.length - 1].seq) : null,
   };
 }
 

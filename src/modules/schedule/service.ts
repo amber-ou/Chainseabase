@@ -261,7 +261,7 @@ export async function getSchedule(db: Db, productId: string, feedbackId: string)
   const entries = await db<{ id: string; rowId: string; columnIndex: number; authorId: string; authorNameSnapshot: string; avatarRef: string | null; body: string; createdAt: Date; operationId: string }[]>`
     select id, row_id, column_index, author_id, author_name_snapshot, avatar_ref, body, created_at, operation_id
     from schedule_entries where feedback_id = ${feedbackId} and removed_at is null
-    order by created_at, seq
+    order by seq
   `;
   return {
     feedbackId,

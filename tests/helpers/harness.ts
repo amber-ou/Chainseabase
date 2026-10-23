@@ -78,7 +78,10 @@ export async function call<T = any>(method: string, path: string, opts: CallOpts
   const origin = site === 'admin' ? ADMIN : PORTAL;
   const headers: Record<string, string> = { host: new URL(origin).host, ...(opts.headers ?? {}) };
   if (opts.origin !== null) headers.origin = opts.origin ?? origin;
-  if (opts.as) headers.cookie = `csb_session=${site === 'admin' ? opts.as.admin : opts.as.portal}`;
+  if (opts.as) {
+    const session = `csb_session=${site === 'admin' ? opts.as.admin : opts.as.portal}`;
+    headers.cookie = headers.cookie ? `${session}; ${headers.cookie}` : session;
+  }
   if (opts.body !== undefined) headers['content-type'] = 'application/json';
   if (opts.key) headers['idempotency-key'] = opts.key === true ? randomUUID() : opts.key;
   if (opts.ifMatch !== undefined) headers['if-match'] = `"${opts.ifMatch}"`;
