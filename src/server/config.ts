@@ -38,10 +38,36 @@ function env(name: string): string | null {
   return v === undefined || v.trim() === '' ? null : v.trim();
 }
 
-function origin(name: string, fallback: string): string {
+function origin(name: string, fallback: string, strict: boolean): string {
   const raw = env(name) ?? fallback;
-  const u = new URL(raw);
-  return u.origin;
+  try {
+    return new URL(raw).origin;
+  } catch (e) {
+    // strict deployments report the variable by name below instead of throwing its value here
+    if (strict) return fallback;
+    throw e;
+  }
+}
+
+/**
+ * Staging/production must name their database and both sites explicitly (no local defaults);
+ * the two origins must be distinct HTTPS sites. Problems are reported by variable name only.
+ */
+function strictSiteProblems(): string[] {
+  const problems: string[] = [];
+  if (!env('DATABASE_URL')) problems.push('DATABASE_URL');
+  const sites: URL[] = [];
+  for (const name of ['ADMIN_ORIGIN', 'PORTAL_ORIGIN']) {
+    const raw = env(name);
+    if (!raw) { problems.push(name); continue; }
+    let u: URL;
+    try { u = new URL(raw); } catch { problems.push(`${name} must be a URL`); continue; }
+    if (u.protocol !== 'https:') problems.push(`${name} must use https`);
+    else if (u.pathname !== '/' || u.search || u.hash || u.username || u.password) problems.push(`${name} must be an origin without path`);
+    else sites.push(u);
+  }
+  if (sites.length === 2 && sites[0].hostname === sites[1].hostname) problems.push('ADMIN_ORIGIN and PORTAL_ORIGIN must be different sites');
+  return problems;
 }
 
 function mode(name: string, configured: boolean): ProviderMode {
@@ -66,8 +92,8 @@ export function getConfig(): AppConfig {
   const supabaseServiceRoleKey = env('SUPABASE_SERVICE_ROLE_KEY');
   const cfg: AppConfig = {
     databaseUrl: env('DATABASE_URL') ?? 'postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_dev',
-    adminOrigin: origin('ADMIN_ORIGIN', 'http://admin.localhost:3000'),
-    portalOrigin: origin('PORTAL_ORIGIN', 'http://portal.localhost:3000'),
+    adminOrigin: origin('ADMIN_ORIGIN', 'http://admin.localhost:3000', strictDeployment),
+    portalOrigin: origin('PORTAL_ORIGIN', 'http://portal.localhost:3000', strictDeployment),
     sessionSecret: env('AUTH_SESSION_SECRET') ?? (strictDeployment ? '' : 'dev-only-session-secret-change-me-0123456789'),
     tokenEncryptionKey: env('TOKEN_ENCRYPTION_KEY'),
     tokenEncryptionKeyVersion: Number(env('TOKEN_ENCRYPTION_KEY_VERSION') ?? '1'),
@@ -90,7 +116,7 @@ export function getConfig(): AppConfig {
     deploymentEnv,
   };
   if (strictDeployment) {
-    const missing: string[] = [];
+    const missing: string[] = strictSiteProblems();
     if (!cfg.sessionSecret || cfg.sessionSecret.length < 32) missing.push('AUTH_SESSION_SECRET');
     if (cfg.calendarProvider === 'fake' || cfg.emailProvider === 'fake' || cfg.storageProvider === 'fake') {
       missing.push(`fake providers are not allowed in ${deploymentEnv}`);

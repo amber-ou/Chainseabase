@@ -7,7 +7,7 @@
 | 環境 | 用途 | 資料與第三方服務 |
 | --- | --- | --- |
 | 開發 | 本機／雲端開發與單元、整合、E2E。 | 本機 PostgreSQL；`CALENDAR_PROVIDER/EMAIL_PROVIDER/STORAGE_PROVIDER=fake`；可開 `E2E_TEST_LOGIN=enabled`。 |
-| Staging | 固定網域的整合、OAuth、寄信、日曆實測。部署分支 `staging`，逐步設定見 [Staging 建置清單](docs/staging-setup.md)。 | 獨立 Supabase 專案、測試 Google OAuth client／sandbox 日曆、只寄測試收件人。設定 `APP_ENV=staging` 時與正式相同：拒絕 fake provider 與測試登入、缺必要變數即啟動失敗。 |
+| Staging | 固定網域的整合、OAuth、寄信、日曆實測。部署分支 `staging`，逐步設定見 [Staging 建置清單](docs/staging-setup.md)。 | 獨立 Supabase 專案、測試 Google OAuth client／sandbox 日曆、只寄測試收件人。設定 `APP_ENV=staging` 時與正式相同：拒絕 fake provider 與測試登入；必須明確提供 `DATABASE_URL`、`ADMIN_ORIGIN`、`PORTAL_ORIGIN`（兩個不同的 HTTPS 網站），缺少或不合規即啟動失敗；`db:migrate`／`db:bootstrap` 在 `APP_ENV=staging|production` 下沒有明確連線字串就拒絕執行。 |
 | Production | 公司正式使用。 | 正式 Supabase、正式 OAuth client、已驗證寄件網域。設定 `APP_ENV=production`（或 Vercel production）時，應用會**拒絕啟動 fake provider、拒絕測試登入、要求 AUTH_SESSION_SECRET**。 |
 
 Preview 部署不可共用正式 secrets：在 Vercel 把正式變數只設在 Production scope，Preview 指向 staging 或不設定。
@@ -35,7 +35,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"     
 
 1. PR 觸發 GitHub Actions（`.github/workflows/ci.yml`）：lint、typecheck、單元＋PostgreSQL 整合、migration 重跑、build、秘密掃描、Playwright E2E。全部通過才合併。
 2. Migration 先在 staging：`DIRECT_DATABASE_URL=<staging direct> npm run db:migrate`。正式採 expand／contract：只加欄位／表與相容預設，移除舊欄位放下一個版本。有資料風險的 migration 前先建立備份（見下）。
-3. 部署 Vercel（staging 網域，分支 `staging`）→ `GET /api/v1/health` 應回 `{"data":{"ok":true,"environment":"staging","providers":{"calendar":"real","email":"real","storage":"real"}}}`（任一 `fake` 即非真實整合）→ 以測試帳號實測 Google 登入、邀請、sandbox 日曆讀寫（[Staging 建置清單](docs/staging-setup.md) 第 7 節）。
+3. 部署 Vercel（staging 網域，分支 `staging`）→ `GET /api/v1/health` 應回 `{"data":{"ok":true,"environment":"staging","providers":{"calendar":"real","email":"real","storage":"real"}}}`（任一 `fake` 即設定錯誤；`real` 只代表已設定真實 adapter，不代表外部服務已驗證）→ 以測試帳號實測 Google 登入、邀請、sandbox 日曆讀寫（[Staging 建置清單](docs/staging-setup.md) 第 7 節）。
 4. Vercel Cron 每 5 分鐘呼叫 `/api/v1/jobs/run`（`vercel.json`；Vercel Cron 只在 Production 部署執行，staging 需手動或外部排程）。Hobby 方案只允許每日排程；需要分鐘級需 Pro 方案或外部排程器以同一 bearer secret 呼叫 `POST /api/v1/jobs/run`。請求完成後應用也會立即處理同請求產生的工作，排程只負責重試與補跑。
 5. Production：取得當次發布授權後，在 production DB 執行 migration，再 promote 部署；驗證 health、登入、最小日曆讀寫。
 6. 回退：Vercel 立即 promote 上一個部署；**不要執行 down migration**，資料依備份與修正 migration 處理。

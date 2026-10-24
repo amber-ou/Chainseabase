@@ -7,7 +7,7 @@
 - 完成：文件、M1–M5、M7-01 的程式與自動化驗證；M6 程式與 mock 測試（C16 輪詢已自動化）；M7-02 自動化響應式／鍵盤／axe 可及性檢查與 taste lint／inspector（前台與後台頁）。
 - 上線前收尾（第二輪）：Roadmap 拖曳併發改為以卡片與目標欄為範圍（M4-02），本機負載重新驗證（M8-02）；staging 建置清單與 `APP_ENV=staging` 防呆（M8-01）。
 - 待外部條件：真實 Google 登入（EXT-02）、Resend 寄信（EXT-03）、Google 日曆 sandbox 實測（EXT-02、EXT-04）、Vercel／Supabase staging 與正式環境（EXT-01、EXT-05）。
-- 最新檢查（2026-10-24，雲端開發容器）：lint、typecheck、build、security scan 通過；Vitest 139 passed／0 failed／0 skipped；Playwright 64 passed／0 failed／0 skipped。完整對照見 [驗收追蹤報告](docs/acceptance-report.md)。
+- 最新檢查（2026-10-24，雲端開發容器）：lint、typecheck、build、security scan 通過；Vitest 147 passed／0 failed／0 skipped；Playwright 64 passed／0 failed／0 skipped。完整對照見 [驗收追蹤報告](docs/acceptance-report.md)。
 - 下一個可執行步驟：依 [Staging 建置清單](docs/staging-setup.md) 完成 EXT-01～EXT-04（部署分支 `staging`），以第 7 節驗證 `/api/v1/health` 為 staging＋全部 real 後，執行 Google 登入、邀請、sandbox 日曆實測（C03／C05–C10／C12–C15）與 staging 負載；螢幕閱讀器人工測試另行安排。
 
 ## 任務清單
@@ -230,6 +230,7 @@
 狀態：進行中
 交付檔案：docs/staging-setup.md、operations.md、.env.example、src/server/config.ts、/api/v1/health
 實際檢查與結果：config.test.ts 4 passed（APP_ENV=staging 拒絕 fake provider 與測試登入、缺憑證只列變數名稱）；operations.test.ts health 回報 environment 與 provider 模式
+補強（2026-10-24）：staging／production 必須明確提供 DATABASE_URL、ADMIN_ORIGIN、PORTAL_ORIGIN（兩個不同 HTTPS 網站、不含路徑、錯誤不含設定值）；migrate／bootstrap 在 APP_ENV=staging|production 無明確連線字串即拒絕並先印出目標主機；config.test.ts 8 passed、db-url.test.ts 4 passed（移除驗證時 3 個 config 測試失敗）；docs/staging-setup.md 補上只建置 staging 的 Ignored Build Step、變數變更需重新部署、部署網址 421、操作順序、連線字串保留原參數、區域相同為建議、health 的 real 不代表外部服務已驗證；staging 分支已建立於 795def3（未強制覆寫）
 未完成或阻擋：EXT-01～EXT-04 尚未提供；未建立任何雲端資源、未寄送真實邀請、未寫入任何真實日曆
 ```
 

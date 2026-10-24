@@ -1,7 +1,9 @@
 import { createSql } from '../src/server/db';
+import { resolveScriptDatabaseUrl } from './db-url';
 import { migrate } from './migrate-lib';
 
-const url = process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL ?? 'postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_dev';
+const { url, target } = resolveScriptDatabaseUrl(process.env, ['DIRECT_DATABASE_URL', 'DATABASE_URL']);
+console.log(`Migrating ${target}`);
 const sql = createSql(url, 1);
 migrate(sql)
   .then((applied) => {

@@ -16,9 +16,9 @@
 | --- | --- |
 | `npm run lint` | 通過，0 error／0 warning |
 | `npm run typecheck` | 通過 |
-| `npm test`（Vitest：單元＋真實 PostgreSQL 整合） | 13 個檔案、139 tests：139 passed、0 failed、0 skipped |
+| `npm test`（Vitest：單元＋真實 PostgreSQL 整合） | 14 個檔案、147 tests：147 passed、0 failed、0 skipped |
 | `npm run build` | 通過（Next.js 16.4.2 production build） |
-| `npm run security:scan` | 通過（client bundle＋Git 追蹤檔案，639 個檔案） |
+| `npm run security:scan` | 通過（client bundle＋Git 追蹤檔案，641 個檔案） |
 | `npm run test:e2e`（Playwright：1440／768／390） | 64 tests：64 passed、0 failed、0 skipped（含 axe 可及性 16、C16 輪詢 1、鍵盤走查 9：1440 八個＋390 一個） |
 | taste skill `lint.mjs --app`（固定 commit 6010f91） | `src/` 0 FAIL、0 WARN（保留理由見 V04） |
 | taste skill `inspect.mjs --app`（1440／768／390） | 前台 Feedback、前台 Roadmap、登入頁、後台 Product／Feedback／Roadmap／Personal／User／Setting：全部 0 FAIL；WARN 理由見 V04 |
@@ -121,7 +121,7 @@
 | V02 | 部分 | 鍵盤走查已執行（只用鍵盤事件、真實 Chromium、每步記錄焦點位置，見下方紀錄），13 個步驟中 10 項需修正（K1、K3、K5–K8、K10–K13）、3 項原本正常，已固定為 `keyboard.spec.ts`／`keyboard-phone.spec.ts`；axe-core WCAG 2.1 A／AA 後台 6 頁、Modal＋Schedule、前台與登入頁在 1440／390 皆 0 violation。**螢幕閱讀器（NVDA／VoiceOver）實機測試未執行**；鍵盤走查由自動化腳本操作，非真人實體鍵盤 |
 | V03 | 部分 | 成功／錯誤／儲存中均有文字＋圖示與 aria-live（E2E 驗證 Schedule 與看板宣告）；其餘狀態為程式審查 |
 | V04 | 部分 | taste lint 0 FAIL／0 WARN（mono 只用於指令座標與 slug、陰影只用於 Modal／選單浮層、時鐘補零已標註）；inspector 以本機反向代理注入測試 session 後檢查後台 6 頁與前台 3 頁：全部 0 FAIL。修正：手機短頁頂部空白、看板工具列溢出、Feedback 列中繼資料溢出、數字欄靠右、手機看板改為一欄一屏仍在容器內橫向捲動。保留 WARN：內容少造成的空白（開發資料量小）、看板各欄卡片數不同的不等高（看板本質）。人工視覺審查未正式簽核 |
-| O01 | 部分 | 單元：production 與 `APP_ENV=staging` 皆拒絕 fake provider、測試登入、缺 secret（只列名稱）；`/api/v1/health` 回報環境與 provider 模式；staging／production 實際分離待 EXT-01（步驟見 [Staging 建置清單](staging-setup.md)） |
+| O01 | 部分 | 單元：production 與 `APP_ENV=staging` 皆拒絕 fake provider、測試登入、缺 secret（只列名稱），且必須明確提供 `DATABASE_URL` 與兩個不同 HTTPS 網站的 `ADMIN_ORIGIN`／`PORTAL_ORIGIN`（不退回本機預設，錯誤不含設定值）；migrate／bootstrap 腳本在 staging／production 沒有明確連線字串即拒絕執行；`/api/v1/health` 回報環境與 provider 模式；staging／production 實際分離待 EXT-01（步驟見 [Staging 建置清單](staging-setup.md)） |
 | O02 | 通過 | 租約過期後續跑、通知不重複、超過次數停止重試 |
 | O03 | 部分 | 本機 pg_dump／pg_restore 演練一致；**Supabase 正式備份還原未執行** |
 | O04 | 通過 | `security:scan` 掃描 client bundle 與 Git；log 遮罩測試；API 錯誤不含 SQL |
