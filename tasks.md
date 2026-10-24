@@ -53,7 +53,7 @@
 
 | ID | 內容 | 影響 | 狀態 |
 | --- | --- | --- | --- |
-| EXT-01 | Vercel／Supabase 專案、區域、正式與 staging 網域。 | 真實雲端建置與部署。 | 待外部條件 |
+| EXT-01 | Vercel／Supabase 專案、區域、正式與 staging 網域。 | 真實雲端建置與部署。 | 待外部條件（Supabase staging 專案已建立、尚未初始化：雲端工作階段的代理不支援 raw-TCP 資料庫連線，初始化需依 docs/staging-setup.md 第 2 節在本機以 `sslmode=verify-full` 執行；Vercel 未設定） |
 | EXT-02 | Google Cloud OAuth client、consent 設定與 callbacks。 | 登入／Calendar 真實整合。 | 待外部條件 |
 | EXT-03 | Resend 已驗證寄件網域與測試寄件資格。 | 邀請信實測。 | 待外部條件 |
 | EXT-04 | sandbox／正式產品日曆、成員分享權限。 | Calendar ACL 與讀寫驗收。 | 待外部條件 |

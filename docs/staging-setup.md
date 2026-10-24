@@ -17,7 +17,7 @@
 建議順序（前一步的輸出是後一步的輸入）：
 
 1. 決定 staging 兩個網址（第 1 節）——Google callback 與 Vercel 變數都要用到。
-2. Supabase 專案與資料庫初始化（第 2 節）——**首次登入前**必須完成 migrate 與 bootstrap。
+2. Supabase 專案：先停用 Data API，再以 `sslmode=verify-full` 完成 migrate 與 bootstrap（第 2 節）——**首次登入前**必須完成。
 3. Google OAuth client（第 3 節）、sandbox 日曆與測試帳號（第 4 節）、Resend 網域（第 5 節，DNS 生效可能需要時間，可提早開始）。
 4. Vercel 專案、網域與變數（第 6 節），部署 `staging`。
 5. 依第 7 節驗證。
@@ -47,24 +47,59 @@ git push origin <已通過 CI 的 commit SHA>:refs/heads/staging   # 非快轉�
 ## 2. Supabase（staging 專用專案）
 
 1. Supabase Dashboard → New project：名稱 `chainseabase-staging`；區域建議 `ap-northeast-1`（東京）或 `ap-southeast-1`（新加坡）。**建議**與第 6 節的 Vercel Functions 區域相同以降低延遲，不是必要條件。資料庫密碼存在密碼管理工具。
-2. Project Settings → Database → Connection string（或頁面上方 Connect）：
-   - **Transaction pooler**（port 6543）→ `DATABASE_URL`。
-   - **Direct connection**（port 5432；若你的網路只支援 IPv4，改用 **Session pooler**）→ `DIRECT_DATABASE_URL`，只給 migration／bootstrap 使用。
-   - **保留連線字串原本的所有參數**，應用與腳本會原樣使用。只有在字串完全沒有 `sslmode` 時才補上：沒有 `?` 就加 `?sslmode=require`，已有 `?` 就加 `&sslmode=require`；不要刪除或改寫既有參數。
-   - 把 `[YOUR-PASSWORD]` 換成實際密碼時，密碼若含 `@ : / ? # %` 等字元需先 URL 編碼。
-3. Storage → New bucket：名稱 `avatars`，**Public 關閉**（private）。Project Settings → API：Project URL → `SUPABASE_URL`；`service_role` key → `SUPABASE_SERVICE_ROLE_KEY`（只放伺服器端，不可加 `NEXT_PUBLIC_`）。
-4. Database → Backups：確認方案的每日備份與保留天數，記錄在 [operations.md](../operations.md)。
-5. 在你自己的終端機初始化（連線字串只放在這個終端機的環境變數，不要貼到聊天）。設定 `APP_ENV=staging` 後，腳本**沒有明確連線字串就拒絕執行**，不會誤連本機資料庫；執行前會印出目標主機（不含帳密），請先確認是 staging：
+2. **停用 Data API（必要，須在 migration 之前）**：Supabase 預設會把 `public` schema 的資料表透過 REST（Data API）公開；本專案資料表沒有 row-level security，任何拿到專案公開 anon key 的人都可能直接讀寫。應用不使用 Data API（伺服器直接連 Postgres，頭像用 service role 呼叫 Storage），因此：Project Settings → **Data API** → 關閉 Data API，或在 Exposed schemas 移除 `public`。Storage 不受影響。驗證：Advisors → Security Advisor 不再列出經由 API 公開的 `public` 資料表。
+3. Project Settings → Database → Connection string（或頁面上方 Connect）：
+   - **Transaction pooler**（port 6543）→ `DATABASE_URL`（Vercel 執行期使用）。
+   - **Session pooler**（port 5432，支援 IPv4）或 **Direct connection** → `DIRECT_DATABASE_URL`，只給 migration／bootstrap 使用；**不要**用 6543 執行這兩個腳本。
+   - 把 `[YOUR-PASSWORD]` 換成實際密碼時，密碼若含 `@ : / ? # %` 等字元需先 URL 編碼。貼上後確認主機名稱完整（例 `aws-0-<region>.pooler.supabase.com`），沒有多出或缺少字元。
+4. **TLS 必須驗證憑證：兩個連線字串都使用 `sslmode=verify-full`**。應用與腳本使用 postgres.js：沒有 `sslmode` 時**不加密**（密碼明文傳送）；`require`／`prefer`／`allow` 會加密但**不驗證伺服器憑證**；只有 `verify-full` 會驗證憑證與主機名稱。
+   - 保留連線字串其他原有參數：沒有 `?` 時加 `?sslmode=verify-full`；已有 `?` 時加 `&sslmode=verify-full`；已有其他 `sslmode` 值時改成 `verify-full`。
+   - 先用 Node 預設信任庫連線。只有出現信任鏈錯誤（例如 `SELF_SIGNED_CERT_IN_CHAIN`、`UNABLE_TO_GET_ISSUER_CERT_LOCALLY`、`UNABLE_TO_VERIFY_LEAF_SIGNATURE`）時，才到 Database Settings → **SSL Configuration** 下載 Supabase CA 憑證，在你自己的終端機設定 `NODE_EXTRA_CA_CERTS=<CA 檔案路徑>` 後重試。**不得**改用 `require` 或關閉憑證驗證。
+   - Vercel 執行期：若 Node 預設信任庫無法驗證 Supabase 憑證，目前程式**沒有**提供自訂 CA 的設定（`NODE_EXTRA_CA_CERTS` 需要部署內的檔案）。此時先補上程式支援再部署，不要退回 `require`。
+5. Storage → New bucket：名稱 `avatars`，**Public 關閉**（private）。Project Settings → API：Project URL → `SUPABASE_URL`；`service_role` key → `SUPABASE_SERVICE_ROLE_KEY`（只放伺服器端，不可加 `NEXT_PUBLIC_`）。
+6. Database → Backups：確認方案的每日備份與保留天數，記錄在 [operations.md](../operations.md)。
+7. **在你自己的電腦**初始化資料庫。Claude Code 雲端工作階段的對外代理只轉送 HTTPS，不支援 Postgres 這類 raw-TCP 資料庫連線，因此無法從雲端工作階段執行。連線字串只放在這個終端機的環境變數（輸入時不顯示、不進入 shell 歷史），不要貼到聊天。逐行執行，每個指令後的 `echo "exit=$?"` 必須是 `exit=0` 才繼續，不要用管線截斷輸出：
 
    ```bash
-   export APP_ENV=staging
-   export DIRECT_DATABASE_URL='<staging direct 或 session pooler 連線字串>'
+   git fetch origin
+   git switch staging                    # 第一次：git switch -c staging --track origin/staging
+   git pull --ff-only
+   echo "exit=$?"
+   node --version                        # 需 v22.12 以上
    npm ci
-   npm run db:migrate          # 先印出「Migrating <host>:<port>/<db>」；冪等，可重跑
-   DATABASE_URL="$DIRECT_DATABASE_URL" BOOTSTRAP_TEAM_EMAIL='<測試 A 的 Email>' npm run db:bootstrap
+   echo "exit=$?"
+   export APP_ENV=staging                # 沒有明確連線字串時腳本會拒絕執行，不會誤連本機資料庫
+   printf 'DIRECT_DATABASE_URL: '; read -rs DIRECT_DATABASE_URL; echo
+   export DIRECT_DATABASE_URL
+   node -e 'const u=new URL(process.env.DIRECT_DATABASE_URL);console.log(u.hostname+":"+(u.port||5432)+u.pathname+" sslmode="+u.searchParams.get("sslmode"))'
+   echo "exit=$?"                        # 只印出主機、資料庫與 sslmode；必須是 staging 專案且 sslmode=verify-full
+   # 只有出現信任鏈錯誤時才需要：export NODE_EXTRA_CA_CERTS=<Supabase CA 檔案路徑>
+   npm run db:migrate
+   echo "exit=$?"                        # 「Migrating <host>…」與「Applied: 0001_init.sql, 0002_roadmap_placement_revision.sql」
+   npm run db:migrate
+   echo "exit=$?"                        # 「Database schema is up to date.」
+   printf 'BOOTSTRAP_TEAM_EMAIL: '; read -r BOOTSTRAP_TEAM_EMAIL; export BOOTSTRAP_TEAM_EMAIL
+   DATABASE_URL="$DIRECT_DATABASE_URL" npm run db:bootstrap
+   echo "exit=$?"                        # 「Bootstrap: product created; first team grant: created」；重跑為 already present／exists
    ```
 
-   驗證：`db:migrate` 第二次執行應顯示 `Database schema is up to date.`；`db:bootstrap` 顯示產品已建立與首位團隊授權狀態。**必須在任何人首次登入前完成**，否則登入會因資料表不存在而失敗。
+8. 唯讀驗證（Supabase Dashboard → SQL Editor）：
+
+   ```sql
+   select count(*) as public_tables from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE';
+   select name, applied_at is not null as applied from schema_migrations order by name;
+   select name, slug, system_key from products;
+   select
+     (select count(*) from statuses s join products p on p.id = s.product_id where p.system_key = 'initial') as statuses,
+     (select count(*) from categories c join products p on p.id = c.product_id where p.system_key = 'initial') as categories,
+     (select count(*) from tag_groups g join products p on p.id = g.product_id where p.system_key = 'initial') as tag_groups,
+     (select count(*) from roadmaps r join products p on p.id = r.product_id where p.system_key = 'initial') as roadmaps,
+     (select count(*) from roadmap_columns rc join products p on p.id = rc.product_id where p.system_key = 'initial') as roadmap_columns;
+   select email, consumed_at is null as waiting_for_first_login from bootstrap_team_grants;
+   select count(*) as users from users;
+   ```
+
+   預期（以同一組腳本在空資料庫演練所得）：`public_tables = 41`（若曾在 `public` 自建資料表會更多）；兩個 migration 皆 `applied = t`；`產品1 | product-1 | initial`；statuses 5、categories 1、tag_groups 1、roadmaps 1、roadmap_columns 5；`bootstrap_team_grants` 一筆測試 A 的小寫 Email 且 `waiting_for_first_login = t`；`users = 0`。首位團隊資格在測試 A 第一次以 Google 登入 staging 後台時才生效（`consumed_at` 寫入、`users` 出現 `role = 'team'`），屬第 7 節驗證 3。**必須在任何人首次登入前完成**，否則登入會因資料表不存在而失敗。
 
 ## 3. Google Cloud（staging 專用 OAuth client）
 
@@ -126,8 +161,8 @@ git push origin <已通過 CI 的 commit SHA>:refs/heads/staging   # 非快轉�
 | `APP_ENV` | `staging` | 否 |
 | `ADMIN_ORIGIN` | 第 1 節後台網址，例 `https://staging-admin.example.com`（必填、HTTPS、與前台不同主機） | 否 |
 | `PORTAL_ORIGIN` | 第 1 節前台網址，例 `https://staging-feedback.example.com`（必填、HTTPS、與後台不同主機） | 否 |
-| `DATABASE_URL` | Supabase transaction pooler，**原樣貼上並保留原有參數**（必填） | 是 |
-| `DIRECT_DATABASE_URL` | Supabase direct／session pooler（只給 migration；可不放 Vercel） | 是 |
+| `DATABASE_URL` | Supabase transaction pooler，保留原有參數並設定 `sslmode=verify-full`（必填；見第 2 節第 4 點） | 是 |
+| `DIRECT_DATABASE_URL` | Supabase session pooler／direct，`sslmode=verify-full`（只給 migration；可不放 Vercel） | 是 |
 | `AUTH_SESSION_SECRET` | 自己終端機產生（下方指令），≥ 32 字元 | 是 |
 | `TOKEN_ENCRYPTION_KEY` | 32 bytes base64（下方指令） | 是 |
 | `TOKEN_ENCRYPTION_KEY_VERSION` | `1` | 否 |
@@ -159,6 +194,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"     
 | # | 檢查 | 方法 | 預期 |
 | --- | --- | --- | --- |
 | 1 | 部署設定 | `curl https://staging-admin.example.com/api/v1/health` 與 `https://staging-feedback.example.com/api/v1/health` | `{"data":{"ok":true,"environment":"staging","providers":{"calendar":"real","email":"real","storage":"real"}}}`。任一為 `fake` 代表設定錯誤。**`real` 只表示已設定憑證並選用真實 adapter，不代表 Google、Resend、Supabase 已實際呼叫成功**；外部服務是否可用以第 3–8 項的實際操作結果為準 |
+| 2a | Data API | Supabase → Project Settings → Data API；Advisors → Security Advisor | Data API 已停用（或 `public` 不在 Exposed schemas）；沒有經由 API 公開的 `public` 資料表 |
 | 2 | 環境防呆 | Vercel → Deployments → 該部署 → Logs（Runtime） | 沒有 `Invalid staging configuration: …`（若有，訊息列出缺少或不合規的變數名稱，例如 `DATABASE_URL`、`ADMIN_ORIGIN must use https`、`ADMIN_ORIGIN and PORTAL_ORIGIN must be different sites`）；兩個網址的登入頁都沒有「測試登入」 |
 | 3 | Google 登入（EXT-02；A02、A05、A07） | 測試 A 登入後台、測試 D 登入前台；未受邀帳號登入前台 | 首位團隊取得權限；未受邀只能瀏覽；失敗時看 `/login?error=` 代碼與 Logs `auth.callback` |
 | 4 | 邀請（EXT-03；A03、A04、A11） | 後台 User → Email 邀請測試 D；收信後以錯誤帳號與正確帳號各接受一次 | Resend Dashboard → Emails 顯示 Delivered；邀請紀錄「已寄出」；錯誤帳號被拒（403）、正確帳號成功 |
