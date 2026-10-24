@@ -25,8 +25,12 @@ GitHub Pages 不能單獨承載登入、權限、日曆憑證及資料寫入。�
 - Personal 位置不回寫 Feedback；私有 cache 與查詢以 owner 隔離。
 - Google／Resend 與本地 DB 無共同交易，以 mutation 狀態、outbox 與核對重試處理，不宣稱可一起 rollback。
 
-## 尚未建立的部分
+## 實作現況
 
-目前沒有應用程式、相依清單、lockfile、SQL migration、可執行測試或雲端部署。框架、auth library、DB client 具體版本由第一個實作任務選定受支援版本並鎖版，不能把文件中的目標結構當成已存在實作。
+已建立：Next.js 16.4.2／React 19.3／TypeScript 5.9 應用（鎖版於 `package-lock.json`）、`postgres` 3.4 driver、`db/migrations/0001_init.sql`、單元／整合／E2E 測試與 CI 設定。身分使用自建的伺服器 session（資料庫只存 session 雜湊、host-only cookie）＋ Google OIDC（PKCE、state、nonce，以 jose 驗證 ID token），未採用第三方 auth framework。
+
+實際程式配置與 `docs/02` 的建議結構一致：`src/modules/*` 為領域服務、`src/server/*` 為 HTTP 路由／授權／冪等／outbox／adapters、`src/features/*` 為 UI。所有 API 經 `src/server/api` 單一路由器（host 白名單、Origin 檢查、zod 白名單 schema、Idempotency-Key）。
+
+尚未建立：任何雲端環境（Vercel、Supabase、Resend、Google Cloud）與真實第三方實測。
 
 實作順序見 [tasks.md](tasks.md)，部署前置與日曆細節見 [operations.md](operations.md) 及 [Calendar 與雲端部署](docs/06-calendar-and-deployment.md)。

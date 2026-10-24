@@ -15,7 +15,8 @@ Feedback 建立及查看以 Modal 完成，提供內容與 Schedule Tab，沒有
 - 使用指定 taste skill 的應用程式介面流程，方向為 Achromatic ledger，seed 20261023。
 - 灰白框架、近黑主要操作；Roadmap 藍色識別、Personal 青綠識別；成功命令使用成功色加文字／圖示。
 - 字型、尺寸、邊框、間距、對比與響應式詳見正式 Design System；原始方向資料在 [taste-direction.json](docs/design/taste-direction.json)。
-- **目前沒有 Figma 檔案或連結，也沒有已實作畫面或瀏覽器視覺驗收。** Mermaid 架構與文字線框是現有規劃素材；之後若提供 Figma，再在此登錄真實連結，不製造假連結。
+- 目前沒有 Figma 檔案或連結；之後若提供 Figma，再在此登錄真實連結，不製造假連結。
+- 畫面已實作於 `src/features/`，設計 token 在 `src/app/globals.css`。已執行 Playwright 1440／768／390 檢查與 taste skill lint／inspector（公開頁），結果見 [驗收追蹤報告](docs/acceptance-report.md) 的 V01–V04。
 
 ## 一致互動
 

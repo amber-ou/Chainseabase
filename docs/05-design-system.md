@@ -20,7 +20,7 @@ node <skill>/scripts/draw.mjs --app --kind workspace \
   --style achromatic-ledger --out <planning-directory>
 ```
 
-本次完成方向與元件規格，**未製作可互動頁面、未執行瀏覽器 inspector，也沒有視覺通過分數**。Featurebase 用作資訊配置參考，最終互動以本文件及已確認需求為準。
+規劃階段只完成方向與元件規格；實作後的 lint／inspector 結果記錄在 [驗收追蹤報告](acceptance-report.md) V04。Featurebase 用作資訊配置參考，最終互動以本文件及已確認需求為準。
 
 ### 產品需求優先的調整
 

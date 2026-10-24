@@ -44,4 +44,4 @@
 - 日曆可在平台內真實讀寫，正確處理 Google 權限、重複活動與更新衝突。
 - 以 [99 項驗收案例](docs/07-delivery-and-acceptance.md) 與約 30 人代表性負載實測判定完成；不以文件存在或假資料畫面代替驗收。
 
-目前只有文件完成，功能與驗收尚未執行。開發順序與進度見 [tasks.md](tasks.md)。
+第一版應用程式已實作並以自動化測試驗證；Google、Resend、Supabase 的真實整合與雲端部署仍待外部設定。進度與證據見 [tasks.md](tasks.md) 與 [驗收追蹤報告](docs/acceptance-report.md)。

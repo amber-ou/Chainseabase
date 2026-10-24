@@ -1,6 +1,6 @@
 # API 契約
 
-本文件為待實作契約，不表示端點已存在。基底 `/api/v1`；Google callback 與 auth library 路由可獨立，但必須遵守相同權限與 host 限制。
+本契約已實作於 `src/server/api/`（實作補充見文末）。基底 `/api/v1`；Google callback 路由同樣在此基底下，遵守相同權限與 host 限制。
 
 ## 通用格式
 
@@ -187,11 +187,23 @@ scheduleDraft.actions 由初始第 2 列按順序重播，支援 row.add、comme
   "beforeFeedbackId": null,
   "afterFeedbackId": "<neighbor-id>",
   "expectedFeedbackRevision": 6,
-  "expectedRoadmapRevision": 3
+  "expectedPlacementRevision": 2
 }
 ```
 
-before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 null 代表空欄或放最頂端，需在契約中依目標欄是否為空明確解讀為頂端。兩者同時提供必須為目標欄相鄰卡，且不得是自己。伺服器判定目標實際維度，禁止額外 body 欄位偷偷改類別／Tag。
+before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 null 一律解讀為目標欄最頂端（空欄即唯一位置）。客戶端送出畫面上相鄰的兩張卡，且不得是自己。伺服器判定目標實際維度，禁止額外 body 欄位偷偷改類別／Tag。
+
+**併發範圍（移動不檢查整張看板 revision）**
+
+| 情境 | 保護方式 | 結果 |
+| --- | --- | --- |
+| 看板結構變更（欄位名稱、欄位順序、排序模式、名稱／描述、公開） | `roadmaps.revision`（`expectedRevision`／`If-Match`）；移動不送也不檢查此值 | 結構編輯彼此衝突回 409；移動只有在第一次把看板切成 freedom 時讓 revision +1 |
+| 同一筆 Feedback 被同時修改 | Feedback 列鎖；跨欄時檢查 `expectedFeedbackRevision`（同欄不檢查，因不改 Feedback 欄位）；每次移動檢查卡片自己的 `expectedPlacementRevision`（看板卡片與欄分頁回應中的 `placementRevision`，尚無排序紀錄為 0） | 409 `details.reason = "card_changed"`；客戶端重新載入，**不自動重試** |
+| 不同卡片的排序操作 | 目標欄列鎖序列化同欄寫入（鎖順序：Feedback 列 → 目標欄列）；看板列以共用鎖讀取 | 不同卡片互不衝突；他人卡片剛好落在同一對相鄰卡之間時，仍視為「放在兩卡之間」並緊接 after 卡之後 |
+| 落點已失效 | 相鄰卡離開目標欄，或 before／after 的先後已顛倒 | 409 `details.reason = "order_changed"`，不自動套用；客戶端重新載入後由使用者再放一次 |
+| 落點不合法 | 相鄰卡是自己或不存在 | 400 VALIDATION_FAILED |
+
+成功回應：`{ roadmapRevision, feedbackRevision, placementRevision, columnId, previousColumnId }`。`placementRevision` 只出現在內部看板與欄分頁回應，公開投影不含。
 
 ## Personal
 
@@ -261,3 +273,28 @@ before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 nul
 ```
 
 回傳 Google event ID、ETag、更新時間及可操作性；不回傳底層 OAuth token。Calendar 專用 code 包含 CALENDAR_REAUTH_REQUIRED、CALENDAR_READ_ONLY、EVENT_CONFLICT、UNSUPPORTED_EVENT_TYPE。外部 412 映射為 409 EVENT_CONFLICT。
+
+## 實作補充（與上表一起閱讀）
+
+以下為實作時補上的端點與確定的細節，不改變上方規則：
+
+| 方法／路徑 | 說明 |
+| --- | --- |
+| GET `/site` | 目前 host 對應的網站與 provider 模式（real／fake），不含秘密。 |
+| GET `/health` | 健康檢查（含資料庫）。 |
+| GET／POST `/jobs/run` | outbox 工作入口，需 `Authorization: Bearer <JOB_RUNNER_SECRET 或 CRON_SECRET>`；錯誤 secret 回 404。 |
+| POST `/me/avatar-upload` | 直接上傳圖片本體（content-type 為 `image/jpeg`、`image/png` 或 `image/webp`，≤ 2 MB）；伺服器驗證實際內容、重新編碼為 256px WebP 並移除中繼資料。GET `/avatars/:userId` 由伺服器讀取 private bucket。 |
+| GET `/products/:p/roadmaps/:r/board?limit=` | 一次取得所有欄位、伺服器計算的筆數與每欄第一頁卡片（內部卡片附 `placementRevision`，供移動檢查）。 |
+| GET `/products/:p/personal/feedback/:f/tags` | 本人對該 Feedback 的私人 Tag 與 revision（首次為 0）。 |
+| GET `/products/:p/calendar/events/:eventId` | 取得單一活動；整系列編輯先以此讀 master 與其 ETag。 |
+| GET／PUT `/portal/products/:p/notifications…` | 測試成員在前台的本人通知（只含可存取的公開內容）。 |
+| GET `/public/products` | 前台首頁的產品入口清單（名稱與 slug）。 |
+| POST `/test-support/login`、`/test-support/calendar/connect` | **僅開發／E2E**：需 `E2E_TEST_LOGIN=enabled`，production 設定下永遠回 404。 |
+
+其他確定行為：
+
+- 一般留言排序以伺服器接受順序（插入序號）為準；清單 cursor 為不透明字串。
+- 普通 Schedule 留言的刪除以 `If-Match: "<comment revision>"` 加查詢參數 `scheduleRevision` 驗證兩個版本。
+- 刪除分類選項時 body 帶 `expectedRevision`（product revision）與 `replacementId` 或 `strategy: "detach"`。
+- Calendar 寫入若 Google 結果不明，回 **202** `{ state: "unknown", mutationId }`；以相同 Idempotency-Key 重試會先核對 Google（建立以固定 event ID、更新以 `extendedProperties.private.csbLastMutation`）再決定，不盲目重放。
+- 所有寫入要求 `Origin` 等於該網站 origin（CSRF 防護）；未列在 schema 的欄位一律 400（禁止 mass assignment）。
