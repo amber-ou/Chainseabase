@@ -238,7 +238,7 @@
 狀態：進行中（鍵盤走查完成；螢幕閱讀器未執行）
 負責人：Claude Code
 交付檔案：src/components/ui.tsx（useDismiss 回焦、Button 送出中保持可聚焦）、menu.tsx、multiselect.tsx、modal.tsx、src/features/admin/shell.tsx（通知面板、手機選單）、src/features/calendar/calendar.tsx（設定步驟焦點、檢視分頁方向鍵）、src/features/roadmap/board.tsx（移動後焦點跟隨卡片）、src/features/portal/portal-feedback.tsx（投票）、各 <main id="main" tabIndex={-1}>、tests/e2e/keyboard.spec.ts、keyboard-phone.spec.ts
-實際檢查與結果：只用鍵盤事件在 Chromium 走查後台 1440／390 與前台測試者流程，13 個步驟中 10 項需修正、3 項原本正常（紀錄見 docs/acceptance-report.md「V02 鍵盤走查紀錄」）；npm run test:e2e 64 passed／0 failed／0 skipped；npm test 139 passed；lint、typecheck、build、security:scan、taste lint 通過
+實際檢查與結果：只用鍵盤事件在 Chromium 走查後台 1440／390 與前台測試者流程，13 個走查步驟，其中 10 個需要修正、3 個原本正常（紀錄見 docs/acceptance-report.md「V02 鍵盤走查紀錄」）；固定為 9 個自動化鍵盤測試（keyboard.spec.ts 1440 共 8 個、keyboard-phone.spec.ts 390 共 1 個）；npm run test:e2e 64 passed／0 failed／0 skipped；npm test 139 passed；lint、typecheck、build、security:scan、taste lint 通過
 未完成或阻擋：螢幕閱讀器（NVDA／VoiceOver）、Safari／Firefox、真人實體鍵盤走查未執行
 ```
 

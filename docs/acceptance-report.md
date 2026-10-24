@@ -131,6 +131,8 @@
 
 方法：以 Playwright 驅動真實 Chromium，**只送出鍵盤事件**（Tab／Shift+Tab／Enter／Space／Escape／方向鍵／Home／End／Ctrl+Enter），每一步讀取 `document.activeElement` 與其計算後的焦點樣式（outline／box-shadow）；登入也以鍵盤輸入。範圍為後台 1440、後台 390、前台受邀測試者。這不是螢幕閱讀器測試，也不是真人以實體鍵盤操作。
 
+數量：**13 個走查步驟**（K1–K13）；其中 **10 個步驟需要修正**（K1、K3、K5–K8、K10–K13），3 個原本正常（K2、K4、K9）；走查固定為 **9 個自動化鍵盤測試**（`keyboard.spec.ts` 於 1440 共 8 個、`keyboard-phone.spec.ts` 於 390 共 1 個），每次 `npm run test:e2e` 都會執行。
+
 | # | 實際操作 | 修正前結果 | 修正後結果（`keyboard*.spec.ts` 驗證） |
 | --- | --- | --- | --- |
 | K1 | 每頁第一個 Tab → Enter（跳到主要內容） | 焦點落在 `<body>`（Chrome 仍會從 main 開始下一個 Tab，但其他瀏覽器／輔助技術無法得知位置） | 焦點進入 `<main>`；後台 6 頁與前台皆驗證 |
