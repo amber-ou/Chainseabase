@@ -238,14 +238,14 @@
 狀態：進行中（鍵盤走查完成；螢幕閱讀器未執行）
 負責人：Claude Code
 交付檔案：src/components/ui.tsx（useDismiss 回焦、Button 送出中保持可聚焦）、menu.tsx、multiselect.tsx、modal.tsx、src/features/admin/shell.tsx（通知面板、手機選單）、src/features/calendar/calendar.tsx（設定步驟焦點、檢視分頁方向鍵）、src/features/roadmap/board.tsx（移動後焦點跟隨卡片）、src/features/portal/portal-feedback.tsx（投票）、各 <main id="main" tabIndex={-1}>、tests/e2e/keyboard.spec.ts、keyboard-phone.spec.ts
-實際檢查與結果：只用鍵盤事件在 Chromium 走查後台 1440／390 與前台測試者流程，13 個步驟、修正 9 項焦點問題（紀錄見 docs/acceptance-report.md「V02 鍵盤走查紀錄」）；npm run test:e2e 64 passed／0 failed／0 skipped；npm test 139 passed；lint、typecheck、build、security:scan、taste lint 通過
+實際檢查與結果：只用鍵盤事件在 Chromium 走查後台 1440／390 與前台測試者流程，13 個步驟中 10 項需修正、3 項原本正常（紀錄見 docs/acceptance-report.md「V02 鍵盤走查紀錄」）；npm run test:e2e 64 passed／0 failed／0 skipped；npm test 139 passed；lint、typecheck、build、security:scan、taste lint 通過
 未完成或阻擋：螢幕閱讀器（NVDA／VoiceOver）、Safari／Firefox、真人實體鍵盤走查未執行
 ```
 
 ```text
 任務：PR #1 追蹤（https://github.com/amber-ou/Chainseabase/pull/1）
 狀態：待審查（不合併、不發布）
-進度：head d55b2ad 的 CI（push 與 pull_request 兩個 verify）皆 success；至 2026-10-24 無審查留言或一般留言；本次鍵盤走查修正另以新 commit 推送，需確認新 head 的 CI
-下一步：檢查最新 head 的全部 check runs；有審查留言時逐項處理並回覆；外部條件就緒後依 docs/staging-setup.md 執行 staging 驗證
+進度：d55b2ad 的 CI（push 與 pull_request 兩個 verify）皆 success；鍵盤走查修正為 18e879a，之後的文件一致性修正另有 commit；最新 head 的 CI 結果以 PR 的 check runs 為準（本檔不預先宣稱）；至 2026-10-24 無審查留言或一般留言
+下一步：檢查最新 head 的全部 check runs；有審查留言時逐項處理並回覆；外部條件就緒後依 docs/staging-setup.md 執行 staging 驗證（第一步：Supabase 建立 staging 專案）
 注意：PR 追蹤只在當次工作階段有效，沒有跨工作階段的背景監看；下一個工作階段需重新檢查 PR 狀態
 ```

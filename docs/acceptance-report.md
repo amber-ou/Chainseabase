@@ -18,8 +18,8 @@
 | `npm run typecheck` | 通過 |
 | `npm test`（Vitest：單元＋真實 PostgreSQL 整合） | 13 個檔案、139 tests：139 passed、0 failed、0 skipped |
 | `npm run build` | 通過（Next.js 16.4.2 production build） |
-| `npm run security:scan` | 通過（client bundle＋Git 追蹤檔案，637 個檔案） |
-| `npm run test:e2e`（Playwright：1440／768／390） | 64 tests：64 passed、0 failed、0 skipped（含 axe 可及性 16、C16 輪詢 1、鍵盤走查 9） |
+| `npm run security:scan` | 通過（client bundle＋Git 追蹤檔案，639 個檔案） |
+| `npm run test:e2e`（Playwright：1440／768／390） | 64 tests：64 passed、0 failed、0 skipped（含 axe 可及性 16、C16 輪詢 1、鍵盤走查 9：1440 八個＋390 一個） |
 | taste skill `lint.mjs --app`（固定 commit 6010f91） | `src/` 0 FAIL、0 WARN（保留理由見 V04） |
 | taste skill `inspect.mjs --app`（1440／768／390） | 前台 Feedback、前台 Roadmap、登入頁、後台 Product／Feedback／Roadmap／Personal／User／Setting：全部 0 FAIL；WARN 理由見 V04 |
 | `npm run db:restore-drill`（本機 dev → drill） | 41 張表、行數一致、私人資料摘要一致 |
@@ -118,7 +118,7 @@
 | ID | 狀態 | 證據 |
 | --- | --- | --- |
 | V01 | 通過 | E2E 在 1440／768／390 檢查 6 個後台頁、前台頁與 Schedule：無整頁橫向溢出、手機折疊選單；截圖附於 Playwright 報告 |
-| V02 | 部分 | 鍵盤走查已執行（只用鍵盤事件、真實 Chromium、每步記錄焦點位置，見下方紀錄），發現並修正 9 項焦點問題，已固定為 `keyboard.spec.ts`／`keyboard-phone.spec.ts`；axe-core WCAG 2.1 A／AA 後台 6 頁、Modal＋Schedule、前台與登入頁在 1440／390 皆 0 violation。**螢幕閱讀器（NVDA／VoiceOver）實機測試未執行**；鍵盤走查由自動化腳本操作，非真人實體鍵盤 |
+| V02 | 部分 | 鍵盤走查已執行（只用鍵盤事件、真實 Chromium、每步記錄焦點位置，見下方紀錄），13 個步驟中 10 項需修正（K1、K3、K5–K8、K10–K13）、3 項原本正常，已固定為 `keyboard.spec.ts`／`keyboard-phone.spec.ts`；axe-core WCAG 2.1 A／AA 後台 6 頁、Modal＋Schedule、前台與登入頁在 1440／390 皆 0 violation。**螢幕閱讀器（NVDA／VoiceOver）實機測試未執行**；鍵盤走查由自動化腳本操作，非真人實體鍵盤 |
 | V03 | 部分 | 成功／錯誤／儲存中均有文字＋圖示與 aria-live（E2E 驗證 Schedule 與看板宣告）；其餘狀態為程式審查 |
 | V04 | 部分 | taste lint 0 FAIL／0 WARN（mono 只用於指令座標與 slug、陰影只用於 Modal／選單浮層、時鐘補零已標註）；inspector 以本機反向代理注入測試 session 後檢查後台 6 頁與前台 3 頁：全部 0 FAIL。修正：手機短頁頂部空白、看板工具列溢出、Feedback 列中繼資料溢出、數字欄靠右、手機看板改為一欄一屏仍在容器內橫向捲動。保留 WARN：內容少造成的空白（開發資料量小）、看板各欄卡片數不同的不等高（看板本質）。人工視覺審查未正式簽核 |
 | O01 | 部分 | 單元：production 與 `APP_ENV=staging` 皆拒絕 fake provider、測試登入、缺 secret（只列名稱）；`/api/v1/health` 回報環境與 provider 模式；staging／production 實際分離待 EXT-01（步驟見 [Staging 建置清單](staging-setup.md)） |
