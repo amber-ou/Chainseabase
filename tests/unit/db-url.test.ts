@@ -14,11 +14,12 @@ describe('migrate/bootstrap database target', () => {
   });
 
   it('uses the first given URL unchanged and prints the target without credentials', () => {
-    const direct = 'postgres://postgres.ref:pw-secret@aws-0-ap.pooler.example.test:5432/postgres?sslmode=require';
+    // short placeholder password: the repository secret scan flags realistic ones
+    const direct = 'postgres://postgres.ref:pw@aws-0-ap.pooler.example.test:5432/postgres?sslmode=require';
     const r = resolveScriptDatabaseUrl({ APP_ENV: 'staging', DIRECT_DATABASE_URL: direct, DATABASE_URL: 'postgres://x@other.test:6543/postgres' }, ['DIRECT_DATABASE_URL', 'DATABASE_URL']);
     expect(r.url).toBe(direct);
     expect(r.target).toBe('aws-0-ap.pooler.example.test:5432/postgres');
-    expect(r.target).not.toContain('pw-secret');
+    expect(r.target).not.toContain(':pw@');
     expect(r.target).not.toContain('postgres.ref');
   });
 
