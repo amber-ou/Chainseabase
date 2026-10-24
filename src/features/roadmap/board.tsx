@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Avatar } from '@/components/ui';
 import { ActionMenu, type MenuItemDef } from '@/components/menu';
 
@@ -22,6 +22,24 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ col: string; index: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // card moved from its menu: a cross-column move remounts the card, so focus follows it
+  const [followId, setFollowId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!followId) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    rootRef.current?.querySelector<HTMLButtonElement>(`[data-card-id="${CSS.escape(followId)}"] .kcard-menu button`)?.focus();
+  }, [columns, followId]);
+  useEffect(() => {
+    if (!followId) return;
+    const t = setTimeout(() => setFollowId(null), 5000);
+    return () => clearTimeout(t);
+  }, [followId]);
+  const menuMove = (cardId: string, targetColumnId: string, beforeId: string | null, afterId: string | null) => {
+    setFollowId(cardId);
+    onMove?.(cardId, targetColumnId, beforeId, afterId);
+  };
 
   const finishDrop = (colId: string) => {
     if (!dragId || !onMove || !drop) return;
@@ -41,12 +59,12 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
     const items: MenuItemDef[] = [{ heading: '移至欄位' }];
     for (const c of columns) {
       if (c.id === col.id) continue;
-      items.push({ label: c.title, onSelect: () => onMove?.(card.id, c.id, c.cards[0]?.id ?? null, null) });
+      items.push({ label: c.title, onSelect: () => menuMove(card.id, c.id, c.cards[0]?.id ?? null, null) });
     }
     items.push({ separator: true });
-    items.push({ label: '上移', disabled: i === 0, onSelect: () => onMove?.(card.id, col.id, col.cards[i - 1].id, i >= 2 ? col.cards[i - 2].id : null) });
-    items.push({ label: '下移', disabled: i === col.cards.length - 1, onSelect: () => onMove?.(card.id, col.id, i + 2 < col.cards.length ? col.cards[i + 2].id : null, col.cards[i + 1].id) });
-    items.push({ label: '移到最上方', disabled: i === 0, onSelect: () => onMove?.(card.id, col.id, col.cards[0].id, null) });
+    items.push({ label: '上移', disabled: i === 0, onSelect: () => menuMove(card.id, col.id, col.cards[i - 1].id, i >= 2 ? col.cards[i - 2].id : null) });
+    items.push({ label: '下移', disabled: i === col.cards.length - 1, onSelect: () => menuMove(card.id, col.id, i + 2 < col.cards.length ? col.cards[i + 2].id : null, col.cards[i + 1].id) });
+    items.push({ label: '移到最上方', disabled: i === 0, onSelect: () => menuMove(card.id, col.id, col.cards[0].id, null) });
     return items;
   };
 
@@ -54,7 +72,7 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
     <>
       {readOnly ? null : <p className="board-swipe-hint small muted" aria-hidden="true">左右滑動查看其他欄位（共 {columns.length} 欄）</p>}
       {/* focusable so keyboard users can scroll the columns horizontally (WCAG 2.1.1) */}
-      <div className={`board-scroll${readOnly ? ' board-stack-mobile' : ''}`} tabIndex={0} role="region" aria-label="看板，可左右捲動">
+      <div ref={rootRef} className={`board-scroll${readOnly ? ' board-stack-mobile' : ''}`} tabIndex={0} role="region" aria-label="看板，可左右捲動">
         <div className="board" role="list" aria-label="看板欄位">
           {columns.map((col) => (
             <section key={col.id} className="column" role="listitem" aria-label={`${col.title}，${col.count} 筆`} data-drop={drop?.col === col.id || undefined}
@@ -76,7 +94,7 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
                 {col.cards.map((card, i) => (
                   <div key={card.id}>
                     {drop?.col === col.id && drop.index === i ? <div className="drop-line" aria-hidden="true" /> : null}
-                    <article className="kcard" data-pending={pendingId === card.id || undefined} draggable={!readOnly}
+                    <article className="kcard" data-card-id={card.id} data-pending={pendingId === card.id || undefined} draggable={!readOnly}
                       aria-label={card.title}
                       onDragStart={(e) => { setDragId(card.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', card.id); }}
                       onDragEnd={() => { setDragId(null); setDrop(null); }}

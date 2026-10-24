@@ -8,7 +8,7 @@ import { useResource, useVisiblePolling } from '@/client/hooks';
 import { loginHref, useSite } from '@/client/site';
 import { relativeTime } from '@/client/format';
 import { Avatar, Button, DeniedState, ErrorState, LoadingState, useDismiss } from '@/components/ui';
-import { ConfirmModal } from '@/components/modal';
+import { ConfirmModal, FOCUSABLE } from '@/components/modal';
 import {
   IconBell, IconFeedback, IconMenu, IconPersonal, IconPortal, IconProduct, IconRoadmap, IconSettings, IconUsers, IconX, Logo,
 } from '@/components/icons';
@@ -70,31 +70,60 @@ export function AdminShell({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => { setMenuOpen(false); }, [pathname]);
+  // phone menu sheet is a modal dialog: focus moves in, Tab stays inside, Escape closes, and
+  // focus returns to the menu button (or into <main> when a link navigated away)
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const sheetOpenedAt = useRef<string | null>(null);
+  useEffect(() => {
+    if (!menuOpen) {
+      if (sheetOpenedAt.current === null) return;
+      const navigated = sheetOpenedAt.current !== window.location.pathname;
+      sheetOpenedAt.current = null;
+      (navigated ? document.getElementById('main') : menuBtnRef.current)?.focus();
+      return;
+    }
+    sheetOpenedAt.current = window.location.pathname;
+    const sheet = sheetRef.current;
+    sheet?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); setMenuOpen(false); return; }
+      if (e.key !== 'Tab' || !sheet) return;
+      const items = [...sheet.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((x) => x.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (!sheet.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
   useEffect(() => {
     try { if (productId) localStorage.setItem('csb:lastProduct', productId); } catch { /* storage unavailable */ }
   }, [productId]);
 
-  if (!meLoaded) return <main id="main" className="main"><LoadingState /></main>;
+  if (!meLoaded) return <main id="main" tabIndex={-1} className="main"><LoadingState /></main>;
   if (!me) {
     return (
-      <main id="main" className="login-wrap">
+      <main id="main" tabIndex={-1} className="login-wrap">
         <DeniedState title="請先登入" message="後台需要團隊成員以 Google 登入。" action={<a className="btn btn-primary" href={loginHref(pathname)}>前往登入</a>} />
       </main>
     );
   }
   if (me.role !== 'team') {
     return (
-      <main id="main" className="login-wrap">
+      <main id="main" tabIndex={-1} className="login-wrap">
         <DeniedState title="沒有後台權限" message={`目前登入的 ${me.email} 不是團隊成員。測試成員請使用前台網站。`} action={<a className="btn" href={site.portalOrigin}>前往前台網站</a>} />
       </main>
     );
   }
-  if (products.loading) return <main id="main" className="main"><LoadingState /></main>;
-  if (products.error) return <main id="main" className="main"><ErrorState message={products.error.message} onRetry={products.reload} /></main>;
+  if (products.loading) return <main id="main" tabIndex={-1} className="main"><LoadingState /></main>;
+  if (products.error) return <main id="main" tabIndex={-1} className="main"><ErrorState message={products.error.message} onRetry={products.reload} /></main>;
   const list = products.data ?? [];
   const product = list.find((p) => p.id === productId);
   if (!product) {
-    return <main id="main" className="main"><ErrorState title="找不到產品" message="此產品不存在。" />{list[0] ? <p style={{ marginTop: 12 }}><Link className="btn" href={`/products/${list[0].id}/dashboard`}>前往 {list[0].name}</Link></p> : null}</main>;
+    return <main id="main" tabIndex={-1} className="main"><ErrorState title="找不到產品" message="此產品不存在。" />{list[0] ? <p style={{ marginTop: 12 }}><Link className="btn" href={`/products/${list[0].id}/dashboard`}>前往 {list[0].name}</Link></p> : null}</main>;
   }
   const section = pathname.split('/')[3] ?? 'dashboard';
   const go = (href: string) => {
@@ -144,14 +173,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
       <div className="shell">
         <aside className="sidebar">{nav}</aside>
         <header className="topbar">
-          <Button variant="ghost" icon aria-label="開啟選單" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><IconMenu /></Button>
+          <Button ref={menuBtnRef} variant="ghost" icon aria-label="開啟選單" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><IconMenu /></Button>
           <span className="screen-name">{current} · {product.name}</span>
         </header>
-        <div className="mobile-sheet" data-open={menuOpen} role="dialog" aria-modal="true" aria-label="選單" hidden={!menuOpen}>
+        <div ref={sheetRef} className="mobile-sheet" data-open={menuOpen} role="dialog" aria-modal="true" aria-label="選單" hidden={!menuOpen}>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}><Button variant="ghost" icon aria-label="關閉選單" onClick={() => setMenuOpen(false)}><IconX /></Button></div>
           {menuOpen ? nav : null}
         </div>
-        <main id="main" className="main" key={product.id}>{children}</main>
+        <main id="main" tabIndex={-1} className="main" key={product.id}>{children}</main>
       </div>
       {pendingNav ? (
         <ConfirmModal title="有尚未儲存的內容" confirmLabel="放棄並離開" danger onCancel={() => setPendingNav(null)}
@@ -180,7 +209,11 @@ interface NotificationItem { id: string; reasons: string[]; feedback: { id: stri
 export function NotificationsButton({ productId, onOpenFeedback, basePath = `/products/${productId}` }: { productId: string; onOpenFeedback: (feedbackId: string) => void; basePath?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  useDismiss(open, () => setOpen(false), ref);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDismiss(open, () => setOpen(false), ref, triggerRef);
+  // keyboard: focus moves into the panel when it opens (even when it has nothing actionable)
+  useEffect(() => { if (open) panelRef.current?.focus(); }, [open]);
   const res = useResource<NotificationItem[]>(`${basePath}/notifications?limit=30`);
   // foreground polling every 30s; paused in background tabs
   useVisiblePolling(() => { void res.reload(); }, 30_000);
@@ -194,12 +227,13 @@ export function NotificationsButton({ productId, onOpenFeedback, basePath = `/pr
     onOpenFeedback(n.feedback.id);
   };
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button type="button" className="nav-item" aria-expanded={open} aria-haspopup="dialog" onClick={() => { setOpen((o) => !o); void res.reload(); }}>
+    <div ref={ref} style={{ position: 'relative' }}
+      onBlur={(e) => { if (open && !e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false); }}>
+      <button ref={triggerRef} type="button" className="nav-item" aria-expanded={open} aria-haspopup="dialog" onClick={() => { setOpen((o) => !o); void res.reload(); }}>
         <IconBell />Notification{unread > 0 ? <span className="nav-badge num" aria-label={`${unread} 則未讀`}>{unread}</span> : null}
       </button>
       {open ? (
-        <div className="popover" role="dialog" aria-label="通知" style={{ left: 0, top: 'calc(100% + 4px)', width: 340, maxHeight: 440, overflowY: 'auto' }}>
+        <div ref={panelRef} tabIndex={-1} className="popover" role="dialog" aria-label="通知" style={{ left: 0, top: 'calc(100% + 4px)', width: 340, maxHeight: 440, overflowY: 'auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 6px 8px' }}>
             <strong>通知</strong>
             <Button size="sm" variant="ghost" disabled={unread === 0} onClick={async () => { await api.put(`${basePath}/notifications/read`, { body: { before: new Date().toISOString() } }); void res.reload(); }}>全部標為已讀</Button>

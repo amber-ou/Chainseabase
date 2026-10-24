@@ -15,11 +15,14 @@ type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 export const Button = forwardRef<HTMLButtonElement, BtnProps>(function Button(
-  { variant = 'default', size = 'md', pending, icon, className = '', children, disabled, ...rest }, ref,
+  { variant = 'default', size = 'md', pending, icon, className = '', children, disabled, onClick, ...rest }, ref,
 ) {
   const cls = ['btn', variant !== 'default' ? `btn-${variant}` : '', size === 'sm' ? 'btn-sm' : '', icon ? 'btn-icon' : '', className].filter(Boolean).join(' ');
+  // while pending the button stays focusable (aria-disabled): a disabled button would drop
+  // keyboard focus to <body> mid-request; clicks (and implicit form submits) are swallowed
   return (
-    <button ref={ref} type="button" className={cls} disabled={disabled || pending} aria-busy={pending || undefined} {...rest}>
+    <button ref={ref} type="button" className={cls} disabled={disabled} aria-disabled={pending && !disabled ? true : undefined} aria-busy={pending || undefined}
+      onClick={pending ? (e) => e.preventDefault() : onClick} {...rest}>
       {pending ? <Spinner /> : null}
       {children}
     </button>
@@ -123,8 +126,11 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
   );
 }
 
-/** Close on outside click / Escape for small popovers. */
-export function useDismiss(open: boolean, onClose: () => void, ref: React.RefObject<HTMLElement | null>) {
+/**
+ * Close on outside click / Escape for small popovers. `returnFocus` gets focus back
+ * after Escape, so keyboard users are not dropped on <body> when the popover unmounts.
+ */
+export function useDismiss(open: boolean, onClose: () => void, ref: React.RefObject<HTMLElement | null>, returnFocus?: React.RefObject<HTMLElement | null>) {
   const saved = useRef(onClose);
   useEffect(() => { saved.current = onClose; }, [onClose]);
   useEffect(() => {
@@ -132,12 +138,17 @@ export function useDismiss(open: boolean, onClose: () => void, ref: React.RefObj
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) saved.current();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); saved.current(); } };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      saved.current();
+      returnFocus?.current?.focus();
+    };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey, true);
     };
-  }, [open, ref]);
+  }, [open, ref, returnFocus]);
 }

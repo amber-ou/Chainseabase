@@ -7,7 +7,7 @@
 - 完成：文件、M1–M5、M7-01 的程式與自動化驗證；M6 程式與 mock 測試（C16 輪詢已自動化）；M7-02 自動化響應式／鍵盤／axe 可及性檢查與 taste lint／inspector（前台與後台頁）。
 - 上線前收尾（第二輪）：Roadmap 拖曳併發改為以卡片與目標欄為範圍（M4-02），本機負載重新驗證（M8-02）；staging 建置清單與 `APP_ENV=staging` 防呆（M8-01）。
 - 待外部條件：真實 Google 登入（EXT-02）、Resend 寄信（EXT-03）、Google 日曆 sandbox 實測（EXT-02、EXT-04）、Vercel／Supabase staging 與正式環境（EXT-01、EXT-05）。
-- 最新檢查（2026-10-23，雲端開發容器）：lint、typecheck、build、security scan 通過；Vitest 139 passed／0 failed／0 skipped；Playwright 55 passed／0 failed／0 skipped。完整對照見 [驗收追蹤報告](docs/acceptance-report.md)。
+- 最新檢查（2026-10-24，雲端開發容器）：lint、typecheck、build、security scan 通過；Vitest 139 passed／0 failed／0 skipped；Playwright 64 passed／0 failed／0 skipped。完整對照見 [驗收追蹤報告](docs/acceptance-report.md)。
 - 下一個可執行步驟：依 [Staging 建置清單](docs/staging-setup.md) 完成 EXT-01～EXT-04（部署分支 `staging`），以第 7 節驗證 `/api/v1/health` 為 staging＋全部 real 後，執行 Google 登入、邀請、sandbox 日曆實測（C03／C05–C10／C12–C15）與 staging 負載；螢幕閱讀器人工測試另行安排。
 
 ## 任務清單
@@ -42,7 +42,7 @@
 | M6-03 | 重複活動本次／整系列、例外與不支援型別保護。 | M6-02 | OPS；C08–C11 | 待外部條件 |
 | M6-04 | Dashboard 日曆、編輯 Modal、拖曳改期、分頁與刷新。 | M6-03、M2-02 | UI、OPS；C05–C06、C16、C18 | 待外部條件 |
 | M7-01 | 公開前台完整流程與匿名／測試／團隊 E2E。 | M2-04、M4-03、M5-03 | REQ、API；F08–F13、R14 | 完成 |
-| M7-02 | 響應式、鍵盤、focus、狀態、taste inspector 與截圖修正。 | M3-03、M4-02、M5-02、M6-04、M7-01 | UI；V01–V04 | 進行中（自動化完成；螢幕閱讀器與人工鍵盤實測未執行） |
+| M7-02 | 響應式、鍵盤、focus、狀態、taste inspector 與截圖修正。 | M3-03、M4-02、M5-02、M6-04、M7-01 | UI；V01–V04 | 進行中（自動化與鍵盤走查完成；螢幕閱讀器與真人實體鍵盤未執行） |
 | M8-01 | CI、staging 隔離、secret 管理、工作程序與觀測。 | M1-01、M5-03；EXT-01、EXT-03 | OPS；O01–O02、O04 | 進行中 |
 | M8-02 | 備份／復原演練、約 30 人負載與相容 migration 驗證。 | M8-01、M7-02 | OPS；O03、O05 | 進行中 |
 | M8-03 | 完整驗收報告、發布／回退計畫與正式部署。 | M8-02；全部外部條件、實際發布授權 | 全部適用驗收 | 待外部條件 |
@@ -231,4 +231,21 @@
 交付檔案：docs/staging-setup.md、operations.md、.env.example、src/server/config.ts、/api/v1/health
 實際檢查與結果：config.test.ts 4 passed（APP_ENV=staging 拒絕 fake provider 與測試登入、缺憑證只列變數名稱）；operations.test.ts health 回報 environment 與 provider 模式
 未完成或阻擋：EXT-01～EXT-04 尚未提供；未建立任何雲端資源、未寄送真實邀請、未寫入任何真實日曆
+```
+
+```text
+任務：M7-02 鍵盤走查（2026-10-24）
+狀態：進行中（鍵盤走查完成；螢幕閱讀器未執行）
+負責人：Claude Code
+交付檔案：src/components/ui.tsx（useDismiss 回焦、Button 送出中保持可聚焦）、menu.tsx、multiselect.tsx、modal.tsx、src/features/admin/shell.tsx（通知面板、手機選單）、src/features/calendar/calendar.tsx（設定步驟焦點、檢視分頁方向鍵）、src/features/roadmap/board.tsx（移動後焦點跟隨卡片）、src/features/portal/portal-feedback.tsx（投票）、各 <main id="main" tabIndex={-1}>、tests/e2e/keyboard.spec.ts、keyboard-phone.spec.ts
+實際檢查與結果：只用鍵盤事件在 Chromium 走查後台 1440／390 與前台測試者流程，13 個步驟、修正 9 項焦點問題（紀錄見 docs/acceptance-report.md「V02 鍵盤走查紀錄」）；npm run test:e2e 64 passed／0 failed／0 skipped；npm test 139 passed；lint、typecheck、build、security:scan、taste lint 通過
+未完成或阻擋：螢幕閱讀器（NVDA／VoiceOver）、Safari／Firefox、真人實體鍵盤走查未執行
+```
+
+```text
+任務：PR #1 追蹤（https://github.com/amber-ou/Chainseabase/pull/1）
+狀態：待審查（不合併、不發布）
+進度：head d55b2ad 的 CI（push 與 pull_request 兩個 verify）皆 success；至 2026-10-24 無審查留言或一般留言；本次鍵盤走查修正另以新 commit 推送，需確認新 head 的 CI
+下一步：檢查最新 head 的全部 check runs；有審查留言時逐項處理並回覆；外部條件就緒後依 docs/staging-setup.md 執行 staging 驗證
+注意：PR 追蹤只在當次工作階段有效，沒有跨工作階段的背景監看；下一個工作階段需重新檢查 PR 狀態
 ```

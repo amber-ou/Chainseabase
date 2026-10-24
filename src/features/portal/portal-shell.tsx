@@ -38,8 +38,8 @@ export function PortalShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const res = useResource<PublicProduct>(`/public/products/${encodeURIComponent(slug)}`);
   const { me } = useSite();
-  if (res.loading) return <main id="main" className="portal-main"><LoadingState /></main>;
-  if (res.error || !res.data) return <main id="main" className="portal-main"><ErrorState title={res.error?.isNotFound ? '找不到產品' : '讀取失敗'} message={res.error?.message} /></main>;
+  if (res.loading) return <main id="main" tabIndex={-1} className="portal-main"><LoadingState /></main>;
+  if (res.error || !res.data) return <main id="main" tabIndex={-1} className="portal-main"><ErrorState title={res.error?.isNotFound ? '找不到產品' : '讀取失敗'} message={res.error?.message} /></main>;
   const p = res.data;
   const section = pathname.split('/')[3] ?? 'feedback';
   return (
@@ -58,7 +58,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
       {me && !p.viewer.canInteract ? (
         <div className="banner" role="note" style={{ borderRadius: 0 }}>你已登入，但尚未受邀參與「{p.name}」，目前只能瀏覽公開內容。需要互動請聯絡團隊寄送邀請。</div>
       ) : null}
-      <main id="main" className="portal-main">{children}</main>
+      <main id="main" tabIndex={-1} className="portal-main">{children}</main>
     </Ctx.Provider>
   );
 }

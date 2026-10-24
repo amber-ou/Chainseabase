@@ -67,6 +67,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .skip-link { position: absolute; left: 8px; top: -40px; background: var(--primary); color: var(--on-primary); padding: 8px 12px; border-radius: var(--radius-control); z-index: 1000; }
 .skip-link:focus { top: 8px; }
+/* the skip link moves focus into <main>; the landmark itself needs no ring */
+main[tabindex="-1"]:focus { outline: none; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

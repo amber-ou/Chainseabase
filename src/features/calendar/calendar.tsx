@@ -8,7 +8,7 @@ import { useDebounced, useResource, useVisiblePolling } from '@/client/hooks';
 import { useSite } from '@/client/site';
 import { DISPLAY_TZ, formatDateTime } from '@/client/format';
 import { Button, DeniedState, EmptyState, ErrorState, Field, LoadingState, Spinner, Switch } from '@/components/ui';
-import { ConfirmModal, Modal } from '@/components/modal';
+import { ConfirmModal, FOCUSABLE, Modal } from '@/components/modal';
 import { IconCalendar, IconChevronLeft, IconChevronRight, IconPlus, IconRefresh } from '@/components/icons';
 import { useToast } from '@/components/toast';
 
@@ -52,12 +52,31 @@ export function CalendarPanel({ productId }: { productId: string }) {
   const connectHref = `/api/v1/integrations/google/calendar/start?returnTo=${encodeURIComponent(pathname)}`;
   const flag = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('calendar') : null;
   const fake = site.providers.calendar === 'fake';
+  // connect → bind → calendar: the step's button unmounts when the step completes, so move
+  // keyboard focus to the next step's first control (unless the user already moved it)
+  const panelRef = useRef<HTMLDivElement>(null);
+  const phase = !status.data ? 'loading' : !status.data.connected ? 'connect' : status.data.needsReauth ? 'reauth' : binding.data ? 'view' : binding.data === undefined ? 'loading' : 'bind';
+  const prevPhase = useRef<string | null>(null);
+  useEffect(() => {
+    if (phase === 'loading') return;
+    const prev = prevPhase.current;
+    prevPhase.current = phase;
+    if (!prev || prev === phase) return;
+    let tries = 0;
+    const t = setInterval(() => {
+      const active = document.activeElement;
+      if ((active && active !== document.body) || ++tries > 30) { clearInterval(t); return; }
+      const next = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+      if (next) { next.focus(); clearInterval(t); }
+    }, 100);
+    return () => clearInterval(t);
+  }, [phase]);
 
   if (status.loading || binding.loading) return <LoadingState label="讀取日曆設定…" />;
   if (status.error) return <ErrorState message={status.error.message} onRetry={status.reload} />;
   const st = status.data!;
   return (
-    <div>
+    <div ref={panelRef}>
       {fake ? <div className="banner" style={{ marginBottom: 12 }}>開發模擬日曆：尚未設定 Google OAuth，活動只存在本機記憶體，不會寫入真實 Google 日曆。</div> : null}
       {flag && flag !== 'connected' ? <div className="banner banner-error" role="alert" style={{ marginBottom: 12 }}>{CONNECT_ERRORS[flag] ?? 'Google 日曆連結失敗，請重試。'}</div> : null}
       {!st.connected ? (
@@ -130,6 +149,8 @@ function windowFor(view: View, anchor: DateTime) {
   return { from: anchor.startOf('day'), to: anchor.startOf('day').plus({ days: 30 }) };
 }
 
+const VIEWS: View[] = ['month', 'week', 'list'];
+
 function CalendarView({ productId, bindingSummary, onDisconnect, onUnbind }: { productId: string; bindingSummary: string; onDisconnect: () => void; onUnbind: () => void }) {
   const [view, setView] = useState<View>(() => (typeof window !== 'undefined' && window.innerWidth < 640 ? 'list' : 'month'));
   const [anchor, setAnchor] = useState(() => DateTime.now().setZone(DISPLAY_TZ));
@@ -149,8 +170,17 @@ function CalendarView({ productId, bindingSummary, onDisconnect, onUnbind }: { p
     <div>
       <div className="cal-toolbar">
         <div className="tabs" role="tablist" aria-label="日曆檢視" style={{ border: 0 }}>
-          {(['month', 'week', 'list'] as View[]).map((v) => (
-            <button key={v} role="tab" type="button" className="tab" aria-selected={view === v} onClick={() => setView(v)}>{v === 'month' ? '月' : v === 'week' ? '週' : '活動清單'}</button>
+          {VIEWS.map((v, i) => (
+            <button key={v} role="tab" type="button" className="tab" aria-selected={view === v} tabIndex={view === v ? 0 : -1} onClick={() => setView(v)}
+              onKeyDown={(e) => {
+                // same keyboard model as the shared Tabs component: arrows / Home / End move and select
+                const next = e.key === 'ArrowRight' ? (i + 1) % VIEWS.length : e.key === 'ArrowLeft' ? (i - 1 + VIEWS.length) % VIEWS.length
+                  : e.key === 'Home' ? 0 : e.key === 'End' ? VIEWS.length - 1 : -1;
+                if (next < 0) return;
+                e.preventDefault();
+                setView(VIEWS[next]);
+                (e.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus();
+              }}>{v === 'month' ? '月' : v === 'week' ? '週' : '活動清單'}</button>
           ))}
         </div>
         <Button size="sm" onClick={() => setAnchor(DateTime.now().setZone(DISPLAY_TZ))}>今天</Button>

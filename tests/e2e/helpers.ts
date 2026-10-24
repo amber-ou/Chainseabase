@@ -32,3 +32,22 @@ export async function expectNoPageOverflow(page: Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 }
+
+/** Short description of the focused element (tag, role, accessible name). */
+export function focused(page: Page) {
+  return page.evaluate(() => {
+    const e = document.activeElement as HTMLElement | null;
+    if (!e || e === document.body) return 'body';
+    const label = (e as HTMLInputElement).labels?.[0]?.textContent;
+    const name = (e.getAttribute('aria-label') ?? label ?? e.innerText ?? '').trim().replace(/\s+/g, ' ');
+    return `${e.tagName.toLowerCase()}${e.getAttribute('role') ? `[${e.getAttribute('role')}]` : ''} ${name}`.trim();
+  });
+}
+
+export async function tabTo(page: Page, name: RegExp, max = 60) {
+  for (let i = 0; i < max; i++) {
+    await page.keyboard.press('Tab');
+    if (name.test(await focused(page))) return;
+  }
+  throw new Error(`Tab never reached ${name}`);
+}

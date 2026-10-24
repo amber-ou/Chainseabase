@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { Button } from './ui';
 import { IconX } from './icons';
 
-const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+export const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Accessible dialog: labelled, focus moves in and is trapped, Escape closes,

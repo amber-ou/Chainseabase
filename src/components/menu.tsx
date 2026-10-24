@@ -12,7 +12,8 @@ export function ActionMenu({ label, items, trigger, align = 'right' }: { label: 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  useDismiss(open, () => setOpen(false), ref);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  useDismiss(open, () => setOpen(false), ref, triggerRef);
   const focusItem = (dir: 1 | -1 | 0) => {
     const els = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([aria-disabled="true"])') ?? [])];
     if (!els.length) return;
@@ -27,7 +28,7 @@ export function ActionMenu({ label, items, trigger, align = 'right' }: { label: 
   };
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <Button variant="ghost" size="sm" icon={!trigger} aria-label={label} aria-haspopup="menu" aria-expanded={open}
+      <Button ref={triggerRef} variant="ghost" size="sm" icon={!trigger} aria-label={label} aria-haspopup="menu" aria-expanded={open}
         onClick={() => { setOpen((o) => !o); setTimeout(() => focusItem(0), 0); }}
         onKeyDown={(e) => { if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); setTimeout(() => focusItem(0), 0); } }}
       >{trigger ?? <IconMore />}</Button>
@@ -39,7 +40,14 @@ export function ActionMenu({ label, items, trigger, align = 'right' }: { label: 
             return (
               <button key={i} type="button" role="menuitem" className="menu-item" aria-disabled={it.disabled || undefined}
                 style={it.danger ? { color: 'var(--negative)' } : undefined}
-                onClick={() => { if (it.disabled) return; setOpen(false); it.onSelect(); }}
+                onClick={() => {
+                  if (it.disabled) return;
+                  setOpen(false);
+                  // the item unmounts with the menu: focus the trigger first, so a dialog opened by
+                  // the action returns focus here when it closes
+                  triggerRef.current?.focus();
+                  it.onSelect();
+                }}
               >{it.label}</button>
             );
           })}

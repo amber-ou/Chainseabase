@@ -21,7 +21,7 @@ export function LoginScreen() {
   const err = params.get('error');
   const href = `/api/v1/auth/google/start?returnTo=${encodeURIComponent(returnTo)}`;
   return (
-    <main id="main" className="login-wrap">
+    <main id="main" tabIndex={-1} className="login-wrap">
       <div className="card login-card">
         <div className="brand" style={{ padding: 0 }}><Logo /><span>Chainseabase</span></div>
         <h1>{site.site === 'admin' ? '登入團隊後台' : '登入回饋網站'}</h1>

@@ -27,7 +27,7 @@ export function InviteScreen() {
     }
   };
   return (
-    <main id="main" className="login-wrap">
+    <main id="main" tabIndex={-1} className="login-wrap">
       <div className="card login-card">
         <div className="brand" style={{ padding: 0 }}><Logo /><span>Chainseabase</span></div>
         <h1>接受邀請</h1>

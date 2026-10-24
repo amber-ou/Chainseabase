@@ -16,9 +16,10 @@ export function MultiSelect({ label, options, value, onChange, noneLabel, placeh
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const auto = useId();
   const listId = `${id ?? auto}-list`;
-  useDismiss(open, () => setOpen(false), ref);
+  useDismiss(open, () => setOpen(false), ref, triggerRef);
   const filtered = useMemo(() => options.filter((o) => o.label.toLowerCase().includes(q.toLowerCase())), [options, q]);
   const groups = useMemo(() => {
     const m = new Map<string, MsOption[]>();
@@ -40,7 +41,7 @@ export function MultiSelect({ label, options, value, onChange, noneLabel, placeh
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button
-        id={id} type="button" className="ms-trigger" aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} disabled={disabled}
+        ref={triggerRef} id={id} type="button" className="ms-trigger" aria-haspopup="listbox" aria-expanded={open} aria-controls={listId} disabled={disabled}
         aria-label={`${label}：${selected.length ? selected.map((s) => s.label).join('、') : (noneLabel ?? placeholder)}`}
         onClick={() => setOpen((o) => !o)}
       >

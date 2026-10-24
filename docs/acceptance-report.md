@@ -6,7 +6,7 @@
 
 | 項目 | 內容 |
 | --- | --- |
-| 日期 | 2026-10-23（Asia/Taipei） |
+| 日期 | 2026-10-23；鍵盤走查與重跑 2026-10-24（Asia/Taipei） |
 | 環境 | 雲端開發容器：Node 22.22.0、PostgreSQL 16.15（本機）、Chromium（Playwright 1.63） |
 | 程式版本 | 分支 `claude/keen-lamport-4qb974`（見 Git 紀錄） |
 | 資料集 | 測試自建：產品甲／乙、團隊甲／乙、受邀產品甲的測試者、未受邀帳號、UIUX／前端／後端、版本 single、用途 multiple、未分組 Tag（`tests/helpers/harness.ts`）；E2E 使用隔離資料庫 `chainseabase_e2e` |
@@ -18,8 +18,8 @@
 | `npm run typecheck` | 通過 |
 | `npm test`（Vitest：單元＋真實 PostgreSQL 整合） | 13 個檔案、139 tests：139 passed、0 failed、0 skipped |
 | `npm run build` | 通過（Next.js 16.4.2 production build） |
-| `npm run security:scan` | 通過（client bundle＋Git 追蹤檔案，635 個檔案） |
-| `npm run test:e2e`（Playwright：1440／768／390） | 55 tests：55 passed、0 failed、0 skipped（含 axe 可及性 16、C16 輪詢 1） |
+| `npm run security:scan` | 通過（client bundle＋Git 追蹤檔案，637 個檔案） |
+| `npm run test:e2e`（Playwright：1440／768／390） | 64 tests：64 passed、0 failed、0 skipped（含 axe 可及性 16、C16 輪詢 1、鍵盤走查 9） |
 | taste skill `lint.mjs --app`（固定 commit 6010f91） | `src/` 0 FAIL、0 WARN（保留理由見 V04） |
 | taste skill `inspect.mjs --app`（1440／768／390） | 前台 Feedback、前台 Roadmap、登入頁、後台 Product／Feedback／Roadmap／Personal／User／Setting：全部 0 FAIL；WARN 理由見 V04 |
 | `npm run db:restore-drill`（本機 dev → drill） | 41 張表、行數一致、私人資料摘要一致 |
@@ -118,7 +118,7 @@
 | ID | 狀態 | 證據 |
 | --- | --- | --- |
 | V01 | 通過 | E2E 在 1440／768／390 檢查 6 個後台頁、前台頁與 Schedule：無整頁橫向溢出、手機折疊選單；截圖附於 Playwright 報告 |
-| V02 | 部分 | E2E：Modal Escape／焦點循環、看板選單鍵盤移動；Dropdown／Tabs 使用原生控制與方向鍵；axe-core WCAG 2.1 A／AA（`a11y.spec.ts`）後台 6 頁、Modal＋Schedule、前台與登入頁在 1440／390 皆 0 violation（修正看板／Schedule 捲動容器不可聚焦）。螢幕閱讀器實機測試與人工鍵盤走查**未執行** |
+| V02 | 部分 | 鍵盤走查已執行（只用鍵盤事件、真實 Chromium、每步記錄焦點位置，見下方紀錄），發現並修正 9 項焦點問題，已固定為 `keyboard.spec.ts`／`keyboard-phone.spec.ts`；axe-core WCAG 2.1 A／AA 後台 6 頁、Modal＋Schedule、前台與登入頁在 1440／390 皆 0 violation。**螢幕閱讀器（NVDA／VoiceOver）實機測試未執行**；鍵盤走查由自動化腳本操作，非真人實體鍵盤 |
 | V03 | 部分 | 成功／錯誤／儲存中均有文字＋圖示與 aria-live（E2E 驗證 Schedule 與看板宣告）；其餘狀態為程式審查 |
 | V04 | 部分 | taste lint 0 FAIL／0 WARN（mono 只用於指令座標與 slug、陰影只用於 Modal／選單浮層、時鐘補零已標註）；inspector 以本機反向代理注入測試 session 後檢查後台 6 頁與前台 3 頁：全部 0 FAIL。修正：手機短頁頂部空白、看板工具列溢出、Feedback 列中繼資料溢出、數字欄靠右、手機看板改為一欄一屏仍在容器內橫向捲動。保留 WARN：內容少造成的空白（開發資料量小）、看板各欄卡片數不同的不等高（看板本質）。人工視覺審查未正式簽核 |
 | O01 | 部分 | 單元：production 與 `APP_ENV=staging` 皆拒絕 fake provider、測試登入、缺 secret（只列名稱）；`/api/v1/health` 回報環境與 provider 模式；staging／production 實際分離待 EXT-01（步驟見 [Staging 建置清單](staging-setup.md)） |
@@ -126,6 +126,28 @@
 | O03 | 部分 | 本機 pg_dump／pg_restore 演練一致；**Supabase 正式備份還原未執行** |
 | O04 | 通過 | `security:scan` 掃描 client bundle 與 Git；log 遮罩測試；API 錯誤不含 SQL |
 | O05 | 部分 | 本機 30 人：正常頻率所有 API p95 ≤ 49 ms，移動首次成功 99.1%、重試後 100%；高競爭同欄拖曳不同卡片重試後 88.0%（舊版 6.8%），剩餘 409 為相鄰卡真的被移動；不變量全數通過。**staging 未執行** |
+
+### V02 鍵盤走查紀錄（2026-10-24，本機 production build，Chromium）
+
+方法：以 Playwright 驅動真實 Chromium，**只送出鍵盤事件**（Tab／Shift+Tab／Enter／Space／Escape／方向鍵／Home／End／Ctrl+Enter），每一步讀取 `document.activeElement` 與其計算後的焦點樣式（outline／box-shadow）；登入也以鍵盤輸入。範圍為後台 1440、後台 390、前台受邀測試者。這不是螢幕閱讀器測試，也不是真人以實體鍵盤操作。
+
+| # | 實際操作 | 修正前結果 | 修正後結果（`keyboard*.spec.ts` 驗證） |
+| --- | --- | --- | --- |
+| K1 | 每頁第一個 Tab → Enter（跳到主要內容） | 焦點落在 `<body>`（Chrome 仍會從 main 開始下一個 Tab，但其他瀏覽器／輔助技術無法得知位置） | 焦點進入 `<main>`；後台 6 頁與前台皆驗證 |
+| K2 | 後台 6 頁從頭 Tab 到循環 | 每個停留點都有可見焦點框；跑到頁尾會短暫離開頁面再回到跳過連結（瀏覽器正常行為） | 不變；改為每次執行都檢查每個停留點有焦點框 |
+| K3 | 新增 Feedback → Tab 到 Person tag → Enter 開啟 → Escape | Escape 後焦點掉到 `<body>`，再按 Escape 無法關閉 Modal（鍵盤使用者受困） | Escape 回到觸發按鈕；再按 Escape 關閉 Modal，焦點回到「新增 Feedback」 |
+| K4 | Modal 內容分頁 → 方向鍵 → Schedule → Tab 到「第 2 列，UIUX」→ Enter → 輸入 → Ctrl+Enter → Escape | 正常：指令框預填 `/2-2`、宣告「已套用至草稿」、Escape 先跳出「捨棄未建立的 Feedback？」且焦點在「取消」 | 不變（固定為測試） |
+| K5 | Roadmap 卡片「移動」按鈕 → Enter → 方向鍵 → Escape；再 Enter 選「進行中」 | Escape 與選擇後焦點都掉到 `<body>`，卡片跨欄後鍵盤位置遺失 | Escape 回到按鈕；跨欄移動後焦點跟到該卡在新欄的「移動」按鈕，並宣告「已將…移到『進行中』」 |
+| K6 | Notification → Enter → Tab → Escape | 焦點留在按鈕，面板內容無法以 Tab 進入（無未讀時沒有可聚焦元素），面板不會隨焦點離開而關閉 | Enter 後焦點進入通知面板；Escape 回到按鈕；焦點離開面板時自動關閉 |
+| K7 | 日曆：Tab 到「連結模擬日曆」→ Enter → 選日曆 → Tab 到「綁定」→ Enter | 兩步完成後按鈕消失，焦點掉到 `<body>` | 每步完成後焦點移到下一步的第一個控制項（日曆下拉 → 月／週／活動清單分頁） |
+| K8 | 日曆檢視分頁「月／週／活動清單」→ 方向鍵／Home／End | 方向鍵無作用、三個分頁都是 Tab 停留點（與其他分頁元件不一致） | 方向鍵／Home／End 切換並移動焦點，僅選中分頁在 Tab 順序 |
+| K9 | 新增活動 Modal 全部 Tab 一輪後 Enter 儲存 | 日期／時間欄位逐段停留（月／日／年／選擇器），選擇器圖示由瀏覽器自行繪製焦點框（截圖確認） | 不變；儲存後焦點回到「新增活動」 |
+| K10 | 任何送出中按鈕（例：綁定、儲存、送出） | 送出中設 `disabled`，按 Enter 後焦點立即掉到 `<body>`，失敗時看不到錯誤附近的焦點 | 送出中改為 `aria-disabled`＋忽略點擊，焦點留在按鈕；錯誤顯示時焦點仍在原處（截圖確認「此日曆已綁定其他產品」） |
+| K11 | 手機 390：開啟選單 → Tab 30 次 → Escape；再開啟 → Roadmap 連結 → Enter | 開啟後焦點留在選單按鈕；Tab 會跑到被選單覆蓋的頁面內容；Escape 無作用；換頁後焦點遺失 | 開啟後焦點在「關閉選單」，Tab 只在選單內循環，Escape 關閉並回到「開啟選單」，換頁後焦點進入 `<main>` |
+| K12 | 前台受邀測試者：跳過連結 → 新增回饋（鍵盤輸入、送出）→ Tab 到投票 → Space 兩次 | 投票送出中按鈕 `disabled`，Space 後焦點掉到 `<body>` | 焦點留在投票按鈕，`aria-pressed` 與名稱「收回投票／投票，目前 N 票」正確切換 |
+| K13 | User 頁「管理 …」選單 → 方向鍵到「變更角色」→ Enter → Escape | （修正 K5 時發現）選單項目先卸載，對話框把 `<body>` 當成開啟者，關閉後焦點遺失 | 選擇項目前先把焦點移回選單按鈕；對話框開啟時焦點在對話框內，關閉後回到「管理 …」 |
+
+仍需人工：螢幕閱讀器（NVDA＋Chrome、VoiceOver＋Safari）朗讀順序與宣告內容、Safari／Firefox 的焦點行為、真人以實體鍵盤走查一次。
 
 ### O05 本機負載結果（2026-10-23，production build，非 staging）
 

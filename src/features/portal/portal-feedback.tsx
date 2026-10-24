@@ -75,8 +75,10 @@ function VoteButton({ productId, feedback, canInteract, onRequire, onChanged }: 
   const [state, setState] = useState({ voted: feedback.myVote, count: feedback.voteCount });
   const [pending, setPending] = useState(false);
   return (
-    <button type="button" className="vote-btn" aria-pressed={state.voted} disabled={pending} aria-label={`${state.voted ? '收回投票' : '投票'}，目前 ${state.count} 票`}
+    // aria-disabled (not disabled) while pending: a disabled button would drop keyboard focus
+    <button type="button" className="vote-btn" aria-pressed={state.voted} aria-disabled={pending || undefined} aria-label={`${state.voted ? '收回投票' : '投票'}，目前 ${state.count} 票`}
       onClick={async () => {
+        if (pending) return;
         if (!canInteract) { onRequire(); return; }
         setPending(true);
         try {

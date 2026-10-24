@@ -13,7 +13,7 @@ export function PortalHome() {
         <span className="brand" style={{ padding: 0 }}><Logo /><span>Chainseabase 回饋</span></span>
         <span style={{ marginLeft: 'auto' }}><PortalUserBox /></span>
       </header>
-      <main id="main" className="portal-main">
+      <main id="main" tabIndex={-1} className="portal-main">
         <h1 style={{ marginBottom: 16 }}>產品</h1>
         {res.loading ? <LoadingState /> : res.error ? <ErrorState message={res.error.message} onRetry={res.reload} /> : (res.data ?? []).length === 0 ? <EmptyState title="目前沒有產品" /> : (
           <div className="list">
