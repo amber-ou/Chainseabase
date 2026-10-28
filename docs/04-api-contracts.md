@@ -104,13 +104,13 @@
 | GET `/products/:p/feedback/:f` | 團隊；內部 DTO，不混入他人個人 Tag。 |
 | PATCH `/products/:p/feedback/:f` | 團隊；允許欄位明確列舉，含 visibility。 |
 | DELETE `/products/:p/feedback/:f` | 團隊；軟刪除與關聯檢視失效。 |
-| GET `/public/products/:slug` | 匿名；公開產品入口資訊。 |
-| GET `/public/products/:slug/feedback` | 匿名；只查 public、未刪除，支援 q。 |
-| GET `/public/products/:slug/feedback/:f` | 匿名；公開 DTO。 |
+| GET `/public/products/:slug` | 團隊或該產品受邀測試成員；公開產品入口資訊。 |
+| GET `/public/products/:slug/feedback` | 團隊或該產品受邀測試成員；只查 public、未刪除，支援 q。 |
+| GET `/public/products/:slug/feedback/:f` | 團隊或該產品受邀測試成員；公開 DTO。 |
 | POST `/portal/products/:p/feedback` | 團隊或該產品測試成員；只接受 title、description，後端設 public 與預設分類。 |
 | PATCH `/portal/products/:p/feedback/:f` | 自己的公開內容或團隊；只接受 title、description、expectedRevision。 |
 | PUT / DELETE `/portal/products/:p/feedback/:f/vote` | 已授權成員，設定／取消本人投票。 |
-| GET `/public/products/:slug/feedback/:f/comments` | 匿名；僅 general、normal、公開可見留言。 |
+| GET `/public/products/:slug/feedback/:f/comments` | 團隊或該產品受邀測試成員；僅 general、normal、公開可見留言。 |
 | GET / POST `/products/:p/feedback/:f/comments` | 團隊；一般留言串；建立 body、replyToId。 |
 | POST `/portal/products/:p/feedback/:f/comments` | 已授權成員；同上，公開 Feedback。 |
 | PATCH / DELETE `/products/:p/comments/:c` | 團隊普通留言編輯／移除，檢查 revision。 |
@@ -298,3 +298,7 @@ before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 nul
 - 刪除分類選項時 body 帶 `expectedRevision`（product revision）與 `replacementId` 或 `strategy: "detach"`。
 - Calendar 寫入若 Google 結果不明，回 **202** `{ state: "unknown", mutationId }`；以相同 Idempotency-Key 重試會先核對 Google（建立以固定 event ID、更新以 `extendedProperties.private.csbLastMutation`）再決定，不盲目重放。
 - 所有寫入要求 `Origin` 等於該網站 origin（CSRF 防護）；未列在 schema 的欄位一律 400（禁止 mass assignment）。
+
+## Windows 自架存取修訂（WIN-04）
+
+保留 `/public/` 路由與 public DTO 名稱以降低遷移範圍，但它們不再允許匿名。所有公司資料讀取（含 Roadmap、搜尋、留言、頭像、通知及直接 URL）先驗證 session 與產品／資源資格；未登入 401，無資格資源 404。頁面可導向登入，API 不得以登入頁 HTML 代替 401。只有登入、OAuth callback、邀請接受必要入口及不含敏感內容的健康檢查可例外。快取不得跨使用者洩漏內容，撤銷資格後每次請求重新檢查。這是待實作的新契約，不是宣稱現有測試已通過。

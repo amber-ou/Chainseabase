@@ -7,12 +7,12 @@
 | 層級 | 選擇 |
 | --- | --- |
 | 前端／後端 | 同一 Next.js＋TypeScript 模組化單體，兩個網站 host，共用服務層。 |
-| 資料庫 | Supabase PostgreSQL；正式 migration／索引待實作。 |
+| 資料庫 | Windows 原生 PostgreSQL；migrations 0001／0002 已存在。本機 PostgreSQL 18.6 基本流程由使用者驗證；完整相容性測試尚待完成。 |
 | 身分 | Google OAuth／OIDC，伺服器管理 session，Email 邀請另決定產品互動權。 |
 | 個人日曆授權 | 與登入分開，各使用者 token 後端加密保存。 |
-| 儲存 | Supabase Storage 用於頭像；第一版不實作 Feedback 附件。 |
+| 儲存 | 正式 filesystem 頭像後端待 WIN-02 實作；既有本機 fake 不可直接用於正式環境。第一版不實作 Feedback 附件。 |
 | 寄信／工作 | Resend 邀請信；DB outbox＋可恢復的受保護工作程序。 |
-| 雲端 | GitHub 保存程式與觸發 CI；Vercel 執行網站及 API。 |
+| 部署 | GitHub 保存程式與 CI；Windows 服務執行 Next.js／PostgreSQL／Tunnel，工作排程器負責背景工作及備份。 |
 
 GitHub Pages 不能單獨承載登入、權限、日曆憑證及資料寫入。兩個網站共用資料庫，不為前台再複製一份 Feedback。
 
@@ -31,6 +31,8 @@ GitHub Pages 不能單獨承載登入、權限、日曆憑證及資料寫入。�
 
 實際程式配置與 `docs/02` 的建議結構一致：`src/modules/*` 為領域服務、`src/server/*` 為 HTTP 路由／授權／冪等／outbox／adapters、`src/features/*` 為 UI。所有 API 經 `src/server/api` 單一路由器（host 白名單、Origin 檢查、zod 白名單 schema、Idempotency-Key）。
 
-尚未建立：任何雲端環境（Vercel、Supabase、Resend、Google Cloud）與真實第三方實測。
+使用者已完成 Windows 開發庫、網站建置／啟動及真實 Google 登入。原 Supabase staging 已初始化、Vercel 專案已建立且 Git 已斷線，先保留；Windows 正式服務、日曆／寄信與還原仍待完成。
 
-實作順序見 [tasks.md](tasks.md)，部署前置與日曆細節見 [operations.md](operations.md) 及 [Calendar 與雲端部署](docs/06-calendar-and-deployment.md)。
+實作順序見 [tasks.md](tasks.md)，部署前置與日曆細節見 [operations.md](operations.md) 及 [Calendar 與部署](docs/06-calendar-and-deployment.md)。
+
+現行服務拓樸、依賴與部署驗收以 [Windows 原生部署規格](docs/windows-native-deployment.md) 為準。

@@ -1,12 +1,14 @@
 # Chainseabase 專案工作規則
 
+現行部署入口：[Windows 原生規格與 WIN 任務](docs/windows-native-deployment.md)。核心功能沿用既有實作；部署與受邀讀取改造尚待驗收。
+
 適用於 Claude 在此專案的後續工作。使用者最新明確指示與當前工具／平台規則優先；本文件不授予額外外部服務權限。
 
 ## 先了解現況
 
-應用程式已實作（Next.js 16.4.2／TypeScript／PostgreSQL），M1–M7 功能與自動化測試完成；Google OAuth／Calendar、Resend、Supabase Storage 已有真實 adapter 但**尚未以真實帳號實測**，也尚未部署任何雲端環境。開工前先讀 [tasks.md](tasks.md) 的狀態與證據，以及 [驗收追蹤報告](docs/acceptance-report.md)，不要重做已完成的任務。
+應用程式已實作（Next.js 16.4.2／TypeScript／PostgreSQL），M1–M7 功能與自動化測試完成；Google 登入已由使用者在 Windows 驗證；Calendar、Resend、Supabase Storage 的真實流程仍未完整實測，Windows 基本建置、資料庫及 Google 登入已有使用者實機回報；正式原生服務尚待實作。開工前先讀 [tasks.md](tasks.md) 的狀態與證據，以及 [驗收追蹤報告](docs/acceptance-report.md)，不要重做已完成的任務。
 
-約 30 人使用的單公司多產品平台，Google 登入、前後台分站、Feedback／Schedule／Roadmap／Personal、站內通知，以及 Google Calendar 讀寫。已選 Next.js／TypeScript、Vercel、Supabase、Resend。
+約 30 人使用的單公司多產品平台，Google 登入、前後台分站、Feedback／Schedule／Roadmap／Personal、站內通知，以及 Google Calendar 讀寫。已選 Windows 原生 Next.js／TypeScript、PostgreSQL、正式本機頭像（待實作），寄信暫保留 Resend。先讀 [Windows 規格](docs/windows-native-deployment.md) 與 WIN 任務。
 
 程式位置：`src/modules/`（領域服務，業務規則在這裡）、`src/server/`（HTTP 路由、授權、冪等、outbox、adapters）、`src/features/`（UI）、`db/migrations/`（SQL）、`tests/`。所有 API 走 `src/server/api` 的單一路由器，新增端點時同時加 zod 白名單 schema、權限檢查與整合測試。
 
@@ -64,8 +66,8 @@ npm run test:e2e         # 需要空的 chainseabase_e2e（或 E2E_DATABASE_URL�
 | lint／typecheck／build | `npm run lint`、`npm run typecheck`、`npm run build`；一次全跑：`npm run check` |
 | 單元／整合／E2E 測試 | `npm test`（Vitest，真實 PostgreSQL）、`npm run test:e2e`（Playwright 1440／768／390） |
 | DB migration／seed | `npm run db:migrate`（冪等）、`npm run db:bootstrap`（冪等、無示範資料）、`ALLOW_DEV_SEED=1 npm run db:seed-dev`（只限 dev／e2e／test 資料庫） |
-| 背景工作 | `npm run jobs:run`；正式由 Vercel Cron 以 `CRON_SECRET` 呼叫 `/api/v1/jobs/run` |
-| 部署／復原 | 尚未部署；`vercel.json` 與 CI 已就緒，正式流程見 [operations.md](operations.md)。還原演練：`npm run db:restore-drill`（目標名稱須含 drill） |
+| 背景工作 | `npm run jobs:run`；正式改由 Windows 工作排程器啟動受保護 runner（待 WIN-05） |
+| 部署／復原 | 尚未完成 Windows 正式服務；`vercel.json` 僅留作舊環境設定，現行流程見 [operations.md](operations.md)。還原演練：`npm run db:restore-drill`（目標名稱須含 drill） |
 
 測試只用替身（fake）驗證第三方時，回報必須標示為 mock，不可寫成真實整合完成。
 

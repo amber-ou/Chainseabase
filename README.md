@@ -1,8 +1,10 @@
 # Chainseabase
 
-公司內部使用的多產品需求與回饋管理平台，目標約 30 位使用者。一個 Next.js 應用提供兩個網站入口：團隊後台（Product／Feedback／Roadmap／Personal／User／Notification／Setting 與 Google 日曆）與獨立的公開前台，共用服務層與 PostgreSQL。
+現行部署入口：[Windows 原生規格與 WIN 任務](docs/windows-native-deployment.md)。核心功能沿用既有實作；部署與受邀讀取改造尚待驗收。
 
-**目前狀態**：M1–M7 的應用程式已實作並以單元、真實 PostgreSQL 整合與 Playwright E2E 驗證；Google 登入／日曆、Resend、Supabase Storage 已有真實 adapter，但**尚未以真實帳號實測**（測試使用替身）。尚未部署任何雲端環境。進度與證據見 [tasks.md](tasks.md) 與 [驗收追蹤報告](docs/acceptance-report.md)。
+公司內部使用的多產品需求與回饋管理平台，目標約 30 位使用者。一個 Next.js 應用提供兩個網站入口：團隊後台（Product／Feedback／Roadmap／Personal／User／Notification／Setting 與 Google 日曆）與獨立的受邀成員前台（存取改造待 WIN-04），共用服務層與 PostgreSQL。
+
+**目前狀態**：M1–M7 的應用程式已實作並以單元、真實 PostgreSQL 整合與 Playwright E2E 驗證；使用者已回報 Windows 本機 migration／bootstrap、建置、啟動及真實 Google 登入成功；日曆、寄信、正式本機儲存與 Windows 服務尚待驗證。進度與證據見 [tasks.md](tasks.md) 與 [驗收追蹤報告](docs/acceptance-report.md)。
 
 ## 技術組成
 
@@ -10,14 +12,14 @@
 | --- | --- |
 | 執行環境 | Node.js ≥ 22.12（開發驗證於 22.22.0）、npm 10 |
 | 框架 | Next.js 16.4.2（App Router、Turbopack）、React 19.3、TypeScript 5.9 |
-| 資料庫 | PostgreSQL 16（正式：Supabase），`postgres` 3.4 driver、版本化 SQL migration |
+| 資料庫 | PostgreSQL（舊 CI：16；使用者本機：18.6，完整相容性待驗證），`postgres` 3.4 driver、版本化 SQL migration |
 | 驗證 | Zod 4（runtime 輸入驗證）、jose（Google ID token 驗證、OAuth 暫存 cookie 簽章） |
 | 測試 | Vitest 5（單元＋整合）、fast-check（property-based）、Playwright 1.63（E2E） |
 | 第三方 | Google OAuth／Calendar REST、Resend REST、Supabase Storage REST（皆有 fake 替身） |
 
 ## 快速開始（本機開發）
 
-以下指令都在**儲存庫根目錄**執行。
+以下為既有 Bash 開發範例，不可直接複製環境變數語法到 PowerShell。Windows 原生流程以 [維運文件](operations.md) 與 [新部署規格](docs/windows-native-deployment.md) 為準；依 WIN-01 補交可重現的安全載入工具。
 
 ```bash
 # 1. 安裝固定版本相依
@@ -42,7 +44,7 @@ ALLOW_DEV_SEED=1 npm run db:seed-dev
 npm run dev
 ```
 
-開啟 <http://admin.localhost:3000>（後台）與 <http://portal.localhost:3000>（前台）。兩個 host 由 `ADMIN_ORIGIN`／`PORTAL_ORIGIN` 白名單決定，session cookie 各自 host-only。Chromium／Firefox 會把 `*.localhost` 解析到本機；若工具無法解析，可改用 `http://127.0.0.1:3000` 與 `http://localhost:3000` 作為兩個 origin。
+目前已驗證的 Windows 本機入口是 <http://localhost:3000>（後台）與 <http://127.0.0.1:3000>（前台）。兩個 host 必須與 `ADMIN_ORIGIN`／`PORTAL_ORIGIN` 及 Google callback 一致，session cookie 各自 host-only。僅綁 loopback，不將 development 配置對外開放。
 
 示範資料的測試帳號：`lead@dev.local`（團隊）、`dev@dev.local`、`qa@dev.local`、`tester@dev.local`（測試成員）；在登入頁的「測試登入」輸入 Email 即可。
 

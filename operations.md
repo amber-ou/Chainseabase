@@ -1,88 +1,52 @@
-# 部署與維運入口
+# Windows 原生維運操作
 
-詳細雲端架構、Calendar 授權、CI、備份與監控規格見 [Google Calendar 與雲端部署](docs/06-calendar-and-deployment.md)。本文件是實際操作程序；**目前尚未建立任何雲端環境，以下檢核皆未勾選。**
+現行架構與完成條件見 [Windows 原生部署規格](docs/windows-native-deployment.md)。本文件是操作順序，不代表服務安裝腳本已交付。舊 Vercel／Supabase 操作移至 [歷史快照](docs/history/operations.md)。
 
-## 環境分離
+## 環境隔離
 
-| 環境 | 用途 | 資料與第三方服務 |
-| --- | --- | --- |
-| 開發 | 本機／雲端開發與單元、整合、E2E。 | 本機 PostgreSQL；`CALENDAR_PROVIDER/EMAIL_PROVIDER/STORAGE_PROVIDER=fake`；可開 `E2E_TEST_LOGIN=enabled`。 |
-| Staging | 固定網域的整合、OAuth、寄信、日曆實測。部署分支 `staging`，逐步設定見 [Staging 建置清單](docs/staging-setup.md)。 | 獨立 Supabase 專案、測試 Google OAuth client／sandbox 日曆、只寄測試收件人。設定 `APP_ENV=staging` 時與正式相同：拒絕 fake provider 與測試登入；必須明確提供 `DATABASE_URL`、`ADMIN_ORIGIN`、`PORTAL_ORIGIN`（兩個不同的 HTTPS 網站），缺少或不合規即啟動失敗；`db:migrate`／`db:bootstrap` 在 `APP_ENV=staging|production` 下沒有明確連線字串就拒絕執行。 |
-| Production | 公司正式使用。 | 正式 Supabase、正式 OAuth client、已驗證寄件網域。設定 `APP_ENV=production`（或 Vercel production）時，應用會**拒絕啟動 fake provider、拒絕測試登入、要求 AUTH_SESSION_SECRET**。 |
-
-Preview 部署不可共用正式 secrets：在 Vercel 把正式變數只設在 Production scope，Preview 指向 staging 或不設定。
-
-## 需要你完成的外部設定
-
-| 外部條件 | 要在哪裡設定 | 影響功能 | 具體步驟 |
-| --- | --- | --- | --- |
-| EXT-01 Vercel＋Supabase | Vercel 專案 Settings → Environment Variables；Supabase 專案 Settings | 雲端部署、資料庫、頭像 | 1. 建立 Supabase 專案，先停用 Data API（本專案資料表沒有 row-level security），取得 transaction pooler 連線字串給 `DATABASE_URL`、session pooler／direct 連線給 `DIRECT_DATABASE_URL`，兩者都用 `sslmode=verify-full`；資料庫初始化須在自己的電腦執行（雲端工作階段不支援 raw-TCP 資料庫連線）。詳見 [Staging 建置清單](docs/staging-setup.md) 第 2 節。2. Storage 建立 **private** bucket `avatars`，取得 `SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`。3. Vercel 匯入 GitHub repo，Framework=Next.js（`vercel.json` 已設定）。4. 綁定兩個網域（例：`admin.example.com`、`feedback.example.com`），設定 `ADMIN_ORIGIN`、`PORTAL_ORIGIN`。 |
-| EXT-02 Google OAuth | Google Cloud Console → APIs & Services | Google 登入、Calendar 授權 | 1. 啟用 Google Calendar API。2. OAuth consent screen：依公司 Workspace 選 Internal／External，加入 scopes `openid email profile`、`.../auth/calendar.events`、`.../auth/calendar.calendarlist.readonly`（敏感 scope，External 需驗證）。3. 建立 Web client，Authorized redirect URIs：`https://<admin>/api/v1/auth/google/callback`、`https://<portal>/api/v1/auth/google/callback`、`https://<admin>/api/v1/integrations/google/calendar/callback`。4. 把 `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET` 填入 Vercel。 |
-| EXT-03 Resend | Resend Dashboard → Domains／API Keys | Email 邀請 | 1. 新增並驗證寄件網域（DNS SPF／DKIM）。2. 建立 sending-only API key。3. 設定 `RESEND_API_KEY`、`RESEND_FROM_EMAIL`（例：`Chainseabase <no-reply@example.com>`）。 |
-| EXT-04 產品日曆 | Google Calendar 設定與共用 | Calendar 讀寫與 ACL 驗收 | 為每個產品建立共用日曆，分享給成員：要編輯者給「變更活動」，只讀者給「查看所有活動詳細資料」。sandbox 另建一份測試日曆，含 writer／reader／未分享帳號。 |
-| EXT-05 正式初始化 | Vercel／本機 shell（連 production DB） | 首位團隊、上線 | 設定 `BOOTSTRAP_TEAM_EMAIL`；執行 `npm run db:migrate` 與 `npm run db:bootstrap`；首位團隊以該 Google 帳號登入後取得團隊權限。 |
-
-必填 secrets（只放在 Vercel／CI 加密設定，**不要貼到聊天或 Git**）：`AUTH_SESSION_SECRET`（≥ 32 字元隨機值）、`TOKEN_ENCRYPTION_KEY`（32 bytes base64）、`GOOGLE_CLIENT_SECRET`、`RESEND_API_KEY`、`SUPABASE_SERVICE_ROLE_KEY`、`DATABASE_URL`、`DIRECT_DATABASE_URL`、`CRON_SECRET`（Vercel Cron 會以 `Authorization: Bearer $CRON_SECRET` 呼叫工作入口；Vercel 上不要另設 `JOB_RUNNER_SECRET`，兩者並存時以後者為準）。名稱與說明見 [.env.example](.env.example)；staging 的完整變數表、callback URI 與驗證方法見 [Staging 建置清單](docs/staging-setup.md)。
-
-產生隨機值（在自己的終端機執行）：
-
-```bash
-node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"   # AUTH_SESSION_SECRET / CRON_SECRET
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"      # TOKEN_ENCRYPTION_KEY
-```
-
-## 部署流程（staging → production）
-
-1. PR 觸發 GitHub Actions（`.github/workflows/ci.yml`）：lint、typecheck、單元＋PostgreSQL 整合、migration 重跑、build、秘密掃描、Playwright E2E。全部通過才合併。
-2. Migration 先在 staging：`DIRECT_DATABASE_URL=<staging direct> npm run db:migrate`。正式採 expand／contract：只加欄位／表與相容預設，移除舊欄位放下一個版本。有資料風險的 migration 前先建立備份（見下）。
-3. 部署 Vercel（staging 網域，分支 `staging`）→ `GET /api/v1/health` 應回 `{"data":{"ok":true,"environment":"staging","providers":{"calendar":"real","email":"real","storage":"real"}}}`（任一 `fake` 即設定錯誤；`real` 只代表已設定真實 adapter，不代表外部服務已驗證）→ 以測試帳號實測 Google 登入、邀請、sandbox 日曆讀寫（[Staging 建置清單](docs/staging-setup.md) 第 7 節）。
-4. Vercel Cron 每 5 分鐘呼叫 `/api/v1/jobs/run`（`vercel.json`；Vercel Cron 只在 Production 部署執行，staging 需手動或外部排程）。Hobby 方案只允許每日排程；需要分鐘級需 Pro 方案或外部排程器以同一 bearer secret 呼叫 `POST /api/v1/jobs/run`。請求完成後應用也會立即處理同請求產生的工作，排程只負責重試與補跑。
-5. Production：取得當次發布授權後，在 production DB 執行 migration，再 promote 部署；驗證 health、登入、最小日曆讀寫。
-6. 回退：Vercel 立即 promote 上一個部署；**不要執行 down migration**，資料依備份與修正 migration 處理。
-
-## 首次上線檢核
-
-- [ ] 雲端專案、網域、HTTPS、區域與方案限制確認（Vercel Cron 頻率、Supabase 備份保留期）。
-- [ ] `npm run db:migrate`、`npm run db:bootstrap` 在 staging／production 執行並記錄輸出。
-- [ ] Google 登入及 Calendar callback、scopes、consent 條件驗證。
-- [ ] 共用日曆分享與 writer／reader／無權限案例驗證（C03／C05–C10／C12–C15）。
-- [ ] Resend 寄件網域與 Email 邀請流程驗證。
-- [ ] `npm run security:scan` 通過；secrets 只在安全設定中。
-- [ ] `/api/v1/jobs/run` 排程可執行、outbox 無積壓、寄信失敗可重試。
-- [ ] 備份還原演練（隔離資料庫）、監控與回退方案完成。
-- [ ] staging 驗收有實際結果，取得當次正式發布授權。
-
-## 監控與日常檢查
-
-- 日誌為 JSON 行：`api.request`（requestId、方法、路徑、狀態、毫秒）、`api.unhandled`、`job.failed`、`auth.callback`、`calendar.callback`。`log.ts` 會遮蔽含 token／secret／email／body 等鍵名的欄位，不記錄正文與憑證。
-- 工作積壓：`npm run jobs:run` 或 `GET /api/v1/jobs/run`（需 bearer secret）回傳 `stats.byState` 與最舊待處理時間；`failed` 數量非零時檢查 `outbox_jobs.last_error`。
-- 邀請狀態：User 頁「邀請紀錄」顯示寄送中／已寄出／寄送失敗與錯誤碼（例：`resend_403`、`not_configured`）。
-- Calendar：`google_credentials.needs_reauth = true` 的比例代表需要重新授權的人數；成員在 Product 頁會看到「重新連結」。
-
-## 備份、還原與秘密輪替
-
-- Supabase：開啟每日備份（Pro 以上），記錄保留天數與可接受資料損失（RPO）。高風險 migration 前另外 `pg_dump --format=custom` 一份。
-- 還原演練（隔離資料庫，名稱需含 `drill`）：
-
-  ```bash
-  SOURCE_DATABASE_URL=<備份來源或 staging> TARGET_DATABASE_URL=<…/chainseabase_drill> npm run db:restore-drill
-  ```
-
-  腳本比較每張表行數與私人資料摘要（Personal、私人 Tag、Calendar 憑證密文、Feedback revision）。本機已演練一次，Supabase 尚未演練。
-- `TOKEN_ENCRYPTION_KEY` 輪替：新金鑰設為 `TOKEN_ENCRYPTION_KEY` 並遞增 `TOKEN_ENCRYPTION_KEY_VERSION`，舊金鑰以 `版本:base64` 放入 `TOKEN_ENCRYPTION_PREVIOUS_KEYS`；新授權用新金鑰，舊密文仍可解。全部重新授權後再移除舊金鑰。
-- `AUTH_SESSION_SECRET` 輪替會讓進行中的 OAuth 流程與邀請重寄連結失效（已寄出的邀請 token 雜湊不受影響，但重新寄送會產生新連結）；session 本身以資料庫雜湊保存不受影響。
-
-## 常見故障處理
-
-| 現象 | 優先檢查 |
+| 環境 | 資料與用途 |
 | --- | --- |
-| Google 登入失敗 | callback URI 與 `ADMIN_ORIGIN`／`PORTAL_ORIGIN` 是否一致、consent 測試使用者、`/login?error=` 代碼；不要記錄 code 或 token。 |
-| Calendar 無法寫入 | 本人是否已連結且 scopes 完整、Google 日曆分享權限（writer）、`needs_reauth`、ETag 衝突訊息、bindingRevision 是否過期；不借用別人 token。 |
-| 日曆送出後顯示「Google 尚未確認」 | 以同一操作重試（相同 Idempotency-Key 會先核對 Google 再決定），不要手動重建活動。 |
-| 邀請未收到 | 邀請紀錄的錯誤碼、Resend 網域驗證、`outbox_jobs` 是否卡在 pending／failed。 |
-| 通知延遲或重複 | Cron 是否執行、`outbox_jobs` 積壓；`notifications (event_id, recipient_id)` 唯一限制保證不重複。 |
-| 公開資料範圍錯誤 | 立即把相關 Feedback 改回內部或取消看板發布；檢查 `loadPublicFeedbackDtos` 白名單與權限測試，再修正與回歸。 |
+| Windows development | `chainseabase_dev`，APP_ENV=development，僅 loopback。使用者已完成基本操作與登入驗證。 |
+| Windows staging | 獨立資料庫、儲存路徑、服務、埠、秘密與 Google sandbox；正式儲存後端實作後才使用 strict staging。 |
+| Production | 獨立資料庫與非 superuser runtime 帳號、HTTPS host、備份與服務；不可沿用有 schema 所有權的開發帳號。 |
+| Test／drill | 名稱須符合既有 test／drill 防呆；不可指向公司正式資料。 |
 
-每次事故保存 request ID（回應標頭 `x-request-id`）、影響範圍、處理與復原時間、修正及回歸結果；不記錄完整私人正文或秘密。
+未完成 WIN-02／04 前，現有 development 的本機 fake 儲存與匿名讀取不得透過 Tunnel 開放。正式環境維持禁止 fake／測試登入，不以 APP_ENV=development 規避防護。
 
-營運驗收見 [O01–O05](docs/07-delivery-and-acceptance.md) 與 [驗收追蹤報告](docs/acceptance-report.md)。
+## 設定保存（WIN-01 待實作）
+
+PowerShell `$env:` 只作用於目前進程與子進程，不能當作服務持久設定。須交付受 NTFS ACL 保護的設定載入工具，供 CLI、網站服務及排程以相同規則載入；定義設定優先序、必要變數驗證與錯誤遮蔽。資料與秘密目錄不放 Git、不放公開靜態資源。
+
+Next.js 會讀取環境檔，但現有 tsx migration／bootstrap 不應假設自動載入 `.env.local`。載入工具需涵蓋兩者，不能因缺少 URL 默默連到其他資料庫。備份、服務帳號與輪替也要能讀取指定設定。
+
+| 設定 | 用途 |
+| --- | --- |
+| APP_ENV | development／staging／production，僅本機驗證使用 development |
+| DATABASE_URL／DIRECT_DATABASE_URL | 分別供 runtime／migration；本機已驗證 URL 不含密碼、由 PGPASSWORD 提供密碼。正式需區分權限，不得在命令列列出秘密 |
+| PGPASSWORD | 驅動與 PostgreSQL 工具可用的秘密來源；避免與 URL 內不同密碼並存，不印出值 |
+| ADMIN_ORIGIN／PORTAL_ORIGIN | 本機 localhost／127.0.0.1，正式兩個不同 HTTPS host；禁止任意外部 Host |
+| GOOGLE_CLIENT_ID／GOOGLE_CLIENT_SECRET | 已建立本機 client；正式 callback 另驗證 |
+| AUTH_SESSION_SECRET | 持久隨機值；輪替會影響登入，不依賴開發預設值 |
+| TOKEN_ENCRYPTION_KEY／版本及舊金鑰 | 日曆憑證加密與還原，不能每次啟動重生 |
+| BOOTSTRAP_TEAM_EMAIL | 既有首位資格流程；從安全設定取得，不將個人信箱硬編碼到腳本 |
+| RESEND_API_KEY／RESEND_FROM_EMAIL | 保留現有寄信 adapter，尚待寄件網域及真實驗收 |
+| JOB_RUNNER_SECRET／CRON_SECRET | 只配置所選 runner 必要秘密；兩者並存時遵守既有優先序 |
+| filesystem provider／儲存根目錄 | 尚待 WIN-02 定義與實作，不能把新名稱當作現有可用變數 |
+
+Supabase 相關變數只保留給舊環境或舊 adapter。本機 Windows 不使用 Supabase CA；不能全域停用 TLS 驗證，對外 Google／寄信／Tunnel 維持驗證。
+
+## 安裝與發布順序
+
+1. 保留目前開發資料與工作樹；記錄 Node 24.11.1、安裝時使用 npm 10.9.4、PostgreSQL 18.6 等使用者回報版本。檢查各元件修補與支援狀態，不因舊 CI 用 PG16 就自動降版或刪資料。
+2. 完成 WIN-01 設定載入與 PowerShell 指令文件，記錄 lint／typecheck／build 及隔離測試；PG18 完整相容性仍待跑測試。
+3. 完成 WIN-02 正式本機頭像與 WIN-04 受邀資料權限，沿用角色／產品／私人 owner 保護。
+4. 交付並驗證 WinSW 網站、PostgreSQL 與 cloudflared 服務，服務帳號最小權限、依賴就緒重試、失敗恢復及日誌輪替。版本化安裝與解除安裝腳本不得刪資料／秘密。
+5. 設定工作排程器與獨立備份裝置；斷開備份裝置時應告警，於隔離環境實際還原。
+6. 確認公司允許 Tunnel、固定網域、Google External 測試帳號／發布條件與寄件網域後，執行外部 sandbox 驗收。
+7. migration 前備份，在 staging 驗證相容變更；正式發布依當次授權。回退程式不等於回退資料庫，禁止盲目 down migration。
+
+原生部署不是保持 PowerShell 視窗開著。正式驗收須包含 Windows 重開機、未登入桌面、服務／網路中斷後自動恢復及約 30 人負載。
+
+## 尚待完成
+
+沒有 Windows 服務、獨立備份、還原、外網存取、Google 日曆或真實寄信的完成證據。檢查清單與證據見 [tasks.md](tasks.md) 及 [驗收報告](docs/acceptance-report.md)。

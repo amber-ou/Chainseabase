@@ -1,4 +1,4 @@
-# Google Calendar 與雲端部署
+# Google Calendar 與 Windows 部署
 
 ## Calendar 範圍
 
@@ -25,7 +25,7 @@ OAuth client／consent screen 可能有組織限制、測試使用者、敏感 s
 
 ### 憑證生命週期
 
-- refresh token 密文與加密金鑰分開儲存；金鑰在雲端 secret 設定，支援 key version 與輪替。
+- refresh token 密文與加密金鑰分開儲存；金鑰在受 NTFS ACL 保護、服務可讀的秘密設定，支援 key version 與輪替。
 - access token 只在後端短期保存；不傳到瀏覽器、不寫 URL／分析事件／日誌。
 - token 到期時由後端刷新；invalid_grant／撤銷時標記需要重新授權，停止不斷重試。
 - 移除／降級團隊成員時撤銷平台使用資格並清除 Calendar 憑證，不改其 Google 帳號本身。
@@ -104,75 +104,14 @@ sequenceDiagram
 - 顯示上次成功更新時間。30 人的實際配額仍需實測與監控，不承諾固定延遲即時同步。
 - 第一版不用推播 watch／長期 syncToken；若日後加入，另處理 channel 到期續租、webhook 驗證與 sync token 失效。
 
-## 雲端部署拓樸
+## 現行部署與秘密
 
-| 服務 | 用途 | 邊界 |
-| --- | --- | --- |
-| GitHub private repo | 原始碼、PR、CI 與部署來源。 | 不保存 secrets，不用 Pages 作完整應用後端。 |
-| Vercel | Next.js 前後台、API、Google callbacks。 | 兩個 host 同一應用，函式無持久程序狀態。 |
-| Supabase PostgreSQL | 產品、Feedback、Personal、授權密文與工作資料。 | server-only 連線，使用適合 serverless 的 pooler。 |
-| Supabase Storage | 頭像檔案。 | 限定本人可寫路徑，讀取公開頭像不暴露 Email。 |
-| Resend | Email 邀請。 | 驗證寄件網域；只寄使用者明確操作的邀請。 |
-| Google Cloud／Calendar | 登入、各使用者授權與活動來源。 | client、scope、日曆 ACL、配額分別驗證。 |
+部署、服務、排程與備份見 [Windows 原生部署](windows-native-deployment.md) 及 [維運操作](../operations.md)。舊雲端操作保留在 [歷史快照](history/06-calendar-and-deployment.md)，不作為本輪執行指令。
 
-長期工作不能依賴 Vercel handler 回應後仍持續的記憶體 timer。通知與 Email 以 DB outbox 保存，由受保護的 scheduled function 或受控工作服務領取；工作服務可用 Vercel 排程，但採用前核對方案的執行頻率、函式時間與商業條款。
+本機開發入口為 `http://localhost:3000` 與 `http://127.0.0.1:3000`。正式為兩個不同 HTTPS host，仍需先確認網域與公司 Tunnel 政策，再設定 Google callback。本機 HTTP callback 的成功不代表正式網域已驗證。
 
-## 環境與秘密變數
+Google OAuth 使用 External／Testing 支援 Gmail；發布與 scopes 驗證、測試模式 refresh token 有效期需在正式使用前確認。登入已由使用者回報成功，不代表 Calendar API、日曆 ACL 或 refresh token 已驗證。
 
-| 名稱 | 類型 | 用途 |
-| --- | --- | --- |
-| DATABASE_URL | secret | runtime pooler 連線。 |
-| DIRECT_DATABASE_URL | secret | migration 用直接連線，只授予 migration 工作。 |
-| GOOGLE_CLIENT_ID | configuration | OAuth client 識別。 |
-| GOOGLE_CLIENT_SECRET | secret | Google OAuth server secret。 |
-| AUTH_SESSION_SECRET | secret | session／簽章。 |
-| TOKEN_ENCRYPTION_KEY | secret | Calendar refresh token 加解密。 |
-| ADMIN_ORIGIN / PORTAL_ORIGIN | configuration | 正式允許網域與 callback origin。 |
-| BOOTSTRAP_TEAM_EMAIL | configuration，個資 | 首位團隊成員，初始化完成後限制重跑用途。 |
-| RESEND_API_KEY | secret | 寄邀請信。 |
-| RESEND_FROM_EMAIL | configuration | 已驗證網域的寄件地址。 |
-| SUPABASE_URL | configuration | Storage 服務。 |
-| SUPABASE_SERVICE_ROLE_KEY | secret | 後端 Storage 操作；不可進入 client bundle。 |
-| JOB_RUNNER_SECRET | secret | 定時工作入口驗證。 |
+登入 callback：`<ADMIN_ORIGIN>/api/v1/auth/google/callback`、`<PORTAL_ORIGIN>/api/v1/auth/google/callback`；日曆 callback：`<ADMIN_ORIGIN>/api/v1/integrations/google/calendar/callback`。
 
-這些是需求名稱，不是已建立或注入的環境變數。使用 Vercel／CI 的安全設定，不把值寫入文件、PR 或前端 `NEXT_PUBLIC_*`。需要本地測試時使用 ignored 的環境檔，另提供無秘密的範例。
-
-## 部署前置條件
-
-1. 公司提供或建立 GitHub、Vercel、Supabase、Resend、Google Cloud 專案的適當管理存取。
-2. 確認正式前後台網域、DNS、HTTPS、資料庫區域與資料備份方案。
-3. 驗證寄件網域與寄信能力，設定部署指定的首位團隊 Email。
-4. Google OAuth consent screen 完成適用組織／發布／驗證設定，註冊明確的前後台登入與後台 Calendar callback URI。
-5. 公司建立產品共用日曆並分享給各使用者；每人授權後驗證 reader／writer 行為。
-6. 實作時確認付費方案符合商業用途、備份與排程需求。不得承諾全免費。
-
-## CI 與發布流程
-
-1. PR 執行型別／靜態檢查、領域單元測試、PostgreSQL 整合測試、權限與代表性 E2E。
-2. Preview 使用隔離 DB、測試 Google OAuth client／日曆、測試寄信目的地；不讀寫正式資料。OAuth 用穩定 staging 網域，不能把任意 preview URL 當可信 callback。
-3. Migration 先在 staging 執行與驗證，正式採可向後相容的 expand／contract；對高影響資料變更先建立可復原備份。
-4. 部署前端／API，驗證健康與代表性功能，確認 worker 能處理 outbox。
-5. 使用專用測試帳號驗證正式 OAuth callback 與日曆最小讀寫；真實邀請／日曆寫入僅在已授權範圍執行。
-6. 發布失敗時回退相容應用版本；資料庫不可盲目 down migration，依備份與遷移計畫處理。
-
-實際指令與已驗證範圍見 [README](../README.md) 與 [operations.md](../operations.md)；雲端部署尚未執行。
-
-## 監控與驗收前準備
-
-- 記錄 request ID、錯誤類型、延遲、outbox 積壓與 Google／Resend 結果碼；敏感正文、邀請 token、憑證不得進 log。
-- 每日備份策略與復原演練需配合選定 Supabase 方案落實，不能只勾選備份而未驗證還原。
-- 定期檢查邀請工作失敗、Calendar 重新授權比例、通知去重、跨產品權限拒絕。
-- 輪替秘密後驗證 session／Calendar 憑證解密相容性。
-
-## 官方參考入口
-
-- [GitHub Pages 能力](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)
-- [Calendar OAuth scopes](https://developers.google.com/workspace/calendar/api/auth)
-- [Calendar 重複活動](https://developers.google.com/workspace/calendar/api/guides/recurringevents)
-- [Calendar 同步](https://developers.google.com/workspace/calendar/api/guides/sync)
-- [Google Web Server OAuth](https://developers.google.com/identity/protocols/oauth2/web-server)
-- [Vercel 文件](https://vercel.com/docs)
-- [Supabase 文件](https://supabase.com/docs)
-- [Resend 文件](https://resend.com/docs)
-
-以上為實作時核對入口；本次未完成對當前雲端帳號、方案、Google 審核與 API 行為的實機驗證。
+背景工作保留 DB outbox／冪等與受保護 runner，改由 Windows 工作排程器觸發，不依賴 Vercel Cron。日曆及 Email 真實寫入僅在授權的 sandbox／收件人範圍驗收。
