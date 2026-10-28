@@ -9,7 +9,7 @@
 | ID | 交付 | 依賴 | 狀態 |
 | --- | --- | --- | --- |
 | DOC-WIN | 現行需求、權限、架構、維運、驗收與 Claude 指令一致化 | 使用者確認原生部署 | 完成（文件）；不代表功能實作完成 |
-| WIN-01 | PowerShell 設定持久化／安全載入、版本與安裝文件、Windows 建置和隔離測試 | 現有實作 | 進行中：載入器、PowerShell 工具、文件與 CI（Windows Server 執行器、Node 24＋PostgreSQL 18）已實作；使用者 Windows 11 主機依 [Windows 設定與安裝](docs/windows-setup.md) 實測待回報 |
+| WIN-01 | PowerShell 設定持久化／安全載入、版本與安裝文件、Windows 建置和隔離測試 | 現有實作 | 進行中：載入器、PowerShell 工具、文件與 CI（Windows Server 執行器、Node 24＋PostgreSQL 18）已實作；使用者 Windows 11 實機回報前置檢查、設定檔、config:check、migration、npm start＋Google 登入成功，並回報 `Test-ChainseabaseConfig.ps1` 預設目錄問題（已修正，待主機重新確認）；bootstrap 重跑、lint／typecheck／build 與各步退出碼待回報 |
 | WIN-02 | 正式 filesystem 頭像、provider 設定及路徑防護 | WIN-01 設定契約 | 待開始 |
 | WIN-03 | Windows 網站／資料庫服務、重開機恢復、權限與日誌 | WIN-01、WIN-02 | 待開始 |
 | WIN-04 | 全面受邀資料讀取與角色／產品界線 | 既有身分實作 | 待開始；可與 WIN-02 並行 |
@@ -35,5 +35,12 @@
 交付：scripts/config/load-config.mjs（單一載入器，網站以 node --import 預載、CLI 第一個 import）、scripts/config-check.ts（npm run config:check）、scripts/windows/*.ps1（前置檢查、建立／設定／驗證受 NTFS ACL 保護的設定檔）、docs/windows-setup.md、migration 目錄與 CRLF／LF 檢查碼相容、npm run dev／start 只監聽 127.0.0.1、測試環境隔離 APP_ENV／CHAINSEABASE_CONFIG_FILE
 本機檢查（Linux）：lint 0、typecheck 0、npm test 0（16 檔 164 tests 全過）、build 0、security:scan 0、test:e2e 0（64 passed）；npm start 在繼承 APP_ENV=staging 時 exit 78 拒絕、乾淨 development 時 health 200 且只監聽 127.0.0.1
 CI 新增：win-native（PowerShell 5.1／7 解析、前置檢查、npm ci／lint／typecheck／build、建立設定檔與 ACL 正反測試、URL 無密碼＋PGPASSWORD 的 migrate／bootstrap、衝突 exit 78、Windows 上 npm test）；pg18-node24（Linux 上 Node 24.11.1＋PostgreSQL 18 的 migration 與 npm test）；結果記於 PR
-未完成：使用者主機的前置檢查、設定檔建立、config:check、migrate／build 回報；E2E 未在 Windows 執行；WIN-03 服務帳號讀取設定檔、WIN-05 排程讀取設定檔尚待驗證
+未完成：使用者主機的 bootstrap 重跑、lint／typecheck／build 與各步 exit 值；E2E 未在 Windows 執行；WIN-03 服務帳號讀取設定檔、WIN-05 排程讀取設定檔尚待驗證
+```
+
+```text
+來源：使用者 Windows 11 實機回報（2026-10-28；代理未在該主機執行，與 CI 分開記錄）
+通過（使用者回報）：PostgreSQL 改為只監聽 localhost 後前置檢查通過；受保護設定檔建立；NTFS ACL 與 config:check 通過；以設定檔執行 migration 顯示 Database schema is up to date；npm start 與 Google 重新登入成功
+問題：Test-ChainseabaseConfig.ps1 參數預設值的 $PSScriptRoot 為空字串，Split-Path 失敗；明確 -AppDirectory 可通過
+修正：預設目錄改在腳本本體計算並驗證應用目錄（不符時 exit 1 並提示 -AppDirectory）；CI win-native 在 PowerShell 7／5.1 重現空 $PSScriptRoot 並檢查；待主機以不帶 -AppDirectory 重新確認
 ```

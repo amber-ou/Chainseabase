@@ -18,7 +18,9 @@
   Additional accounts allowed on the file (e.g. the service account).
 
 .PARAMETER AppDirectory
-  Chainseabase app directory (default: two levels above this script).
+  Chainseabase app directory. Default: two levels above this script; when the script location is
+  not available (e.g. the script text is run as a script block), the current directory. Either
+  way it must contain package.json and scripts\config\load-config.mjs, otherwise exit 1.
 
 .EXAMPLE
   .\scripts\windows\Test-ChainseabaseConfig.ps1
@@ -28,11 +30,27 @@
 param(
   [string]$Path,
   [string[]]$AllowedReader = @(),
-  [string]$AppDirectory = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
+  [string]$AppDirectory
 )
 
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
+
+# resolved here, not in the param default: $PSScriptRoot can be empty there (reported on the
+# Windows 11 host), and Split-Path then fails on an empty string before any check runs
+if (-not $AppDirectory) {
+  $scriptDirectory = $PSScriptRoot
+  if (-not $scriptDirectory -and $MyInvocation.MyCommand -is [System.Management.Automation.ExternalScriptInfo]) {
+    $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+  }
+  if ($scriptDirectory) { $AppDirectory = Split-Path -Parent (Split-Path -Parent $scriptDirectory) }
+  else { $AppDirectory = (Get-Location).ProviderPath }
+}
+if (-not ((Test-Path -LiteralPath (Join-Path $AppDirectory 'package.json')) -and
+          (Test-Path -LiteralPath (Join-Path $AppDirectory 'scripts\config\load-config.mjs')))) {
+  Write-Output "FAIL not the Chainseabase app directory: $AppDirectory (pass -AppDirectory <app directory>)"
+  exit 1
+}
 
 if (-not $Path) { $Path = [Environment]::GetEnvironmentVariable('CHAINSEABASE_CONFIG_FILE', 'Machine') }
 if (-not $Path) { $Path = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env' }

@@ -91,6 +91,7 @@ echo "exit=$LASTEXITCODE"
 
 - NTFS：目錄與檔案不得繼承權限，只能授權給 SYSTEM、Administrators 及 `-AllowedReader` 指定的帳號；例如 `BUILTIN\Users` 可讀會判定失敗。
 - 接著以相同載入器執行 `npm run config:check`：列出每個變數的來源（`config file`／`process`／`not set`）與 provider 模式，不顯示值；最後執行應用自身的設定驗證。
+- 應用目錄預設為腳本所在位置往上兩層；無法取得腳本位置時改用目前目錄。該目錄必須含 `package.json` 與 `scripts\config\load-config.mjs`，否則顯示 `FAIL not the Chainseabase app directory` 並結束代碼 1；此時加上 `-AppDirectory C:\Apps\Chainseabase`（你的應用目錄）。
 
 ## 5. 資料庫與建置
 

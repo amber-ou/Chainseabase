@@ -182,6 +182,34 @@ jobs:
           icacls $cfg /remove:g '*S-1-5-32-545' | Out-Null
           .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg
           if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseConfig after repair exit $LASTEXITCODE" }
+      - name: Test-ChainseabaseConfig.ps1 default app directory (PowerShell 7 and 5.1)
+        # Windows 11 host report: the default -AppDirectory failed when $PSScriptRoot was empty
+        run: |
+          $cfg = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'
+          $script = (Resolve-Path '.\scripts\windows\Test-ChainseabaseConfig.ps1').Path
+          $app = (Get-Location).Path
+          function Invoke-Shell([string]$Shell, [string]$Directory, [string]$Command) {
+            $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Command))
+            Push-Location -LiteralPath $Directory
+            try { $out = & $Shell -NoProfile -NonInteractive -EncodedCommand $encoded 2>&1 | Out-String; $code = $LASTEXITCODE }
+            finally { Pop-Location }
+            return @{ Out = $out; Code = $code }
+          }
+          # the script text run as a script block has no script location, as reported on the host
+          $asBlock = "& ([scriptblock]::Create([IO.File]::ReadAllText('$script'))) -Path '$cfg'"
+          foreach ($shell in @('pwsh', 'powershell')) {
+            $probe = Invoke-Shell $shell $app "& ([scriptblock]::Create('[string]::IsNullOrEmpty(`$PSScriptRoot)'))"
+            if ($probe.Out.Trim() -ne 'True') { throw "$shell did not reproduce an empty PSScriptRoot: $($probe.Out)" }
+            $r = Invoke-Shell $shell $env:RUNNER_TEMP "& '$script' -Path '$cfg'"
+            if ($r.Code -ne 0) { throw "$shell by path from another directory: exit $($r.Code)`n$($r.Out)" }
+            $r = Invoke-Shell $shell $app $asBlock
+            if ($r.Code -ne 0) { throw "$shell without script location, in the app directory: exit $($r.Code)`n$($r.Out)" }
+            $r = Invoke-Shell $shell $env:RUNNER_TEMP $asBlock
+            if ($r.Code -ne 1 -or $r.Out -notmatch 'FAIL not the Chainseabase app directory') { throw "$shell without script location, elsewhere: expected exit 1 with the app directory message, got $($r.Code)`n$($r.Out)" }
+            $r = Invoke-Shell $shell $env:RUNNER_TEMP "& '$script' -Path '$cfg' -AppDirectory '$app'"
+            if ($r.Code -ne 0) { throw "$shell with -AppDirectory: exit $($r.Code)`n$($r.Out)" }
+            Write-Output "$shell`: default app directory checks passed"
+          }
       - name: Migrate and bootstrap through the loader (URL without password + PGPASSWORD)
         run: |
           $env:CHAINSEABASE_CONFIG_FILE = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'

@@ -35,6 +35,22 @@
 
 所有第三方服務在上述測試中皆為 fake；Windows 執行器不是使用者的 Windows 11 主機，不能據此標示 WIN-01 在主機上完成。
 
+## WIN-01 使用者 Windows 11 實機回報（2026-10-28）
+
+以下為使用者在自己的 Windows 11 主機執行並回報的結果，代理未在該主機執行；與上方容器及 CI 結果分開記錄，不代表完整 Windows 測試通過。
+
+| 項目 | 使用者回報 |
+| --- | --- |
+| PostgreSQL 監聽位址 | 改為只監聽 localhost 後，`Test-ChainseabasePrerequisites.ps1` 通過 |
+| 受保護設定檔 | `New-ChainseabaseConfig.ps1` 建立成功；`Test-ChainseabaseConfig.ps1` 的 NTFS ACL 與 `config:check` 通過（需明確傳入 `-AppDirectory`，見下） |
+| migration | 使用設定檔執行，顯示 `Database schema is up to date.` |
+| 網站與登入 | `npm start` 啟動，Google 重新登入成功（真實 Google OAuth，本機 callback） |
+| 問題 | `Test-ChainseabaseConfig.ps1` 第 31 行參數預設值的 `$PSScriptRoot` 為空字串，`Split-Path` 失敗；明確傳入 `-AppDirectory` 後通過 |
+
+修正：預設應用目錄改在腳本本體計算（`$PSScriptRoot` → 腳本路徑 → 目前目錄），並確認目錄含 `package.json` 與 `scripts\config\load-config.mjs`，否則以 exit 1 說明需傳入 `-AppDirectory`。CI `win-native` 新增在 PowerShell 7 與 5.1 下重現空 `$PSScriptRoot`（以 script block 執行腳本內容）、從其他目錄執行與明確 `-AppDirectory` 的檢查。修正尚待使用者在主機以不帶 `-AppDirectory` 的指令重新確認。
+
+未回報（尚待主機執行）：各步驟的 `exit=` 值、`db:bootstrap` 重跑、lint／typecheck／build、主機上的 `npm test`、`npm start` 只監聽 127.0.0.1 的確認。
+
 ## 尚未驗證
 
 - Windows 原生完整 lint／typecheck／單元／整合／E2E、PostgreSQL 18 完整回歸與 30 人負載。
