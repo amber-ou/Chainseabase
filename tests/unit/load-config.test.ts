@@ -102,11 +102,12 @@ describe('WIN-01 strict environments read only the protected config file', () =>
   });
 
   it('on POSIX the strict config file must not be group/other accessible (NTFS ACLs are checked by PowerShell)', () => {
-    const dir = tempDir();
-    const open = writeConfig(dir, 'APP_ENV=staging\n', 'open.env', 0o644);
-    expect(resolveConfig({ env: { CHAINSEABASE_CONFIG_FILE: open }, cwd: tempDir(), platform: 'linux', fsImpl: { ...fs, statSync: () => ({ mode: 0o100644 }) } as never }).problems)
+    // a fake POSIX filesystem, so the case behaves the same when the suite runs on Windows
+    const open = '/etc/chainseabase/open.env';
+    const posixFs = (mode: number) => ({ existsSync: (p: string) => p === open, readFileSync: () => 'APP_ENV=staging\n', statSync: () => ({ mode }) }) as never;
+    expect(resolveConfig({ env: { CHAINSEABASE_CONFIG_FILE: open }, cwd: '/srv/chainseabase', platform: 'linux', fsImpl: posixFs(0o100644) }).problems)
       .toEqual(['config file is readable or writable by group/others (use chmod 600)']);
-    expect(resolveConfig({ env: { CHAINSEABASE_CONFIG_FILE: open }, cwd: tempDir(), platform: 'linux', fsImpl: { ...fs, statSync: () => ({ mode: 0o100600 }) } as never }).problems).toEqual([]);
+    expect(resolveConfig({ env: { CHAINSEABASE_CONFIG_FILE: open }, cwd: '/srv/chainseabase', platform: 'linux', fsImpl: posixFs(0o100600) }).problems).toEqual([]);
     expect(resolveConfig({ env: { CHAINSEABASE_CONFIG_FILE: 'C:\\x\\c.env' }, cwd: tempDir(), platform: 'win32', fsImpl: { existsSync: (p: string) => p === 'C:\\x\\c.env', readFileSync: () => 'APP_ENV=staging\n', statSync: () => { throw new Error('mode is not checked on Windows'); } } as never }).problems).toEqual([]);
   });
 });
