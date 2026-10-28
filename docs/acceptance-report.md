@@ -51,6 +51,19 @@
 
 未回報（尚待主機執行）：各步驟的 `exit=` 值、`db:bootstrap` 重跑、lint／typecheck／build、主機上的 `npm test`、`npm start` 只監聽 127.0.0.1 的確認。
 
+## WIN-02 filesystem 頭像（2026-10-28，代理執行）
+
+| 檢查 | 平台 | 結果 |
+| --- | --- | --- |
+| 設定：staging 接受 filesystem 且不需 Supabase；仍拒絕 fake；AVATAR_STORAGE_DIR 須為絕對本機路徑且在應用目錄外（Windows 拒絕 UNC／裝置路徑）；錯誤不含路徑；舊值 real＝supabase | Linux 容器 | `tests/unit/config.test.ts` 新增 6 tests 通過 |
+| 儲存：重啟（新實例）持久化、物件路徑白名單（穿越、`CON`／`NUL`、ADS、尾端點／空白、大小寫）、根目錄不存在時明確失敗、連結／junction 拒絕、原子寫入不留暫存檔、讀取不見半寫入檔 | Linux 容器 | `tests/unit/storage-filesystem.test.ts` 6 tests 通過；放寬白名單時穿越測試失敗 |
+| API：上傳存於資料庫路徑並於重啟後提供；根目錄不可用時 503 且保留原頭像；遭竄改的資料庫路徑回 404；無 content-length 的 64 MB 串流在 2 MB 後中止 | Linux 容器、真實 PostgreSQL 16 | `tests/integration/avatar.test.ts` 新增 4 tests 通過 |
+| 全套 `npm test`、lint、typecheck、build、security:scan | Linux 容器 | 17 檔 180 tests 全過；其餘退出碼皆 0 |
+| `npm start`＋設定檔：上傳、停止、重新啟動後頭像位元組相同；health 回報 `storageBackend: filesystem` | Linux 容器（應用目錄副本、獨立資料庫） | passed |
+| PowerShell 建立／匯入／ACL、npm start 重啟持久化、Windows junction 防護 | GitHub Actions `windows-2025`（非使用者主機） | 結果見 PR 的 `win-native` 檢查 |
+
+第三方服務仍為 fake；頭像為真實本機檔案系統。使用者 Windows 11 主機尚未執行第 7 節；WIN-04（頭像需登入、快取 private）未開始。
+
 ## 尚未驗證
 
 - Windows 原生完整 lint／typecheck／單元／整合／E2E、PostgreSQL 18 完整回歸與 30 人負載。

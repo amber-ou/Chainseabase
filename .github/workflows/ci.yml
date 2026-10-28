@@ -210,6 +210,46 @@ jobs:
             if ($r.Code -ne 0) { throw "$shell with -AppDirectory: exit $($r.Code)`n$($r.Out)" }
             Write-Output "$shell`: default app directory checks passed"
           }
+      - name: WIN-02 avatar root (Initialize-ChainseabaseAvatarStorage.ps1) and NTFS checks
+        run: |
+          $cfg = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'
+          $root = Join-Path $env:ProgramData 'Chainseabase\data\avatars'
+          # existing development avatars to import: one object, one stray file
+          $src = Join-Path $env:RUNNER_TEMP 'dev-avatars'
+          $obj = '0b9e1c2a-4d5f-4a6b-8c7d-9e0f1a2b3c4d\AbCdEf0123456789.webp'
+          New-Item -ItemType Directory -Force -Path (Join-Path $src '0b9e1c2a-4d5f-4a6b-8c7d-9e0f1a2b3c4d') | Out-Null
+          Set-Content -LiteralPath (Join-Path $src $obj) -Value 'old-avatar' -NoNewline
+          Set-Content -LiteralPath (Join-Path $src 'notes.txt') -Value 'not an avatar'
+          # refused: a root inside the app directory, and a non-local path
+          .\scripts\windows\Initialize-ChainseabaseAvatarStorage.ps1 -ConfigFile $cfg -Path (Join-Path (Get-Location) '.data\avatars')
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1 for a root inside the app directory, got $LASTEXITCODE" }
+          .\scripts\windows\Initialize-ChainseabaseAvatarStorage.ps1 -ConfigFile $cfg -Path '\\server\share\avatars'
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1 for a UNC root, got $LASTEXITCODE" }
+          .\scripts\windows\Initialize-ChainseabaseAvatarStorage.ps1 -ConfigFile $cfg -ImportFrom $src
+          if ($LASTEXITCODE -ne 0) { throw "Initialize-ChainseabaseAvatarStorage exit $LASTEXITCODE" }
+          if ((Get-Content -LiteralPath (Join-Path $root $obj) -Raw) -ne 'old-avatar') { throw 'avatar not imported' }
+          if (Test-Path -LiteralPath (Join-Path $root 'notes.txt')) { throw 'a stray file was imported' }
+          if (-not (Test-Path -LiteralPath (Join-Path $src $obj))) { throw 'the import source was modified' }
+          if (-not (Get-Acl -LiteralPath $root).AreAccessRulesProtected) { throw 'avatar root inherits permissions' }
+          # rerun is idempotent; repointing an existing root is refused
+          .\scripts\windows\Initialize-ChainseabaseAvatarStorage.ps1 -ConfigFile $cfg -ImportFrom $src
+          if ($LASTEXITCODE -ne 0) { throw "rerun exit $LASTEXITCODE" }
+          .\scripts\windows\Initialize-ChainseabaseAvatarStorage.ps1 -ConfigFile $cfg -Path 'C:\ChainseabaseOther\avatars'
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1 when repointing AVATAR_STORAGE_DIR, got $LASTEXITCODE" }
+          if (Test-Path -LiteralPath 'C:\ChainseabaseOther') { throw 'a refused root was created' }
+          $dirLines = @(Get-Content -LiteralPath $cfg | Where-Object { $_ -match '^(AVATAR_STORAGE_DIR|STORAGE_PROVIDER)=' })
+          if ($dirLines.Count -ne 2) { throw "expected STORAGE_PROVIDER and AVATAR_STORAGE_DIR once each, found $($dirLines.Count)" }
+          # Test-ChainseabaseConfig covers the avatar root ACL and config:check probes it
+          $out = .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg | Out-String
+          Write-Output $out
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseConfig exit $LASTEXITCODE" }
+          if ($out -notmatch 'storage=real \(filesystem\)' -or $out -notmatch 'Avatar storage directory: .* \(writable by the current account\)') { throw 'config:check did not report the filesystem backend' }
+          icacls $root /grant '*S-1-5-32-545:(OI)(CI)(R)' | Out-Null
+          .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1 for an avatar root readable by Users, got $LASTEXITCODE" }
+          icacls $root /remove:g '*S-1-5-32-545' | Out-Null
+          .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseConfig after repair exit $LASTEXITCODE" }
       - name: Migrate and bootstrap through the loader (URL without password + PGPASSWORD)
         run: |
           $env:CHAINSEABASE_CONFIG_FILE = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'
@@ -228,6 +268,48 @@ jobs:
           $env:PGPASSWORD = $env:RUNNER_PG_PASSWORD
           & (Join-Path $env:PGBIN 'psql.exe') -h 127.0.0.1 -U postgres -d chainseabase_win -tA -c "select count(*) from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'" -c 'select name, slug, system_key from products' -c 'select count(*) from bootstrap_team_grants where consumed_at is null'
           if ($LASTEXITCODE -ne 0) { throw 'verification query failed' }
+      - name: WIN-02 avatar survives a website restart (npm start, filesystem backend)
+        run: |
+          $cfg = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'
+          $root = Join-Path $env:ProgramData 'Chainseabase\data\avatars'
+          # development-only test login for this check (APP_ENV=development in this file)
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name E2E_TEST_LOGIN -Value (ConvertTo-SecureString 'enabled' -AsPlainText -Force)
+          $env:CHAINSEABASE_CONFIG_FILE = $cfg
+          Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+          $base = 'http://localhost:3000'
+          function Start-Site {
+            $p = Start-Process -FilePath 'npm.cmd' -ArgumentList 'start' -PassThru -RedirectStandardOutput (Join-Path $env:RUNNER_TEMP "site-$([guid]::NewGuid()).log") -RedirectStandardError (Join-Path $env:RUNNER_TEMP "site-$([guid]::NewGuid()).err")
+            for ($i = 0; $i -lt 90; $i++) {
+              try { if ((Invoke-WebRequest "$base/api/v1/health" -UseBasicParsing -TimeoutSec 5).StatusCode -eq 200) { return $p } } catch { Start-Sleep -Seconds 1 }
+            }
+            throw 'website did not become healthy'
+          }
+          function Stop-Site($p) {
+            taskkill /PID $p.Id /T /F | Out-Null
+            for ($i = 0; $i -lt 30 -and (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 1 }
+            if (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue) { throw 'port 3000 still listening after stop' }
+          }
+          $site = Start-Site
+          $listen = @(Get-NetTCPConnection -LocalPort 3000 -State Listen | ForEach-Object LocalAddress | Sort-Object -Unique)
+          if (($listen | Where-Object { $_ -notin @('127.0.0.1', '::1') }).Count) { throw "website listens beyond loopback: $($listen -join ', ')" }
+          $s = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+          $h = @{ Origin = $base }
+          Invoke-WebRequest "$base/api/v1/test-support/login" -Method Post -WebSession $s -Headers $h -ContentType 'application/json' -Body '{"email":"team-a@example.test","name":"Windows CI","sub":"win-ci-1"}' -UseBasicParsing | Out-Null
+          $png = Join-Path $env:RUNNER_TEMP 'avatar.png'
+          [IO.File]::WriteAllBytes($png, [Convert]::FromBase64String('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='))
+          $up = Invoke-WebRequest "$base/api/v1/me/avatar-upload" -Method Post -WebSession $s -Headers $h -ContentType 'image/png' -InFile $png -UseBasicParsing
+          $url = ($up.Content | ConvertFrom-Json).data.avatarUrl
+          $first = (Invoke-WebRequest "$base$url" -WebSession $s -UseBasicParsing).RawContentStream.ToArray()
+          Stop-Site $site
+          $site = Start-Site
+          $second = (Invoke-WebRequest "$base$url" -WebSession $s -UseBasicParsing).RawContentStream.ToArray()
+          Stop-Site $site
+          if ($first.Length -lt 20 -or [Convert]::ToBase64String($first) -ne [Convert]::ToBase64String($second)) { throw 'avatar changed or disappeared across the restart' }
+          $files = @(Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object { $_.Name -notlike '.*' })
+          if ($files.Count -lt 2) { throw "expected the imported and the uploaded avatar under the root, found $($files.Count)" }
+          if (Test-Path -LiteralPath '.data\avatars') { throw 'avatars were written inside the app directory' }
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name E2E_TEST_LOGIN -Remove
+          Write-Output "avatar served identically before and after the restart ($($first.Length) bytes); $($files.Count) files under the root"
       - name: Unit and integration tests on Windows
         env:
           TEST_DATABASE_URL: postgres://postgres:root@127.0.0.1:5432/chainseabase_test

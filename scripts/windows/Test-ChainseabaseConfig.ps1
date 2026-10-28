@@ -4,7 +4,8 @@
 
 .DESCRIPTION
   1. The file and its directory must not inherit permissions and may grant access only to
-     SYSTEM, Administrators and the listed service account(s).
+     SYSTEM, Administrators and the listed service account(s). The same applies to the avatar
+     root when the file sets AVATAR_STORAGE_DIR (WIN-02).
   2. Runs `npm run config:check` in the app directory with CHAINSEABASE_CONFIG_FILE set for that
      child process only: the same loader the website and CLI scripts use, then the application's
      own validation. Output contains variable names, sources and provider modes only.
@@ -81,6 +82,13 @@ function Test-Acl([string]$Target, [string]$Label) {
 
 Test-Acl (Split-Path -Parent $Path) 'configuration directory'
 Test-Acl $Path 'configuration file'
+# WIN-02 avatar root (path only; values of other keys are never read into output)
+$avatarLine = @([IO.File]::ReadAllLines($Path) | Where-Object { $_.TrimStart([char]0xFEFF).Trim() -match '^AVATAR_STORAGE_DIR\s*=' })
+if ($avatarLine.Count -eq 1) {
+  $avatarRoot = ($avatarLine[0].TrimStart([char]0xFEFF) -replace '^\s*AVATAR_STORAGE_DIR\s*=\s*', '').Trim().Trim('"', "'")
+  if ($avatarRoot -and (Test-Path -LiteralPath $avatarRoot -PathType Container)) { Test-Acl $avatarRoot 'avatar directory' }
+  elseif ($avatarRoot) { $failures.Add("avatar directory $avatarRoot does not exist (run Initialize-ChainseabaseAvatarStorage.ps1)") }
+}
 if ($failures.Count -eq 0) { Write-Output 'PASS NTFS ACL: only SYSTEM, Administrators and allowed readers have access' }
 else { foreach ($f in $failures) { Write-Output "FAIL $f" } }
 

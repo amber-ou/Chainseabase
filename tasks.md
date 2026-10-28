@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | DOC-WIN | 現行需求、權限、架構、維運、驗收與 Claude 指令一致化 | 使用者確認原生部署 | 完成（文件）；不代表功能實作完成 |
 | WIN-01 | PowerShell 設定持久化／安全載入、版本與安裝文件、Windows 建置和隔離測試 | 現有實作 | 進行中：載入器、PowerShell 工具、文件與 CI（Windows Server 執行器、Node 24＋PostgreSQL 18）已實作；使用者 Windows 11 實機回報前置檢查、設定檔、config:check、migration、npm start＋Google 登入成功，並回報 `Test-ChainseabaseConfig.ps1` 預設目錄問題（已修正，待主機重新確認）；bootstrap 重跑、lint／typecheck／build 與各步退出碼待回報 |
-| WIN-02 | 正式 filesystem 頭像、provider 設定及路徑防護 | WIN-01 設定契約 | 待開始 |
+| WIN-02 | 正式 filesystem 頭像、provider 設定及路徑防護 | WIN-01 設定契約 | 進行中：filesystem 後端、設定與 health、PowerShell 建立／匯入／ACL 檢查、測試與 CI 已實作；使用者主機依 [Windows 設定與安裝](docs/windows-setup.md) 第 7 節實測待回報 |
 | WIN-03 | Windows 網站／資料庫服務、重開機恢復、權限與日誌 | WIN-01、WIN-02 | 待開始 |
 | WIN-04 | 全面受邀資料讀取與角色／產品界線 | 既有身分實作 | 待開始；可與 WIN-02 並行 |
 | WIN-05 | 排程、獨立備份、隔離還原與告警 | WIN-02、WIN-03、備份裝置 | 待開始 |
@@ -43,4 +43,16 @@ CI 新增：win-native（PowerShell 5.1／7 解析、前置檢查、npm ci／lin
 通過（使用者回報）：PostgreSQL 改為只監聽 localhost 後前置檢查通過；受保護設定檔建立；NTFS ACL 與 config:check 通過；以設定檔執行 migration 顯示 Database schema is up to date；npm start 與 Google 重新登入成功
 問題：Test-ChainseabaseConfig.ps1 參數預設值的 $PSScriptRoot 為空字串，Split-Path 失敗；明確 -AppDirectory 可通過
 修正：預設目錄改在腳本本體計算並驗證應用目錄（不符時 exit 1 並提示 -AppDirectory）；CI win-native 在 PowerShell 7／5.1 重現空 $PSScriptRoot 並檢查；待主機以不帶 -AppDirectory 重新確認
+```
+
+## WIN-02 紀錄（2026-10-28）
+
+```text
+任務：WIN-02 正式 filesystem 頭像儲存與設定
+狀態：進行中（實作完成；使用者主機實測待回報）
+平台：Linux 雲端容器（Node 22.22.0、PostgreSQL 16）；Windows 部分由 CI 的 windows-2025 執行器執行，不是使用者的 Windows 11 主機
+交付：FilesystemAvatarStorage（固定根目錄、物件路徑白名單＝<uuid>/<16 字元>.webp、拒絕穿越／裝置名稱／ADS／連結與 junction、暫存檔＋fsync＋rename 原子寫入、錯誤拋出並記錄 avatar_store_failed／avatar_read_failed）；STORAGE_PROVIDER=filesystem|supabase|fake（舊值 real＝supabase）與 AVATAR_STORAGE_DIR（絕對本機路徑、須在應用目錄外，所有環境皆檢查）；health 回報 storageBackend；上傳串流讀取超過 2 MB 即中止；config:check 檢查根目錄存在且可寫；Initialize-ChainseabaseAvatarStorage.ps1（建立／ACL／匯入 .data\avatars、不覆寫不刪來源、拒絕改指向既有根目錄）；Test-ChainseabaseConfig.ps1 檢查頭像目錄 ACL
+本機檢查（Linux）：lint 0、typecheck 0、npm test 0（17 檔 180 tests 全過）、build 0、security:scan 0；放寬路徑白名單時穿越測試失敗（變異檢查）；複製的應用目錄以 npm start＋設定檔實測：上傳、停止、重新啟動後頭像位元組相同，檔案只在 AVATAR_STORAGE_DIR
+CI 新增（win-native）：Initialize 腳本拒絕應用目錄內／UNC 路徑、匯入與冪等、拒絕改指向、頭像目錄 ACL 正反測試、config:check 回報 filesystem；npm start 重新啟動前後頭像相同且只監聽 loopback；Windows 上 junction 防護單元測試
+未完成：使用者主機的第 7 節實測；WIN-03 服務帳號的 Modify 權限與服務重啟；WIN-05 頭像備份與還原；頭像讀取需登入與快取改為 private 屬 WIN-04（目前 /api/v1/avatars 仍允許匿名讀取與 public 快取，不得經 Tunnel 開放）；舊頭像檔案在更換後不刪除（無清理）
 ```

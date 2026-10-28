@@ -3,8 +3,11 @@
  * from the environment (Vercel / CI secrets / ignored local .env files).
  * Secrets are never exposed to the client bundle (no NEXT_PUBLIC_ prefix).
  */
+import path from 'node:path';
 
 export type ProviderMode = 'real' | 'fake';
+/** Where avatars are kept: a real backend (filesystem, legacy Supabase) or the local test double. */
+export type StorageBackend = 'filesystem' | 'supabase' | 'fake';
 
 export interface AppConfig {
   databaseUrl: string;
@@ -26,6 +29,9 @@ export interface AppConfig {
   calendarProvider: ProviderMode;
   emailProvider: ProviderMode;
   storageProvider: ProviderMode;
+  storageBackend: StorageBackend;
+  /** filesystem backend root (absolute, outside the app directory) */
+  avatarStorageDir: string | null;
   e2eTestLogin: boolean;
   isProductionDeployment: boolean;
   /** production or APP_ENV=staging: no fake providers, no test login, secrets required. */
@@ -77,6 +83,34 @@ function mode(name: string, configured: boolean): ProviderMode {
   return configured ? 'real' : 'fake';
 }
 
+/**
+ * STORAGE_PROVIDER: filesystem | supabase | fake ('real' is the legacy name for supabase).
+ * Unset: filesystem when AVATAR_STORAGE_DIR is set, supabase when its credentials are, else fake.
+ */
+function storageBackend(dirSet: boolean, supabaseSet: boolean): StorageBackend | null {
+  const v = env('STORAGE_PROVIDER');
+  if (v === null) return dirSet ? 'filesystem' : supabaseSet ? 'supabase' : 'fake';
+  if (v === 'real') return 'supabase';
+  return v === 'filesystem' || v === 'supabase' || v === 'fake' ? v : null;
+}
+
+/**
+ * The filesystem root must be a fixed absolute local directory, separate from the program
+ * directory so an upgrade or a fresh checkout can never delete avatars. Names only in problems.
+ */
+export function avatarStorageDirProblem(raw: string | null, platform: NodeJS.Platform = process.platform, appDir = process.cwd()): string | null {
+  if (!raw) return 'AVATAR_STORAGE_DIR (required for STORAGE_PROVIDER=filesystem)';
+  const p = platform === 'win32' ? path.win32 : path.posix;
+  // Windows: a drive path only (no UNC share, \\?\ or \\.\ device path, no drive-relative C:x)
+  if (platform === 'win32' ? !/^[A-Za-z]:[\\/]/.test(raw) : !p.isAbsolute(raw)) return 'AVATAR_STORAGE_DIR must be an absolute local directory';
+  const dir = p.resolve(raw);
+  const app = p.resolve(appDir);
+  const rel = p.relative(app, dir);
+  const same = platform === 'win32' ? dir.toLowerCase() === app.toLowerCase() : dir === app;
+  if (same || (rel && !rel.startsWith('..') && !p.isAbsolute(rel))) return 'AVATAR_STORAGE_DIR must be outside the application directory';
+  return null;
+}
+
 let cached: AppConfig | null = null;
 
 export function getConfig(): AppConfig {
@@ -90,6 +124,16 @@ export function getConfig(): AppConfig {
   const resendApiKey = env('RESEND_API_KEY');
   const supabaseUrl = env('SUPABASE_URL');
   const supabaseServiceRoleKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  const avatarDir = env('AVATAR_STORAGE_DIR');
+  const backend = storageBackend(Boolean(avatarDir), Boolean(supabaseUrl && supabaseServiceRoleKey));
+  // storage problems apply in every environment: the reported mode must be the one in use
+  const storageProblems: string[] = [];
+  if (!backend) storageProblems.push('STORAGE_PROVIDER must be filesystem, supabase or fake');
+  if (backend === 'filesystem') {
+    const problem = avatarStorageDirProblem(avatarDir);
+    if (problem) storageProblems.push(problem);
+  }
+  if (backend === 'supabase' && !(supabaseUrl && supabaseServiceRoleKey)) storageProblems.push('SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY');
   const cfg: AppConfig = {
     databaseUrl: env('DATABASE_URL') ?? 'postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_dev',
     adminOrigin: origin('ADMIN_ORIGIN', 'http://admin.localhost:3000', strictDeployment),
@@ -109,7 +153,9 @@ export function getConfig(): AppConfig {
     bootstrapTeamEmail: env('BOOTSTRAP_TEAM_EMAIL')?.toLowerCase() ?? null,
     calendarProvider: mode('CALENDAR_PROVIDER', Boolean(googleClientId && googleClientSecret)),
     emailProvider: mode('EMAIL_PROVIDER', Boolean(resendApiKey)),
-    storageProvider: mode('STORAGE_PROVIDER', Boolean(supabaseUrl && supabaseServiceRoleKey)),
+    storageProvider: backend === 'fake' ? 'fake' : 'real',
+    storageBackend: backend ?? 'fake',
+    avatarStorageDir: backend === 'filesystem' && avatarDir ? path.resolve(avatarDir) : null,
     e2eTestLogin: env('E2E_TEST_LOGIN') === 'enabled' && !strictDeployment,
     isProductionDeployment,
     strictDeployment,
@@ -125,9 +171,11 @@ export function getConfig(): AppConfig {
     const need = (ok: boolean, names: string) => { if (!ok) missing.push(names); };
     if (cfg.calendarProvider === 'real') need(Boolean(googleClientId && googleClientSecret && cfg.tokenEncryptionKey), 'GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/TOKEN_ENCRYPTION_KEY');
     if (cfg.emailProvider === 'real') need(Boolean(resendApiKey && cfg.resendFromEmail), 'RESEND_API_KEY/RESEND_FROM_EMAIL');
-    if (cfg.storageProvider === 'real') need(Boolean(supabaseUrl && supabaseServiceRoleKey), 'SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY');
+    missing.push(...storageProblems);
     need(Boolean(cfg.jobRunnerSecret), 'CRON_SECRET');
     if (missing.length) throw new Error(`Invalid ${deploymentEnv} configuration: ${missing.join(', ')}`);
+  } else if (storageProblems.length) {
+    throw new Error(`Invalid ${deploymentEnv} configuration: ${storageProblems.join(', ')}`);
   }
   cached = cfg;
   return cfg;

@@ -15,7 +15,7 @@
 | 資料庫 | PostgreSQL（舊 CI：16；使用者本機：18.6，完整相容性待驗證），`postgres` 3.4 driver、版本化 SQL migration |
 | 驗證 | Zod 4（runtime 輸入驗證）、jose（Google ID token 驗證、OAuth 暫存 cookie 簽章） |
 | 測試 | Vitest 5（單元＋整合）、fast-check（property-based）、Playwright 1.63（E2E） |
-| 第三方 | Google OAuth／Calendar REST、Resend REST、Supabase Storage REST（皆有 fake 替身） |
+| 第三方／儲存 | Google OAuth／Calendar REST、Resend REST（皆有 fake 替身）；頭像為本機 filesystem（WIN-02），舊環境可用 Supabase Storage REST |
 
 ## 快速開始（本機開發）
 

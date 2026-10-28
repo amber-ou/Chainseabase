@@ -11,7 +11,7 @@
 | Production | 獨立資料庫與非 superuser runtime 帳號、HTTPS host、備份與服務；不可沿用有 schema 所有權的開發帳號。 |
 | Test／drill | 名稱須符合既有 test／drill 防呆；不可指向公司正式資料。 |
 
-未完成 WIN-02／04 前，現有 development 的本機 fake 儲存與匿名讀取不得透過 Tunnel 開放。正式環境維持禁止 fake／測試登入，不以 APP_ENV=development 規避防護。
+WIN-02 已實作正式 filesystem 頭像後端（待主機實測）；未完成 WIN-04 前，匿名讀取（含頭像）不得透過 Tunnel 開放。正式環境維持禁止 fake／測試登入，不以 APP_ENV=development 規避防護。
 
 ## 設定保存（WIN-01）
 
@@ -36,7 +36,7 @@ PowerShell `$env:` 只作用於目前進程與子進程，不能當作服務持�
 | BOOTSTRAP_TEAM_EMAIL | 既有首位資格流程；從安全設定取得，不將個人信箱硬編碼到腳本 |
 | RESEND_API_KEY／RESEND_FROM_EMAIL | 保留現有寄信 adapter，尚待寄件網域及真實驗收 |
 | JOB_RUNNER_SECRET／CRON_SECRET | 只配置所選 runner 必要秘密；兩者並存時遵守既有優先序 |
-| filesystem provider／儲存根目錄 | 尚待 WIN-02 定義與實作，不能把新名稱當作現有可用變數（設定檔中的未知變數會被拒絕） |
+| STORAGE_PROVIDER／AVATAR_STORAGE_DIR | `filesystem`＋應用目錄以外的固定本機目錄（預設 `C:\ProgramData\Chainseabase\data\avatars`，由 `Initialize-ChainseabaseAvatarStorage.ps1` 建立並設定 ACL）；`supabase`（舊名 `real`）只供舊環境；`fake` 為測試替身，staging／production 拒絕 |
 
 Supabase 相關變數只保留給舊環境或舊 adapter。本機 Windows 不使用 Supabase CA；不能全域停用 TLS 驗證，對外 Google／寄信／Tunnel 維持驗證。
 
@@ -44,7 +44,7 @@ Supabase 相關變數只保留給舊環境或舊 adapter。本機 Windows 不使
 
 1. 保留目前開發資料與工作樹；記錄 Node 24.11.1、安裝時使用 npm 10.9.4、PostgreSQL 18.6 等使用者回報版本。檢查各元件修補與支援狀態，不因舊 CI 用 PG16 就自動降版或刪資料。
 2. 依 [Windows 設定與安裝](docs/windows-setup.md) 完成 WIN-01：前置檢查、受保護設定檔、`config:check`、migrate／bootstrap、lint／typecheck／build，回報輸出與退出碼。CI 另在 Windows Server 執行器與 Node 24＋PostgreSQL 18（Linux）跑同一組檢查，但不取代主機實測。
-3. 完成 WIN-02 正式本機頭像與 WIN-04 受邀資料權限，沿用角色／產品／私人 owner 保護。
+3. 依 [Windows 設定與安裝](docs/windows-setup.md) 第 7 節建立頭像目錄（WIN-02），完成 WIN-04 受邀資料權限，沿用角色／產品／私人 owner 保護。
 4. 交付並驗證 WinSW 網站、PostgreSQL 與 cloudflared 服務，服務帳號最小權限、依賴就緒重試、失敗恢復及日誌輪替。版本化安裝與解除安裝腳本不得刪資料／秘密。
 5. 設定工作排程器與獨立備份裝置；斷開備份裝置時應告警，於隔離環境實際還原。
 6. 確認公司允許 Tunnel、固定網域、Google External 測試帳號／發布條件與寄件網域後，執行外部 sandbox 驗收。

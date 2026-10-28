@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { getConfig, resetConfigCache, siteForHost } from '@/server/config';
+import path from 'node:path';
+import { avatarStorageDirProblem, getConfig, resetConfigCache, siteForHost } from '@/server/config';
 
 const saved = { ...process.env };
 // placeholder values only: these tests check names and modes, never call a provider
@@ -137,5 +138,89 @@ describe('O01 environment separation guards', () => {
     expect(siteForHost('FEEDBACK.example.com')).toBe('portal');
     expect(siteForHost('evil.example.com')).toBeNull();
     expect(siteForHost('admin.example.com.evil.net')).toBeNull();
+  });
+});
+
+describe('WIN-02 avatar storage backend configuration', () => {
+  const outside = path.resolve(process.cwd(), '..', 'csb-avatar-root-outside-app');
+  function staging(storage: Record<string, string>) {
+    strictStaging();
+    for (const k of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'STORAGE_PROVIDER', 'AVATAR_STORAGE_DIR']) delete process.env[k];
+    Object.assign(process.env, storage);
+    resetConfigCache();
+  }
+  function problem(): string {
+    try { getConfig(); return ''; } catch (e) { return (e as Error).message; }
+  }
+
+  it('staging accepts the filesystem backend without any Supabase settings and reports it accurately', () => {
+    staging({ STORAGE_PROVIDER: 'filesystem', AVATAR_STORAGE_DIR: outside });
+    const cfg = getConfig();
+    expect([cfg.storageProvider, cfg.storageBackend, cfg.avatarStorageDir]).toEqual(['real', 'filesystem', outside]);
+    // AVATAR_STORAGE_DIR alone selects filesystem
+    staging({ AVATAR_STORAGE_DIR: outside });
+    expect(getConfig().storageBackend).toBe('filesystem');
+  });
+
+  it('staging still refuses the fake storage double (explicit or by default)', () => {
+    staging({ STORAGE_PROVIDER: 'fake' });
+    expect(problem()).toMatch(/fake providers are not allowed in staging/);
+    staging({});
+    expect(problem()).toMatch(/fake providers are not allowed in staging/);
+  });
+
+  it('filesystem needs an absolute directory outside the application directory; errors never show the path', () => {
+    const cases: [string | undefined, RegExp][] = [
+      [undefined, /AVATAR_STORAGE_DIR \(required for STORAGE_PROVIDER=filesystem\)/],
+      ['relative/avatars', /AVATAR_STORAGE_DIR must be an absolute local directory/],
+      [path.join(process.cwd(), '.data', 'avatars'), /AVATAR_STORAGE_DIR must be outside the application directory/],
+      [process.cwd(), /AVATAR_STORAGE_DIR must be outside the application directory/],
+    ];
+    for (const [dir, expected] of cases) {
+      staging(dir === undefined ? { STORAGE_PROVIDER: 'filesystem' } : { STORAGE_PROVIDER: 'filesystem', AVATAR_STORAGE_DIR: dir });
+      const message = problem();
+      expect(message).toMatch(expected);
+      if (dir) expect(message).not.toContain(dir);
+    }
+  });
+
+  it('the same storage rules apply in development (the reported mode is the one in use)', () => {
+    for (const k of ['APP_ENV', 'VERCEL_ENV', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']) delete process.env[k];
+    Object.assign(process.env, { STORAGE_PROVIDER: 'filesystem', AVATAR_STORAGE_DIR: 'relative' });
+    resetConfigCache();
+    expect(problem()).toMatch(/Invalid development configuration: AVATAR_STORAGE_DIR must be an absolute local directory/);
+    process.env.STORAGE_PROVIDER = 'supabase';
+    resetConfigCache();
+    expect(problem()).toMatch(/SUPABASE_URL\/SUPABASE_SERVICE_ROLE_KEY/);
+    process.env.STORAGE_PROVIDER = 'disk';
+    resetConfigCache();
+    expect(problem()).toMatch(/STORAGE_PROVIDER must be filesystem, supabase or fake/);
+    process.env.STORAGE_PROVIDER = 'fake';
+    resetConfigCache();
+    expect([getConfig().storageProvider, getConfig().storageBackend]).toEqual(['fake', 'fake']);
+  });
+
+  it('the legacy Supabase adapter is kept: STORAGE_PROVIDER=real still means supabase', () => {
+    staging({ STORAGE_PROVIDER: 'real', SUPABASE_URL: 'https://example.test', SUPABASE_SERVICE_ROLE_KEY: 'test-storage-value' });
+    expect([getConfig().storageProvider, getConfig().storageBackend]).toEqual(['real', 'supabase']);
+    staging({ STORAGE_PROVIDER: 'real' });
+    expect(problem()).toMatch(/SUPABASE_URL\/SUPABASE_SERVICE_ROLE_KEY/);
+  });
+
+  it('Windows roots must be local drive paths outside the program directory', () => {
+    const app = 'C:\\Apps\\Chainseabase';
+    const check = (dir: string) => avatarStorageDirProblem(dir, 'win32', app);
+    expect(check('C:\\ProgramData\\Chainseabase\\data\\avatars')).toBeNull();
+    expect(check('D:/ChainseabaseData/avatars')).toBeNull();
+    for (const dir of ['\\\\server\\share\\avatars', '\\\\?\\C:\\avatars', '\\\\.\\C:\\avatars', 'C:avatars', '\\avatars', 'avatars']) {
+      expect(check(dir), dir).toBe('AVATAR_STORAGE_DIR must be an absolute local directory');
+    }
+    for (const dir of ['C:\\Apps\\Chainseabase\\.data\\avatars', 'c:\\apps\\chainseabase', 'C:\\Apps\\Chainseabase\\']) {
+      expect(check(dir), dir).toBe('AVATAR_STORAGE_DIR must be outside the application directory');
+    }
+    // a sibling whose name only starts like the app directory is outside it
+    expect(check('C:\\Apps\\Chainseabase-data\\avatars')).toBeNull();
+    expect(avatarStorageDirProblem('/srv/chainseabase-data/avatars', 'linux', '/srv/chainseabase')).toBeNull();
+    expect(avatarStorageDirProblem('/srv/chainseabase/data', 'linux', '/srv/chainseabase')).toBe('AVATAR_STORAGE_DIR must be outside the application directory');
   });
 });

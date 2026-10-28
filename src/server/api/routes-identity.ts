@@ -7,12 +7,12 @@ import { AppError } from '../errors';
 import { requireTeam, requireUser } from '../authz';
 import { clearSessionCookie, createSession, revokeSession, sessionCookie } from '../session';
 import { getGoogleOAuth, LOGIN_SCOPES, CALENDAR_SCOPES } from '../adapters/google-oauth';
-import { getAvatarStorage } from '../adapters/storage';
+import { getAvatarStorage, StorageError } from '../adapters/storage';
 import { FakeCalendarApi, getCalendarApi } from '../adapters/google-calendar';
 import { clearTransientCookie, newTransient, pkceChallenge, readTransient, safeReturnTo, transientCookie, upsertGoogleUser } from '@/modules/identity/auth';
 import { acceptInvitation, createInvitation, listInvitations, resendInvitation, revokeInvitation } from '@/modules/identity/invitations';
 import { changeRole, meDto, removeMembership, updateMe } from '@/modules/identity/users';
-import { AVATAR_MAX_BYTES, uploadAvatar } from '@/modules/identity/avatar';
+import { AVATAR_MAX_BYTES, readAvatarBody, uploadAvatar } from '@/modules/identity/avatar';
 import { saveCalendarGrant } from '@/modules/calendar/credentials';
 import { logError } from '../log';
 import { text, zRevision, zUuid } from '@/modules/shared/text';
@@ -136,7 +136,8 @@ export function registerIdentityRoutes(r: Router) {
     if (!/^image\/(jpeg|png|webp)$/.test(ct)) throw new AppError('INVALID_REQUEST', '只接受 JPEG、PNG 或 WebP。', { fieldErrors: { file: '不支援的格式' } });
     const declared = Number(ctx.header('content-length') ?? '0');
     if (declared > AVATAR_MAX_BYTES) throw new AppError('INVALID_REQUEST', '頭像最大 2 MB。', { fieldErrors: { file: '檔案超過 2 MB' } });
-    const buf = Buffer.from(await ctx.req.arrayBuffer());
+    // bounded read: a missing or understated content-length cannot make the server buffer more
+    const buf = await readAvatarBody(ctx.req);
     const res = await uploadAvatar(getSql(), user.id, buf);
     return { data: { avatarUrl: `/api/v1/avatars/${user.id}?v=${res.revision}`, revision: res.revision, storage: getAvatarStorage().mode } };
   });
@@ -145,7 +146,16 @@ export function registerIdentityRoutes(r: Router) {
     const id = uuidParam(ctx, 'u');
     const [u] = await getSql()<{ avatarPath: string | null }[]>`select avatar_path from users where id = ${id}`;
     if (!u?.avatarPath) throw new AppError('NOT_FOUND');
-    const obj = await getAvatarStorage().get(u.avatarPath);
+    const storage = getAvatarStorage();
+    let obj: Awaited<ReturnType<typeof storage.get>>;
+    try {
+      obj = await storage.get(u.avatarPath);
+    } catch (e) {
+      // identifiers and error classes only (no file contents)
+      logError('avatar_read_failed', e, { userId: id, backend: storage.backend });
+      if (e instanceof StorageError && e.code === 'invalid_object_path') throw new AppError('NOT_FOUND');
+      throw new AppError('UPSTREAM_UNAVAILABLE', '頭像儲存服務暫時無法使用。');
+    }
     if (!obj) throw new AppError('NOT_FOUND');
     return new Response(new Uint8Array(obj.data), {
       headers: { 'content-type': 'image/webp', 'cache-control': 'public, max-age=86400, immutable', 'x-content-type-options': 'nosniff' },

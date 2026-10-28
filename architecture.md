@@ -10,7 +10,7 @@
 | 資料庫 | Windows 原生 PostgreSQL；migrations 0001／0002 已存在。本機 PostgreSQL 18.6 基本流程由使用者驗證；完整相容性測試尚待完成。 |
 | 身分 | Google OAuth／OIDC，伺服器管理 session，Email 邀請另決定產品互動權。 |
 | 個人日曆授權 | 與登入分開，各使用者 token 後端加密保存。 |
-| 儲存 | 正式 filesystem 頭像後端待 WIN-02 實作；既有本機 fake 不可直接用於正式環境。第一版不實作 Feedback 附件。 |
+| 儲存 | 正式 filesystem 頭像後端（WIN-02，`STORAGE_PROVIDER=filesystem`、應用目錄外的固定根目錄、原子寫入、路徑白名單）；本機 fake 只作測試替身，正式環境拒絕；Supabase adapter 保留給舊環境。第一版不實作 Feedback 附件。 |
 | 寄信／工作 | Resend 邀請信；DB outbox＋可恢復的受保護工作程序。 |
 | 部署 | GitHub 保存程式與 CI；Windows 服務執行 Next.js／PostgreSQL／Tunnel，工作排程器負責背景工作及備份。 |
 

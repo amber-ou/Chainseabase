@@ -1,6 +1,6 @@
 # Windows 設定與安裝（WIN-01）
 
-適用 Windows 原生部署（規格見 [Windows 原生部署規格](windows-native-deployment.md)）。本文件只涵蓋 WIN-01：前置檢查、受保護設定檔、與網站／CLI／排程一致的設定載入，以及原生 install／lint／typecheck／build。正式頭像（WIN-02）、Windows 服務（WIN-03）、受邀讀取（WIN-04）與排程備份（WIN-05）另見各任務。
+適用 Windows 原生部署（規格見 [Windows 原生部署規格](windows-native-deployment.md)）。本文件涵蓋 WIN-01：前置檢查、受保護設定檔、與網站／CLI／排程一致的設定載入，以及原生 install／lint／typecheck／build；以及 WIN-02：正式本機頭像目錄（第 7 節）。Windows 服務（WIN-03）、受邀讀取（WIN-04）與排程備份（WIN-05）另見各任務。
 
 > 狀態：以下指令已在 GitHub Actions 的 Windows Server 執行器（`windows-2025`，Node 24.11.1、npm 10.9.4、執行器內建 PostgreSQL）自動執行，結果見 [驗收報告](acceptance-report.md)。**尚未在你的 Windows 11 主機執行**；請依序執行並回報每一步的輸出與 `exit=` 值。
 
@@ -127,6 +127,27 @@ npm start
 
 `npm start` 透過同一個載入器啟動 `next start`，只監聽 `127.0.0.1:3000`（`npm run dev` 相同），區網其他電腦無法連線。後台 <http://localhost:3000>、前台 <http://127.0.0.1:3000>，與 `ADMIN_ORIGIN`／`PORTAL_ORIGIN` 及 Google callback 一致。在 WIN-02（正式頭像）與 WIN-04（受邀讀取）完成前，只供本機使用，**不得**經 Tunnel 或路由器對外開放；Windows 服務化、開機自動恢復與日誌在 WIN-03 處理，不以開著的 PowerShell 視窗代替。
 
+## 7. 頭像儲存（WIN-02）
+
+正式頭像使用 `STORAGE_PROVIDER=filesystem`，檔案放在應用目錄**以外**的固定目錄（預設 `C:\ProgramData\Chainseabase\data\avatars`），升級或重新簽出程式不會刪除頭像。檔案只經 `/api/v1/avatars/<使用者>` 讀取，不作為靜態檔案提供。舊的 `.data\avatars`（開發用 fake 替身）只作為匯入來源，不刪除。
+
+在應用目錄、系統管理員 PowerShell：
+
+```powershell
+.\scripts\windows\Initialize-ChainseabaseAvatarStorage.ps1 -ImportFrom .\.data\avatars
+echo "exit=$LASTEXITCODE"
+.\scripts\windows\Test-ChainseabaseConfig.ps1
+echo "exit=$LASTEXITCODE"
+```
+
+- 建立頭像目錄並取消繼承權限：SYSTEM、Administrators 完全控制；WIN-03 建立服務帳號後以 `-ServiceAccount` 再執行一次，授予該帳號「修改」權限。
+- `-ImportFrom` 只複製符合應用物件名稱（`<使用者 id>\<16 字元>.webp`）的檔案，既有目的檔不覆寫、來源不刪除；資料庫中的頭像路徑不變。若 `.data\avatars` 不存在，省略 `-ImportFrom`。
+- 在設定檔寫入 `STORAGE_PROVIDER=filesystem` 與 `AVATAR_STORAGE_DIR`。設定檔已有不同的 `AVATAR_STORAGE_DIR` 時拒絕（exit 1），避免改指向後舊頭像全部遺失。
+- 拒絕應用目錄內的路徑、UNC 網路路徑與 `\\?\`／`\\.\` 裝置路徑；應用程式啟動時以相同規則再檢查一次。
+- `Test-ChainseabaseConfig.ps1` 另檢查頭像目錄的 NTFS ACL；`config:check` 顯示 `storage=real (filesystem)`，並以目前帳號寫入／刪除一個暫存檔確認可寫入。
+
+重新啟動網站（`npm start`）後上傳一張頭像、重新整理頁面，再停止並重新啟動網站，確認頭像仍在；檔案應出現在頭像目錄的 `<使用者 id>` 子目錄下，應用目錄內不應出現新的 `.data\avatars` 檔案。
+
 ## 回報內容
 
-請回報每個步驟的輸出與 `exit=` 值（不要包含秘密），特別是：前置檢查表、`Test-ChainseabaseConfig.ps1` 的兩個 PASS／FAIL、`config:check` 的來源表、`db:migrate` 兩次與 `build` 的結尾。這些會記為「使用者 Windows 11 主機實測」，與 CI 執行器的結果分開記錄。
+請回報每個步驟的輸出與 `exit=` 值（不要包含秘密），特別是：前置檢查表、`Test-ChainseabaseConfig.ps1` 的兩個 PASS／FAIL、`config:check` 的來源表、`db:migrate` 兩次與 `build` 的結尾，以及第 7 節的匯入數量與重新啟動後頭像是否仍在。這些會記為「使用者 Windows 11 主機實測」，與 CI 執行器的結果分開記錄。
