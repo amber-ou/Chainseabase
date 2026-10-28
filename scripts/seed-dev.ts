@@ -2,6 +2,7 @@
  * Demo data for LOCAL DEVELOPMENT / E2E only. Never run against staging or production:
  * refuses unless ALLOW_DEV_SEED=1 and the database name contains "dev", "e2e" or "test".
  */
+import './config/preload.mjs'; // load configuration before anything reads process.env
 import { createSql, setSql } from '../src/server/db';
 import { bootstrap } from './bootstrap-lib';
 import { createFeedback } from '../src/modules/feedback/service';

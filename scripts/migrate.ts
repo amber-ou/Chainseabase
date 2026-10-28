@@ -1,3 +1,4 @@
+import './config/preload.mjs'; // load configuration before anything reads process.env
 import { createSql } from '../src/server/db';
 import { resolveScriptDatabaseUrl } from './db-url';
 import { migrate } from './migrate-lib';

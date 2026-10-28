@@ -1,3 +1,4 @@
+import './config/preload.mjs'; // load configuration before anything reads process.env
 import { processJobs, outboxStats } from '../src/server/jobs';
 import { getSql } from '../src/server/db';
 

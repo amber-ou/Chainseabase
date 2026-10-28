@@ -7,15 +7,16 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "node --import ./scripts/config/preload.mjs ./node_modules/next/dist/bin/next dev --hostname 127.0.0.1 -p 3000",
     "build": "next build",
-    "start": "next start -p 3000",
+    "start": "node --import ./scripts/config/preload.mjs ./node_modules/next/dist/bin/next start --hostname 127.0.0.1 -p 3000",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:bootstrap": "tsx scripts/bootstrap.ts",
     "db:seed-dev": "tsx scripts/seed-dev.ts",
     "jobs:run": "tsx scripts/run-jobs.ts",
+    "config:check": "tsx scripts/config-check.ts",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",

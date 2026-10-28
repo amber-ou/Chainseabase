@@ -13,11 +13,16 @@
 
 未完成 WIN-02／04 前，現有 development 的本機 fake 儲存與匿名讀取不得透過 Tunnel 開放。正式環境維持禁止 fake／測試登入，不以 APP_ENV=development 規避防護。
 
-## 設定保存（WIN-01 待實作）
+## 設定保存（WIN-01）
 
-PowerShell `$env:` 只作用於目前進程與子進程，不能當作服務持久設定。須交付受 NTFS ACL 保護的設定載入工具，供 CLI、網站服務及排程以相同規則載入；定義設定優先序、必要變數驗證與錯誤遮蔽。資料與秘密目錄不放 Git、不放公開靜態資源。
+PowerShell `$env:` 只作用於目前進程與子進程，不能當作服務持久設定。已實作單一載入器 `scripts/config/load-config.mjs`：網站（`npm run dev`／`npm start` 以 Node `--import` 預載）、CLI（`db:migrate`、`db:bootstrap`、`jobs:run`、`db:seed-dev`、`config:check`）在讀取環境變數之前以相同規則載入。逐步操作見 [Windows 設定與安裝](docs/windows-setup.md)。
 
-Next.js 會讀取環境檔，但現有 tsx migration／bootstrap 不應假設自動載入 `.env.local`。載入工具需涵蓋兩者，不能因缺少 URL 默默連到其他資料庫。備份、服務帳號與輪替也要能讀取指定設定。
+- 來源：`CHAINSEABASE_CONFIG_FILE` 指向的受 NTFS ACL 保護設定檔（staging／production 唯一來源）；development 無設定檔時讀 `.env.local`（與 `next dev` 相同）；程序環境只能與檔案同值。
+- 拒絕：同一變數多個來源值不同、strict 環境的變數只在程序環境、設定檔旁仍有 `.env*`、URL 內密碼與 `PGPASSWORD` 不同、未知或重複變數。結束代碼 78，只列變數名稱。
+- PowerShell 工具（`scripts/windows/`）：`Test-ChainseabasePrerequisites.ps1`、`New-ChainseabaseConfig.ps1`（建立／匯入、以 SID 設定 ACL、只在缺少時產生持久秘密、可存電腦層級路徑）、`Set-ChainseabaseConfigValue.ps1`（安全輸入、原地寫入）、`Test-ChainseabaseConfig.ps1`（ACL 與 `config:check`）。
+- `npm run config:check`：列出每個變數的來源與 provider 模式，再執行應用設定驗證；不顯示值。
+- migration 讀取程式所在位置的 `db/migrations`（不依賴工作目錄）；檢查碼不受 CRLF／LF 影響，真正的內容變更仍會被拒絕。
+- 尚未納入：`db:restore-drill` 與 `load-test` 仍使用各自明確的來源／目標變數；WIN-03 服務帳號、WIN-05 排程與備份讀取同一設定檔時再驗證。
 
 | 設定 | 用途 |
 | --- | --- |
@@ -31,14 +36,14 @@ Next.js 會讀取環境檔，但現有 tsx migration／bootstrap 不應假設自
 | BOOTSTRAP_TEAM_EMAIL | 既有首位資格流程；從安全設定取得，不將個人信箱硬編碼到腳本 |
 | RESEND_API_KEY／RESEND_FROM_EMAIL | 保留現有寄信 adapter，尚待寄件網域及真實驗收 |
 | JOB_RUNNER_SECRET／CRON_SECRET | 只配置所選 runner 必要秘密；兩者並存時遵守既有優先序 |
-| filesystem provider／儲存根目錄 | 尚待 WIN-02 定義與實作，不能把新名稱當作現有可用變數 |
+| filesystem provider／儲存根目錄 | 尚待 WIN-02 定義與實作，不能把新名稱當作現有可用變數（設定檔中的未知變數會被拒絕） |
 
 Supabase 相關變數只保留給舊環境或舊 adapter。本機 Windows 不使用 Supabase CA；不能全域停用 TLS 驗證，對外 Google／寄信／Tunnel 維持驗證。
 
 ## 安裝與發布順序
 
 1. 保留目前開發資料與工作樹；記錄 Node 24.11.1、安裝時使用 npm 10.9.4、PostgreSQL 18.6 等使用者回報版本。檢查各元件修補與支援狀態，不因舊 CI 用 PG16 就自動降版或刪資料。
-2. 完成 WIN-01 設定載入與 PowerShell 指令文件，記錄 lint／typecheck／build 及隔離測試；PG18 完整相容性仍待跑測試。
+2. 依 [Windows 設定與安裝](docs/windows-setup.md) 完成 WIN-01：前置檢查、受保護設定檔、`config:check`、migrate／bootstrap、lint／typecheck／build，回報輸出與退出碼。CI 另在 Windows Server 執行器與 Node 24＋PostgreSQL 18（Linux）跑同一組檢查，但不取代主機實測。
 3. 完成 WIN-02 正式本機頭像與 WIN-04 受邀資料權限，沿用角色／產品／私人 owner 保護。
 4. 交付並驗證 WinSW 網站、PostgreSQL 與 cloudflared 服務，服務帳號最小權限、依賴就緒重試、失敗恢復及日誌輪替。版本化安裝與解除安裝腳本不得刪資料／秘密。
 5. 設定工作排程器與獨立備份裝置；斷開備份裝置時應告警，於隔離環境實際還原。

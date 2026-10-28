@@ -36,6 +36,9 @@ export default defineConfig({
     timeout: 240_000,
     reuseExistingServer: false,
     env: {
+      // isolated from the shell: a staging APP_ENV or a machine-wide CHAINSEABASE_CONFIG_FILE must not leak in
+      APP_ENV: 'development',
+      CHAINSEABASE_CONFIG_FILE: '',
       DATABASE_URL: DB,
       ADMIN_ORIGIN: ADMIN,
       PORTAL_ORIGIN: PORTAL,

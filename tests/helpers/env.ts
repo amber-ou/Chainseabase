@@ -12,3 +12,9 @@ process.env.JOB_RUNNER_SECRET = 'test-job-secret';
 delete process.env.GOOGLE_CLIENT_ID;
 delete process.env.GOOGLE_CLIENT_SECRET;
 delete process.env.VERCEL_ENV;
+// a developer machine or CI may carry these (e.g. a machine-wide CHAINSEABASE_CONFIG_FILE on the
+// Windows host, APP_ENV from a staging shell): tests always run as an isolated development setup
+delete process.env.APP_ENV;
+delete process.env.CHAINSEABASE_CONFIG_FILE;
+delete process.env.DIRECT_DATABASE_URL;
+// PGPASSWORD stays: TEST_DATABASE_URL may omit the password, as on the Windows host

@@ -60,3 +60,152 @@ jobs:
           name: playwright-report
           path: playwright-report
           retention-days: 14
+
+  # Same Node and PostgreSQL major versions as the Windows host (Node 24.11.1, PostgreSQL 18.6).
+  # Runs on Linux: it checks version compatibility, not Windows behaviour.
+  pg18-node24:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: chainsea
+          POSTGRES_PASSWORD: chainsea
+          POSTGRES_DB: chainseabase_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U chainsea" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_test
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.11.1
+          cache: npm
+      - name: Use npm 10.9.4 (the version used for npm ci on the Windows host)
+        run: npm install -g npm@10.9.4
+      - run: npm ci
+      - name: Server version
+        run: PGPASSWORD=chainsea psql -h 127.0.0.1 -U chainsea -d chainseabase_test -tAc 'show server_version'
+      - name: Migrations apply cleanly and re-run idempotently (PostgreSQL 18)
+        run: |
+          PGPASSWORD=chainsea psql -h 127.0.0.1 -U chainsea -d chainseabase_test -c 'create database chainseabase_pg18'
+          DIRECT_DATABASE_URL=postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_pg18 npm run db:migrate
+          DIRECT_DATABASE_URL=postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_pg18 npm run db:migrate
+      - name: Unit and integration tests (Node 24.11.1, PostgreSQL 18)
+        run: npm test
+
+  # Native Windows (GitHub-hosted Windows Server runner, not the Windows 11 host): PowerShell
+  # tooling, NTFS ACLs, the configuration loader, migrations and the test suite.
+  win-native:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      # runner image default for its preinstalled PostgreSQL (not a secret)
+      RUNNER_PG_PASSWORD: root
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.11.1
+          cache: npm
+      - name: Use npm 10.9.4 (the version used for npm ci on the Windows host)
+        run: npm install -g npm@10.9.4
+      - name: Parse PowerShell scripts (PowerShell 7)
+        run: |
+          foreach ($f in Get-ChildItem scripts/windows/*.ps1) {
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs) | Out-Null
+            if ($errs) { $errs | Format-List | Out-String | Write-Output; throw "parse errors in $($f.Name)" }
+            Write-Output "parsed $($f.Name)"
+          }
+      - name: Parse PowerShell scripts (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          foreach ($f in Get-ChildItem scripts/windows/*.ps1) {
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs) | Out-Null
+            if ($errs) { $errs | Format-List | Out-String | Write-Output; throw "parse errors in $($f.Name)" }
+            Write-Output "parsed $($f.Name)"
+          }
+      - name: Start PostgreSQL as an automatic Windows service, loopback only
+        run: |
+          $svc = Get-Service -Name 'postgresql*' | Select-Object -First 1
+          Add-Content -LiteralPath (Join-Path $env:PGDATA 'postgresql.conf') "`nlisten_addresses = 'localhost'"
+          Set-Service -Name $svc.Name -StartupType Automatic
+          Start-Service -Name $svc.Name
+          & (Join-Path $env:PGBIN 'psql.exe') --version
+      - name: Prerequisite check (Test-ChainseabasePrerequisites.ps1)
+        run: |
+          .\scripts\windows\Test-ChainseabasePrerequisites.ps1 -RequireAdmin
+          if ($LASTEXITCODE -ne 0) { throw "prerequisites exit $LASTEXITCODE" }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Protected configuration file (New/Set/Test-Chainseabase*.ps1)
+        run: |
+          $psql = Join-Path $env:PGBIN 'psql.exe'
+          $env:PGPASSWORD = $env:RUNNER_PG_PASSWORD
+          & $psql -h 127.0.0.1 -U postgres -c 'create database chainseabase_win'
+          if ($LASTEXITCODE -ne 0) { throw 'createdb failed' }
+          # an existing .env.local-style file to import (URL without password, as on the Windows host)
+          $import = Join-Path $env:RUNNER_TEMP 'import.env'
+          Set-Content -LiteralPath $import -Value @(
+            'APP_ENV=development',
+            'DATABASE_URL=postgresql://postgres@127.0.0.1:5432/chainseabase_win',
+            'ADMIN_ORIGIN=http://localhost:3000',
+            'PORTAL_ORIGIN=http://127.0.0.1:3000'
+          )
+          .\scripts\windows\New-ChainseabaseConfig.ps1 -ImportEnvFile $import -SetMachineVariable
+          if ($LASTEXITCODE -ne 0) { throw "New-ChainseabaseConfig exit $LASTEXITCODE" }
+          $cfg = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name PGPASSWORD -Value (ConvertTo-SecureString $env:RUNNER_PG_PASSWORD -AsPlainText -Force)
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name BOOTSTRAP_TEAM_EMAIL -Value (ConvertTo-SecureString 'team-a@example.test' -AsPlainText -Force)
+          # a second run keeps existing values (no regenerated secrets)
+          $before = (Get-FileHash -LiteralPath $cfg).Hash
+          .\scripts\windows\New-ChainseabaseConfig.ps1
+          if ((Get-FileHash -LiteralPath $cfg).Hash -ne $before) { throw 'a second run changed the configuration file' }
+          .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseConfig exit $LASTEXITCODE" }
+          # negative: a readable-by-Users file must fail the check, then be repaired
+          icacls $cfg /grant '*S-1-5-32-545:(R)' | Out-Null
+          .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1 for a file readable by Users, got $LASTEXITCODE" }
+          icacls $cfg /remove:g '*S-1-5-32-545' | Out-Null
+          .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseConfig after repair exit $LASTEXITCODE" }
+      - name: Migrate and bootstrap through the loader (URL without password + PGPASSWORD)
+        run: |
+          $env:CHAINSEABASE_CONFIG_FILE = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'
+          Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue   # the config file is the only source
+          npm run db:migrate
+          if ($LASTEXITCODE -ne 0) { throw "db:migrate exit $LASTEXITCODE" }
+          npm run db:migrate
+          if ($LASTEXITCODE -ne 0) { throw "db:migrate rerun exit $LASTEXITCODE" }
+          npm run db:bootstrap
+          if ($LASTEXITCODE -ne 0) { throw "db:bootstrap exit $LASTEXITCODE" }
+          # negative: a different PGPASSWORD in the process environment is refused with exit 78
+          $env:PGPASSWORD = 'different-value'
+          npm run db:migrate
+          if ($LASTEXITCODE -ne 78) { throw "expected exit 78 for conflicting PGPASSWORD, got $LASTEXITCODE" }
+          Remove-Item Env:PGPASSWORD
+          $env:PGPASSWORD = $env:RUNNER_PG_PASSWORD
+          & (Join-Path $env:PGBIN 'psql.exe') -h 127.0.0.1 -U postgres -d chainseabase_win -tA -c "select count(*) from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'" -c 'select name, slug, system_key from products' -c 'select count(*) from bootstrap_team_grants where consumed_at is null'
+          if ($LASTEXITCODE -ne 0) { throw 'verification query failed' }
+      - name: Unit and integration tests on Windows
+        env:
+          TEST_DATABASE_URL: postgres://postgres:root@127.0.0.1:5432/chainseabase_test
+        run: |
+          $env:PGPASSWORD = $env:RUNNER_PG_PASSWORD
+          & (Join-Path $env:PGBIN 'psql.exe') -h 127.0.0.1 -U postgres -c 'create database chainseabase_test'
+          if ($LASTEXITCODE -ne 0) { throw 'createdb failed' }
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw "npm test exit $LASTEXITCODE" }

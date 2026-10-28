@@ -19,11 +19,27 @@
 
 連線字串嘗試曾出現密碼驗證失敗。最後成功組合是無密碼的本機 URL＋PGPASSWORD；只能記為設定差異排除成功，沒有證據證明驅動程式 URL 解碼有缺陷。秘密不存入本報告。
 
+## WIN-01 設定載入（2026-10-28，代理執行）
+
+| 檢查 | 平台 | 結果 |
+| --- | --- | --- |
+| 載入器單元測試（來源優先序、衝突、strict 只讀設定檔、Windows 路徑、POSIX 權限、URL 密碼與 PGPASSWORD、`.env.example` 變數一致） | Linux 容器 | 14 passed（`tests/unit/load-config.test.ts`）；移除衝突檢查或 migrate 的預載時對應測試失敗 |
+| 真實預載與 CLI：`node --import` 預載、`db:migrate` 以「URL 無密碼＋設定檔 PGPASSWORD」連線 | Linux 容器、真實 PostgreSQL 16 | passed（子行程測試，輸出只含目標主機與結果） |
+| migration 檢查碼 CRLF／LF 相容、內容變更仍拒絕 | Linux 容器 | 3 passed（`tests/unit/migrate-lib.test.ts`） |
+| 全套 `npm test` | Linux 容器、PostgreSQL 16 | 16 檔 164 tests：164 passed、0 failed、0 skipped |
+| `npm run test:e2e` | Linux 容器、Chromium | 64 passed、0 failed、0 skipped |
+| lint／typecheck／build／security:scan | Linux 容器 | 退出碼皆 0 |
+| `npm start` 經載入器 | Linux 容器 | 繼承 `APP_ENV=staging` 時 exit 78 拒絕；development 時 health 200、只監聽 127.0.0.1 |
+| PowerShell 工具、NTFS ACL 正反測試、Windows 上 migrate／bootstrap 與 npm test | GitHub Actions `windows-2025`（Windows Server，非使用者主機） | 結果見 PR 的 `win-native` 檢查 |
+| Node 24.11.1＋PostgreSQL 18 相容性 | GitHub Actions Linux | 結果見 PR 的 `pg18-node24` 檢查；Windows 上的 PostgreSQL 18.6 仍待主機實測 |
+
+所有第三方服務在上述測試中皆為 fake；Windows 執行器不是使用者的 Windows 11 主機，不能據此標示 WIN-01 在主機上完成。
+
 ## 尚未驗證
 
 - Windows 原生完整 lint／typecheck／單元／整合／E2E、PostgreSQL 18 完整回歸與 30 人負載。
 - WIN-02 正式 filesystem、WIN-04 受邀資料讀取（包括新版 A02、F09）；舊匿名測試不適用。
-- 設定持久化、NTFS ACL、Windows 服務、無桌面登入重開機恢復、排程與磁碟告警。
+- 使用者主機上的設定檔建立、NTFS ACL 與 `config:check`（工具已交付，見 [Windows 設定與安裝](windows-setup.md)）；Windows 服務、無桌面登入重開機恢復、排程與磁碟告警。
 - 備份／還原、外部 Tunnel、正式 HTTPS callbacks、Google Calendar 真實讀寫、寄信與長期授權。
 - 舊報告中尚未完成的螢幕閱讀器／瀏覽器相容性／人工驗收，仍維持未完成。
 

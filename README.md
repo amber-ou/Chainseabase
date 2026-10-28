@@ -19,7 +19,7 @@
 
 ## 快速開始（本機開發）
 
-以下為既有 Bash 開發範例，不可直接複製環境變數語法到 PowerShell。Windows 原生流程以 [維運文件](operations.md) 與 [新部署規格](docs/windows-native-deployment.md) 為準；依 WIN-01 補交可重現的安全載入工具。
+以下為既有 Bash 開發範例，不可直接複製環境變數語法到 PowerShell。Windows 原生流程見 [Windows 設定與安裝](docs/windows-setup.md)（WIN-01：受保護設定檔與單一載入器，網站與 CLI 同一規則）與 [新部署規格](docs/windows-native-deployment.md)。
 
 ```bash
 # 1. 安裝固定版本相依
@@ -65,6 +65,7 @@ npm run dev
 | Migration | `npm run db:migrate` | 使用 `DIRECT_DATABASE_URL`（若有）否則 `DATABASE_URL` |
 | 正式初始化 | `npm run db:bootstrap` | 冪等；團隊已存在時不再建立首位團隊授權 |
 | 示範資料 | `ALLOW_DEV_SEED=1 npm run db:seed-dev` | 只允許名稱含 dev／e2e／test 的資料庫 |
+| 設定檢查 | `npm run config:check` | 以網站與 CLI 相同的載入器載入設定，列出變數來源與 provider 模式（不顯示值），再執行應用設定驗證；拒絕時結束代碼 78／1 |
 | 背景工作 | `npm run jobs:run` | 處理通知與邀請信 outbox；正式環境由排程呼叫 `/api/v1/jobs/run` |
 | 還原演練 | `SOURCE_DATABASE_URL=… TARGET_DATABASE_URL=…drill… npm run db:restore-drill` | 目標資料庫名稱必須含 `drill` |
 | 負載測試 | `LOAD_BASE_URL=… LOAD_DATABASE_URL=… npm run load-test` | `LOAD_SCENARIO=normal｜contention｜both`（預設 both）、`LOAD_USERS`、`LOAD_SECONDS`、`LOAD_THINK_MS=2000-6000`；只允許名稱含 e2e／load／staging 的資料庫，或 `LOAD_ENV_CONFIRM=staging` 且伺服器 `/health` 回報 staging；結束時檢查看板不變量，違反時 exit 2 |
