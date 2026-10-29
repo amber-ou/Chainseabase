@@ -175,6 +175,8 @@ test.describe('desktop keyboard walkthrough', () => {
     await expect.poll(() => focused(page)).toMatch(/^button\[tab\] 活動清單/);
     await page.keyboard.press('Home');
     await expect.poll(() => focused(page)).toMatch(/^button\[tab\] 月/);
+    // the month view renders its toolbar after the switch; tab only once it is there
+    await expect(page.getByRole('button', { name: '新增活動' })).toBeVisible();
     await tabTo(page, /新增活動/, 15);
     await page.keyboard.press('Enter');
     const summary = unique('鍵盤會議');

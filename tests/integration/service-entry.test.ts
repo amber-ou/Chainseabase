@@ -68,8 +68,10 @@ describe('WIN-03 service entry point', () => {
     // a database that never answers keeps the entry point busy waiting
     fs.writeFileSync(file, 'DATABASE_URL=postgresql://chainseabase@127.0.0.1:9/chainseabase\nPGPASSWORD=x\n', { mode: 0o600 });
     const out = path.join(dir, 'child.log');
-    // the "wrapper": starts the entry point, reports its pid, then is killed
-    const wrapper = `const fs=require('fs');const c=require('child_process').spawn(process.execPath,[${JSON.stringify(entry)},'--exit-with-parent','--db-wait-seconds=120'],{cwd:${JSON.stringify(dir)},env:{...process.env,CHAINSEABASE_CONFIG_FILE:${JSON.stringify(file)}},stdio:['ignore',fs.openSync(${JSON.stringify(out)},'a'),'ignore']});console.log(c.pid);setInterval(()=>{},1000);`;
+    // the "wrapper": starts the entry point, reports its pid, then is killed. detached: on Windows a
+    // Node parent otherwise puts its children in a kill-on-close job, unlike WinSW (.NET), whose
+    // children outlive it (that is how the orphan appeared in the service test)
+    const wrapper = `const fs=require('fs');const c=require('child_process').spawn(process.execPath,[${JSON.stringify(entry)},'--exit-with-parent','--db-wait-seconds=120'],{cwd:${JSON.stringify(dir)},detached:true,env:{...process.env,CHAINSEABASE_CONFIG_FILE:${JSON.stringify(file)}},stdio:['ignore',fs.openSync(${JSON.stringify(out)},'a'),'ignore']});console.log(c.pid);setInterval(()=>{},1000);`;
     const env: Record<string, string> = {};
     for (const k of ['PATH', 'Path', 'SystemRoot', 'TEMP', 'TMP', 'USERPROFILE', 'HOME']) { const v = process.env[k]; if (v) env[k] = v; }
     const parent = spawn(process.execPath, ['-e', wrapper], { env: env as NodeJS.ProcessEnv, stdio: ['ignore', 'pipe', 'ignore'] });
