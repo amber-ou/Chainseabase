@@ -18,7 +18,8 @@ function run(databaseUrl: string, args: string[], extra: string[] = []) {
   const file = path.join(dir, 'chainseabase.env');
   const lines = [`DATABASE_URL=${databaseUrl}`, ...extra];
   // a URL without a password (as on the Windows host) takes it from PGPASSWORD
-  if (process.env.PGPASSWORD && !/:\/\/[^/@]*:[^/@]*@/.test(databaseUrl)) lines.push(`PGPASSWORD=${process.env.PGPASSWORD}`);
+  // (unless the case supplies its own)
+  if (process.env.PGPASSWORD && !/:\/\/[^/@]*:[^/@]*@/.test(databaseUrl) && !extra.some((l) => l.startsWith('PGPASSWORD='))) lines.push(`PGPASSWORD=${process.env.PGPASSWORD}`);
   fs.writeFileSync(file, `${lines.join('\n')}\n`, { mode: 0o600 });
   // only what Node needs to run: no application variables leak in from this test process
   const env: Record<string, string> = { CHAINSEABASE_CONFIG_FILE: file };
