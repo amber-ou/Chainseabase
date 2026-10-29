@@ -1,6 +1,6 @@
 # 驗收報告
 
-更新日期：2026-10-28。現行驗收規格見 [驗收案例](07-delivery-and-acceptance.md) 與 [WIN 任務](windows-native-deployment.md#開發任務與驗收)。原雲端／匿名前台驗收及 147 單元整合等當時紀錄完整保留在 [歷史報告](history/acceptance-report.md)；不當作本次重跑結果。
+更新日期：2026-10-29。現行驗收規格見 [驗收案例](07-delivery-and-acceptance.md) 與 [WIN 任務](windows-native-deployment.md#開發任務與驗收)。原雲端／匿名前台驗收及 147 單元整合等當時紀錄完整保留在 [歷史報告](history/acceptance-report.md)；不當作本次重跑結果。
 
 ## Windows 實機：使用者回報
 
@@ -109,11 +109,28 @@
 | 頭像回應的 `cache-control`／`vary` 標頭 | **未實機驗證** |
 | 第二個未受邀 Google 帳號 | **未實機驗證** |
 
+## WIN-03 Windows 服務（2026-10-29，代理執行與 CI）
+
+CI 為 GitHub Actions `windows-2025`（Windows Server、PostgreSQL 17 服務），不是使用者的 Windows 11 主機。push 執行測 `bd35a9c`，pull_request 執行測其與基底的合併提交；兩者皆 success：[push 40840399096](https://github.com/amber-ou/Chainseabase/actions/runs/40840399096)、[pull_request 40840406841](https://github.com/amber-ou/Chainseabase/actions/runs/40840406841)。
+
+| 檢查 | 平台 | 結果 |
+| --- | --- | --- |
+| 資料庫等待（退避、可重試錯誤、逾時 75、密碼錯誤立即 78、日誌無秘密）、wrapper 消失即結束、參數與設定拒絕 | Linux 容器、真實 PostgreSQL 16 | `npm test` 20 檔 197 tests 全過；看門狗關閉的變異使測試失敗 |
+| 安裝與重跑；服務定義（虛擬帳號、延遲自動、相依 PostgreSQL、10／30／60 秒重啟、非 0 結束也重啟、非 Administrators） | CI windows-2025 | PASS |
+| 服務帳號實際權限：執行中程序擁有者為 `NT SERVICE\Chainseabase`、health 200（讀到設定檔）、設定檔唯讀、頭像／日誌／`.next\cache` 可寫、release 與 WinSW 唯讀 | 同上 | PASS（證據來自執行中的服務與 SID 權限，不是管理員 PowerShell） |
+| 只監聽 loopback；恰一個服務 node 程序 | 同上 | `127.0.0.1:3000` |
+| 強制結束 node、強制結束 WinSW | 同上 | 皆自動恢復；WinSW 被終止時 node 自行結束並記錄 `service.wrapper_exited` |
+| 資料庫延遲就緒 | 同上 | `db.wait`（ECONNREFUSED）期間 health 非 200，資料庫可連後 `db.ready` 並恢復 |
+| 日誌輪替 | 同上 | 8 KB／保留 3：3 個舊檔＋現行檔；無連線字串 |
+| 版本切換、故障版本自動回退、切回 | 同上 | 故障版本 exit 1 並回到健康版本；之後切回並再次全檢通過 |
+| 解除安裝（兩次） | 同上 | 服務與其權限移除；設定檔雜湊、頭像數量不變；日誌保留；埠釋放 |
+| 未登入桌面的重開機恢復 | 使用者主機 | **未驗證**（CI 不能代替；步驟見 [Windows 設定與安裝](windows-setup.md) 9.4） |
+
 ## 尚未驗證
 
 - Windows 原生完整 lint／typecheck／單元／整合／E2E、PostgreSQL 18 完整回歸與 30 人負載。
 - WIN-02 正式 filesystem、WIN-04 受邀資料讀取（包括新版 A02、F09）；舊匿名測試不適用。
-- 使用者主機上的設定檔建立、NTFS ACL 與 `config:check`（工具已交付，見 [Windows 設定與安裝](windows-setup.md)）；Windows 服務、無桌面登入重開機恢復、排程與磁碟告警。
+- 使用者主機上的設定檔建立、NTFS ACL 與 `config:check`（工具已交付，見 [Windows 設定與安裝](windows-setup.md)）；使用者主機上的 Windows 服務安裝（第 9 節）、無桌面登入重開機恢復、排程與磁碟告警。
 - 備份／還原、外部 Tunnel、正式 HTTPS callbacks、Google Calendar 真實讀寫、寄信與長期授權。
 - 舊報告中尚未完成的螢幕閱讀器／瀏覽器相容性／人工驗收，仍維持未完成。
 

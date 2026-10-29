@@ -11,7 +11,7 @@
 | DOC-WIN | 現行需求、權限、架構、維運、驗收與 Claude 指令一致化 | 使用者確認原生部署 | 完成（文件）；不代表功能實作完成 |
 | WIN-01 | PowerShell 設定持久化／安全載入、版本與安裝文件、Windows 建置和隔離測試 | 現有實作 | 完成（依規格完成條件；證據為使用者 Windows 11 實機回報 2026-10-28／29＋CI Windows Server）；主機未執行 npm test 與 E2E，服務帳號／排程讀取設定檔留待 WIN-03／05 |
 | WIN-02 | 正式 filesystem 頭像、provider 設定及路徑防護 | WIN-01 設定契約 | 完成（依規格完成條件；使用者 Windows 11 實機回報 2026-10-29：初始化、ACL、重啟持久化）；服務帳號 Modify 權限（WIN-03）、頭像備份還原（WIN-05）、舊檔清理未做 |
-| WIN-03 | Windows 網站／資料庫服務、重開機恢復、權限與日誌 | WIN-01、WIN-02 | 待開始 |
+| WIN-03 | Windows 網站／資料庫服務、重開機恢復、權限與日誌 | WIN-01、WIN-02 | 進行中：實作完成；CI `windows-2025`（非使用者主機）完整服務生命週期通過（`bd35a9c`）；未登入桌面的重開機恢復與使用者主機上的服務安裝、頭像上傳待實機 |
 | WIN-04 | 全面受邀資料讀取與角色／產品界線 | 既有身分實作 | 進行中：實作與自動化測試完成；使用者實機回報（2026-10-29）通過更新／建置、匿名 API 401、無痕頁面無內容、後台登入；頭像匿名直接存取、快取標頭、第二個未受邀 Google 帳號未實機驗證 |
 | WIN-05 | 排程、獨立備份、隔離還原與告警 | WIN-02、WIN-03、備份裝置 | 待開始 |
 | WIN-06 | Tunnel、正式 host、Google／寄信／sandbox 日曆 | WIN-02～05、網域與公司政策 | 待開始 |
@@ -92,4 +92,25 @@ WIN-02：Initialize-ChainseabaseAvatarStorage.ps1 與其後的 Test-Chainseabase
 通過（使用者回報）：更新到 6f45809、安裝與建置；docs/windows-setup.md 第 8 節的三個匿名 API 皆為 401；無痕視窗的前台頁面不顯示公司內容；後台以團隊帳號登入查看正常
 未實機驗證（無獨立證據，不推定通過）：頭像網址在無痕視窗直接存取、頭像回應的快取標頭（cache-control／vary）、第二個未受邀 Google 帳號的「尚未受邀」流程；這三項僅有代理在 Linux 容器與 CI 的自動化證據
 狀態：WIN-04 維持進行中，待上述三項實機證據
+```
+
+## WIN-03 紀錄（2026-10-29）
+
+```text
+任務：WIN-03 Windows 常駐網站服務
+狀態：進行中（實作與 CI 驗證完成；重開機未登入桌面恢復待使用者主機）
+服務身分：虛擬服務帳號 NT SERVICE\Chainseabase（無密碼、專屬 SID、非 Administrators）；評估與權限表見 docs/windows-setup.md 第 9 節
+權限（依 SID）：設定檔讀取（資料夾僅列出、其他檔案無權限）；頭像根目錄、日誌、release 的 .next\cache 修改；release 與 WinSW 讀取／執行
+交付：scripts/windows/ Install-／Update-／Set-ChainseabaseServiceState／Uninstall-／Test-ChainseabaseService.ps1、ChainseabaseService.psm1；scripts/service/start-website.mjs（等待資料庫、只監聽 127.0.0.1、wrapper 消失即結束）、wait-for-database.mjs；/health 在資料庫不可用時 503
+包裝：WinSW 2.12.0 x64，下載後核對大小與 SHA-256（Authenticode：NotSigned，以固定檢查碼代替）；延遲自動啟動、相依 PostgreSQL 服務；失敗 10／30／60 秒重啟、3600 秒重設、非 0 結束也套用；日誌依大小輪替
+本機檢查（Linux 容器）：lint／typecheck 0；npm test 0（20 檔 197 tests，含 wait-for-database 3、service-entry 5、health 503 1）；看門狗關閉的變異使 wrapper 消失測試失敗
+CI win-native（GitHub Actions windows-2025、PostgreSQL 17 服務；push 跑 bd35a9c、pull_request 跑合併提交；兩者 success）：
+  https://github.com/amber-ou/Chainseabase/actions/runs/40840399096（push）、https://github.com/amber-ou/Chainseabase/actions/runs/40840406841（pull_request）
+  安裝與重跑、Test-ChainseabaseService 全部 PASS（以執行中的服務為證據：程序擁有者、loopback、health、依 SID 的權限）、Test-ChainseabaseConfig -AllowedReader
+  強制結束 node → 自動重啟；強制結束 WinSW → node 自行結束（events.log 記錄 service.wrapper_exited）且服務重啟，無殘留程序佔用埠
+  資料庫延遲：指向未開放的埠，服務記錄 db.wait（ECONNREFUSED）、health 非 200；開放後 db.ready（第 2 次以上嘗試）並恢復
+  日誌輪替：8 KB／保留 3 → 3 個舊檔＋1 個現行檔；日誌不含連線字串
+  版本切換、故障版本（移除 .next\server）exit 1 並自動回退到健康版本、再切回；解除安裝兩次：設定檔雜湊、頭像數量不變，日誌保留，設定檔無服務 SID，3000 埠釋放
+修正（CI 發現）：wrapper 被終止時 node 成為孤兒佔用 3000 埠（加 --exit-with-parent 看門狗與「恰一個服務 node」檢查）；故障版本被自動重啟時 Stop-Service 失敗導致回退中斷（停止改為重試至停妥且埠釋放）
+未完成：使用者主機第 9 節（安裝、權限、頭像上傳、故障恢復、Restart-Computer 後未登入 -BootReport）；開機時資料庫較晚就緒的等待只在 CI 以延遲連線模擬；WIN-05 排程、備份
 ```

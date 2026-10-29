@@ -11,7 +11,7 @@
 | Production | 獨立資料庫與非 superuser runtime 帳號、HTTPS host、備份與服務；不可沿用有 schema 所有權的開發帳號。 |
 | Test／drill | 名稱須符合既有 test／drill 防呆；不可指向公司正式資料。 |
 
-WIN-02 已完成（使用者實機回報）；WIN-04 已實作受邀讀取（匿名 401、無資格 404，含頭像與搜尋），待使用者本機驗證。在 WIN-03 服務、WIN-06 Tunnel 與當次授權前，網站仍只在本機使用，不得對外開放。正式環境維持禁止 fake／測試登入，不以 APP_ENV=development 規避防護。
+WIN-02 已完成（使用者實機回報）；WIN-04 已實作受邀讀取（匿名 401、無資格 404，含頭像與搜尋），待使用者本機驗證。WIN-03 網站服務已實作（虛擬服務帳號、只監聽 127.0.0.1，操作見 [Windows 設定與安裝](docs/windows-setup.md) 第 9 節），重開機恢復待主機驗證。在 WIN-06 Tunnel 與當次授權前，網站仍只在本機使用，不得對外開放。正式環境維持禁止 fake／測試登入，不以 APP_ENV=development 規避防護。
 
 ## 設定保存（WIN-01）
 
@@ -22,7 +22,7 @@ PowerShell `$env:` 只作用於目前進程與子進程，不能當作服務持�
 - PowerShell 工具（`scripts/windows/`）：`Test-ChainseabasePrerequisites.ps1`、`New-ChainseabaseConfig.ps1`（建立／匯入、以 SID 設定 ACL、只在缺少時產生持久秘密、可存電腦層級路徑）、`Set-ChainseabaseConfigValue.ps1`（安全輸入、原地寫入）、`Test-ChainseabaseConfig.ps1`（ACL 與 `config:check`）。
 - `npm run config:check`：列出每個變數的來源與 provider 模式，再執行應用設定驗證；不顯示值。
 - migration 讀取程式所在位置的 `db/migrations`（不依賴工作目錄）；檢查碼不受 CRLF／LF 影響，真正的內容變更仍會被拒絕。
-- 尚未納入：`db:restore-drill` 與 `load-test` 仍使用各自明確的來源／目標變數；WIN-03 服務帳號、WIN-05 排程與備份讀取同一設定檔時再驗證。
+- 尚未納入：`db:restore-drill` 與 `load-test` 仍使用各自明確的來源／目標變數；WIN-03 服務帳號讀取設定檔已在 CI 驗證（執行中服務的 health 與 SID 權限）；WIN-05 排程與備份讀取同一設定檔時再驗證。
 
 | 設定 | 用途 |
 | --- | --- |

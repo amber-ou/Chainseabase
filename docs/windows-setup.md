@@ -269,6 +269,7 @@ Get-ChildItem 'C:\Program Files\Chainseabase\releases' | Select-Object Name
 ```
 
 - 更新先建好新版本，才停止舊版本；新版本在時限內沒有通過 health，會自動切回原版本並以 exit 1 回報。
+- 停止（含更新、解除安裝）會等候服務停妥且 3000 埠釋放，最多 90 秒；故障版本正被自動重啟時也會重送停止要求，不會中途失敗。
 - 回退程式不等於回退資料庫：只有相容的 migration 才能回退程式版本。
 - 解除安裝只移除服務與服務帳號的權限；**不刪除**設定檔（秘密）、頭像、資料庫、日誌與備份。版本與 WinSW 預設保留，加 `-RemoveProgramFiles` 才刪除（只限程式檔）。
 
