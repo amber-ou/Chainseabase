@@ -178,6 +178,102 @@ foreach ($p in '/api/v1/public/products', '/api/v1/public/products/product-1/fee
 4. （若有第二個 Google 帳號）以**未受邀**帳號登入前台：顯示「尚未受邀」與「改用其他帳號」，沒有產品清單或內容。
 5. （若有測試者帳號）測試者只看到受邀產品；在後台把該帳號的產品資格移除或移除成員後，測試者重新整理即看不到內容。
 
+## 9. Windows 常駐服務（WIN-03）
+
+網站改由 Windows 服務執行：開機後不需登入桌面即啟動，故障自動重啟，等待資料庫就緒，日誌自動輪替，且只監聽 `127.0.0.1`。
+
+**服務身分：虛擬服務帳號 `NT SERVICE\Chainseabase`。** 評估結果：由 Windows 自動管理、沒有密碼需要保存或輪替、有自己的 SID 可精確設定 NTFS 權限、不是系統管理員、只在本機有效；資料庫以設定檔中的密碼經 loopback 連線，與 Windows 身分無關，因此適用。不採用 LocalSystem（權限過大）或 LocalService／NetworkService（多個服務共用身分）；專用本機使用者帳號也可行，但需另外管理密碼。
+
+| 位置 | 服務帳號權限 |
+| --- | --- |
+| 設定檔 `C:\ProgramData\Chainseabase\config\chainseabase.env` | 讀取（資料夾僅能列出；資料夾內其他檔案如 `env-local.backup` 無權限） |
+| 頭像目錄 `C:\ProgramData\Chainseabase\data\avatars` | 修改 |
+| 日誌 `C:\ProgramData\Chainseabase\logs` | 修改 |
+| 程式版本 `C:\Program Files\Chainseabase\releases\<版本>` | 讀取與執行；只有其中 `.next\cache` 可修改 |
+| 服務包裝程式 `C:\Program Files\Chainseabase\service` | 讀取與執行 |
+
+服務包裝程式為 WinSW 2.12.0（安裝時自動下載，核對檔案大小與 SHA-256，不符即中止）；服務直接執行 `node.exe scripts\service\start-website.mjs`，不經 `npm.cmd`。
+
+### 9.1 安裝
+
+先停止開著的 `npm start`（Ctrl+C）：服務使用同一個 3000 埠。確認設定檔沒有 `E2E_TEST_LOGIN`。在應用目錄、系統管理員 PowerShell：
+
+```powershell
+git pull origin claude/keen-lamport-4qb974
+.\scripts\windows\Install-ChainseabaseService.ps1
+echo "exit=$LASTEXITCODE"
+```
+
+安裝會在 `C:\Program Files\Chainseabase\releases` 建立新版本（複製程式、`npm ci`、`npm run build`，需數分鐘與網路），再建立服務並等到 health 回應。可重複執行：每次建立新版本並重新套用服務設定，資料與設定不變。若需先執行 migration：`-Migrate -BackupConfirmed`（先自行備份資料庫；自動備份屬 WIN-05）。
+
+### 9.2 驗證服務帳號與設定
+
+```powershell
+.\scripts\windows\Test-ChainseabaseService.ps1
+echo "exit=$LASTEXITCODE"
+.\scripts\windows\Test-ChainseabaseConfig.ps1 -AllowedReader 'NT SERVICE\Chainseabase'
+echo "exit=$LASTEXITCODE"
+```
+
+`Test-ChainseabaseService.ps1` 以執行中的服務為證據：網站程序必須以 `NT SERVICE\Chainseabase` 執行、health 回 200（代表服務帳號讀得到設定檔）、只監聽 loopback；並依 SID 檢查各位置的權限、復原設定、相依 PostgreSQL、日誌輪替與 WinSW 檢查碼。系統管理員 PowerShell 能讀寫，不代表服務帳號能，所以不以此為證據。
+
+接著在瀏覽器登入並**上傳一張新頭像**、重新整理：這一步由服務帳號寫入頭像目錄。
+
+### 9.3 故障自動恢復
+
+```powershell
+$wrapper = (Get-CimInstance Win32_Service -Filter "Name='Chainseabase'").ProcessId
+$node = (Get-CimInstance Win32_Process -Filter "ParentProcessId=$wrapper AND Name='node.exe'").ProcessId
+"before: $node"
+Stop-Process -Id $node -Force
+Start-Sleep -Seconds 60
+.\scripts\windows\Set-ChainseabaseServiceState.ps1 -Action Status
+echo "exit=$LASTEXITCODE"
+```
+
+預期 `exit=0`，網站程序編號與 `before` 不同（服務在 10 秒後自動重啟；連續失敗為 10／30／60 秒，1 小時後重新計數）。
+
+### 9.4 開機恢復（未登入桌面）
+
+```powershell
+Restart-Computer
+```
+
+重新開機後**至少 3 分鐘不要登入**，再登入並執行：
+
+```powershell
+.\scripts\windows\Test-ChainseabaseService.ps1 -BootReport
+echo "exit=$LASTEXITCODE"
+Select-String -Path 'C:\ProgramData\Chainseabase\logs\Chainseabase.out*.log' -Pattern '"event":"(db\.wait|db\.ready|website\.ready)"' | Select-Object -Last 6
+```
+
+`-BootReport` 比較開機時間、開機後第一次 `website.ready` 與第一次互動登入時間；網站必須在有人登入前就已就緒。最後一行會列出開機時是否等待過資料庫（`db.wait`）以及就緒時間；PostgreSQL 若先完成啟動則不會出現 `db.wait`，此時等待邏輯的證據來自 CI。
+
+### 9.5 日誌與 loopback
+
+```powershell
+Get-ChildItem 'C:\ProgramData\Chainseabase\logs' | Format-Table Name, Length, LastWriteTime
+Get-NetTCPConnection -LocalPort 3000 -State Listen | Select-Object LocalAddress, OwningProcess
+```
+
+日誌依大小輪替：單檔 10 MB、保留 8 個舊檔（安裝參數 `-LogSizeKB`、`-LogKeepFiles`）；日誌只含事件名稱與錯誤類別，不含連線字串或密碼。監聽位址只能是 `127.0.0.1`。
+
+### 9.6 啟停、更新、回退與解除安裝
+
+```powershell
+.\scripts\windows\Set-ChainseabaseServiceState.ps1 -Action Restart   # Start / Stop / Restart / Status
+.\scripts\windows\Update-ChainseabaseService.ps1                     # 由目前簽出建立新版本並切換
+Get-ChildItem 'C:\Program Files\Chainseabase\releases' | Select-Object Name
+.\scripts\windows\Update-ChainseabaseService.ps1 -UseRelease <舊版本名稱>   # 回退
+.\scripts\windows\Uninstall-ChainseabaseService.ps1                  # 只移除服務
+```
+
+- 更新先建好新版本，才停止舊版本；新版本在時限內沒有通過 health，會自動切回原版本並以 exit 1 回報。
+- 回退程式不等於回退資料庫：只有相容的 migration 才能回退程式版本。
+- 解除安裝只移除服務與服務帳號的權限；**不刪除**設定檔（秘密）、頭像、資料庫、日誌與備份。版本與 WinSW 預設保留，加 `-RemoveProgramFiles` 才刪除（只限程式檔）。
+
+服務執行期間不要再用 `npm start`／`npm run dev` 佔用 3000 埠；開發時先 `Set-ChainseabaseServiceState.ps1 -Action Stop`。
+
 ## 回報內容
 
-請回報每個步驟的輸出與 `exit=` 值（不要包含秘密），特別是：前置檢查表、`Test-ChainseabaseConfig.ps1` 的兩個 PASS／FAIL、`config:check` 的來源表、`db:migrate` 兩次與 `build` 的結尾，以及第 7 節的匯入數量與重新啟動後頭像是否仍在、第 8 節的狀態碼與各瀏覽器步驟結果。這些會記為「使用者 Windows 11 主機實測」，與 CI 執行器的結果分開記錄。
+請回報每個步驟的輸出與 `exit=` 值（不要包含秘密），特別是：前置檢查表、`Test-ChainseabaseConfig.ps1` 的兩個 PASS／FAIL、`config:check` 的來源表、`db:migrate` 兩次與 `build` 的結尾，以及第 7 節的匯入數量與重新啟動後頭像是否仍在、第 8 節的狀態碼與各瀏覽器步驟結果，以及第 9 節每個指令的輸出與 `exit=`（含 `-BootReport` 的四個時間）。這些會記為「使用者 Windows 11 主機實測」，與 CI 執行器的結果分開記錄。
