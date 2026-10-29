@@ -109,8 +109,12 @@ Check ($x.service.log.mode -eq 'roll-by-size') "log rotation: roll-by-size, $($x
 $outLogs = @(Get-ChildItem -LiteralPath $paths.Logs -Filter "$ServiceName.out*.log" -File -ErrorAction SilentlyContinue)
 Check ($outLogs.Count -ge 1 -and $outLogs.Count -le ([int]$x.service.log.keepFiles + 1)) "log files: $($outLogs.Count) (limit $([int]$x.service.log.keepFiles + 1))"
 $wrapperStart = (Get-CimInstance Win32_Process -Filter "ProcessId=$($svc.ProcessId)").CreationDate
-$newest = $outLogs | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-Check ($newest -and $newest.LastWriteTime -ge $wrapperStart.AddSeconds(-5)) "the service wrote its log since it started ($($newest.Name) at $($newest.LastWriteTime))"
+# the running website process logs its own pid at start; finding it proves the service account wrote
+# the log (directory timestamps of a file held open are updated lazily, so they are not evidence)
+$logText = ($outLogs | ForEach-Object { Read-SharedText $_.FullName }) -join "`n"
+$ownLine = $false
+if ($proc) { $ownLine = $logText -match ('"event":"website\.starting"[^\n]*"pid":' + $proc.ProcessId + '\b') }
+Check $ownLine "the running website process (pid $(if ($proc) { $proc.ProcessId })) wrote its start line to the log"
 
 if ($BootReport) {
   $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
