@@ -364,7 +364,9 @@ jobs:
           # the website process notices its wrapper is gone and exits (no orphan holding the port)
           WaitFor { -not (Get-Process -Id $n2 -ErrorAction SilentlyContinue) } 20 'the website process exits when its wrapper dies'
           WaitFor { (Health) -eq 200 -and (WrapperPid) -and (WrapperPid) -ne $w1 -and (NodePid) -and (NodePid) -ne $n2 } 150 'recovery after the service wrapper was killed'
-          if ((OutLog) -notmatch '"event":"service.wrapper_exited"') { throw 'service.wrapper_exited not logged' }
+          # stdout went through the dead wrapper; the event goes to its own file in the log folder
+          $events = Get-Content (Join-Path $logs "$name.events.log") -Raw -ErrorAction SilentlyContinue
+          if ($events -notmatch ('"event":"service.wrapper_exited","parentPid":' + $w1 + ',"pid":' + $n2)) { throw "service.wrapper_exited (wrapper $w1, website $n2) not in $name.events.log: $events" }
           Write-Output 'PASS service restarted itself after the website process and the wrapper were killed'
 
           # database not ready: point the service at a port with nothing behind it, then let it through

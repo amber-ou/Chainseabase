@@ -68,10 +68,11 @@ describe('WIN-03 service entry point', () => {
     // a database that never answers keeps the entry point busy waiting
     fs.writeFileSync(file, 'DATABASE_URL=postgresql://chainseabase@127.0.0.1:9/chainseabase\nPGPASSWORD=x\n', { mode: 0o600 });
     const out = path.join(dir, 'child.log');
+    const events = path.join(dir, 'events.log');
     // the "wrapper": starts the entry point, reports its pid, then is killed. detached: on Windows a
     // Node parent otherwise puts its children in a kill-on-close job, unlike WinSW (.NET), whose
     // children outlive it (that is how the orphan appeared in the service test)
-    const wrapper = `const fs=require('fs');const c=require('child_process').spawn(process.execPath,[${JSON.stringify(entry)},'--exit-with-parent','--db-wait-seconds=120'],{cwd:${JSON.stringify(dir)},detached:true,env:{...process.env,CHAINSEABASE_CONFIG_FILE:${JSON.stringify(file)}},stdio:['ignore',fs.openSync(${JSON.stringify(out)},'a'),'ignore']});console.log(c.pid);setInterval(()=>{},1000);`;
+    const wrapper = `const fs=require('fs');const c=require('child_process').spawn(process.execPath,[${JSON.stringify(entry)},'--exit-with-parent','--db-wait-seconds=120',${JSON.stringify(`--event-log=${events}`)}],{cwd:${JSON.stringify(dir)},detached:true,env:{...process.env,CHAINSEABASE_CONFIG_FILE:${JSON.stringify(file)}},stdio:['ignore',fs.openSync(${JSON.stringify(out)},'a'),'ignore']});console.log(c.pid);setInterval(()=>{},1000);`;
     const env: Record<string, string> = {};
     for (const k of ['PATH', 'Path', 'SystemRoot', 'TEMP', 'TMP', 'USERPROFILE', 'HOME']) { const v = process.env[k]; if (v) env[k] = v; }
     const parent = spawn(process.execPath, ['-e', wrapper], { env: env as NodeJS.ProcessEnv, stdio: ['ignore', 'pipe', 'ignore'] });
@@ -83,8 +84,10 @@ describe('WIN-03 service entry point', () => {
     const deadline = Date.now() + 15_000;
     while (alive(childPid) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 250));
     expect(alive(childPid)).toBe(false);
-    const events = fs.readFileSync(out, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l).event);
-    expect(events.at(-1)).toBe('service.wrapper_exited');
+    const lines = fs.readFileSync(out, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l).event);
+    expect(lines.at(-1)).toBe('service.wrapper_exited');
+    // also in the event file, which does not depend on the wrapper's stdout pipe
+    expect(JSON.parse(fs.readFileSync(events, 'utf8').trim())).toMatchObject({ event: 'service.wrapper_exited', pid: childPid, parentPid: parent.pid });
     fs.rmSync(dir, { recursive: true, force: true });
   }, 30_000);
 

@@ -7,6 +7,7 @@
 // 75 database still unavailable (the service manager restarts us), 78 configuration refused or a
 // database error that waiting cannot fix.
 // Log lines are JSON with identifiers and error classes only, never secrets.
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import postgres from 'postgres';
@@ -27,19 +28,28 @@ const waitOnly = process.argv.includes('--wait-only');
 // under the service: if the wrapper dies, this process must not live on unmanaged (it would hold
 // the port, and every restarted instance would fail with EADDRINUSE)
 const exitWithParent = process.argv.includes('--exit-with-parent');
+// events that must survive the wrapper: stdout goes through the wrapper's pipe, so once the wrapper is
+// gone they are appended to this file directly (the service account may write the log folder)
+const eventLog = arg('event-log', '');
 if (!Number.isInteger(port) || port < 1 || port > 65535 || !Number.isFinite(waitSeconds) || waitSeconds < 0) {
-  console.error('Usage: start-website.mjs [--port=3000] [--db-wait-seconds=600] [--wait-only] [--exit-with-parent]');
+  console.error('Usage: start-website.mjs [--port=3000] [--db-wait-seconds=600] [--wait-only] [--exit-with-parent] [--event-log=<file>]');
   process.exit(64);
 }
 
 if (exitWithParent) {
   const parent = process.ppid;
+  // a dead wrapper leaves stdout without a reader: ignore that write error and exit below instead
+  process.stdout.on('error', () => {});
   const watch = setInterval(() => {
     try {
       process.kill(parent, 0); // existence check only, no signal is sent
     } catch (e) {
       if (e && e.code === 'ESRCH') {
-        log({ level: 'error', event: 'service.wrapper_exited', parentPid: parent });
+        const line = { at: new Date().toISOString(), level: 'error', event: 'service.wrapper_exited', parentPid: parent, pid: process.pid };
+        if (eventLog) {
+          try { fs.appendFileSync(eventLog, `${JSON.stringify(line)}\n`); } catch { /* nothing else to report to */ }
+        }
+        log(line);
         process.exit(70);
       }
     }
