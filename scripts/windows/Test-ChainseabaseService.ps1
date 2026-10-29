@@ -81,6 +81,11 @@ if ($proc) {
   $outside = @($listen | Where-Object { $_.LocalAddress -notin @('127.0.0.1', '::1') })
   Check ($listen.Count -gt 0 -and $outside.Count -eq 0 -and @($listen | Where-Object LocalPort -eq $port).Count -gt 0) "listens on loopback only: $($addresses -join ', ')"
 }
+# a website process left behind by a crashed wrapper would hold the port unmanaged
+$ownNode = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object {
+    $o = Invoke-CimMethod -InputObject $_ -MethodName GetOwner
+    "$($o.Domain)\$($o.User)" -eq "NT SERVICE\$ServiceName" })
+Check ($ownNode.Count -eq 1) "exactly one node.exe runs as NT SERVICE\$ServiceName (found $($ownNode.Count); no orphan from a crashed wrapper)"
 $any = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalAddress -notin @('127.0.0.1', '::1') })
 Check ($any.Count -eq 0) "nothing listens on port $port beyond loopback"
 Check (Wait-Healthy $port 10) "health: http://127.0.0.1:$port/api/v1/health answers 200 (the service read its configuration)"

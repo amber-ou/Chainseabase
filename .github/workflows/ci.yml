@@ -360,8 +360,11 @@ jobs:
           # failure recovery: the website process dies, then the wrapper itself dies
           $n1 = NodePid; Stop-Process -Id $n1 -Force
           WaitFor { (Health) -eq 200 -and (NodePid) -and (NodePid) -ne $n1 } 150 'recovery after the website process was killed'
-          $w1 = WrapperPid; Stop-Process -Id $w1 -Force
-          WaitFor { (Health) -eq 200 -and (WrapperPid) -and (WrapperPid) -ne $w1 } 150 'recovery after the service wrapper was killed'
+          $w1 = WrapperPid; $n2 = NodePid; Stop-Process -Id $w1 -Force
+          # the website process notices its wrapper is gone and exits (no orphan holding the port)
+          WaitFor { -not (Get-Process -Id $n2 -ErrorAction SilentlyContinue) } 20 'the website process exits when its wrapper dies'
+          WaitFor { (Health) -eq 200 -and (WrapperPid) -and (WrapperPid) -ne $w1 -and (NodePid) -and (NodePid) -ne $n2 } 150 'recovery after the service wrapper was killed'
+          if ((OutLog) -notmatch '"event":"service.wrapper_exited"') { throw 'service.wrapper_exited not logged' }
           Write-Output 'PASS service restarted itself after the website process and the wrapper were killed'
 
           # database not ready: point the service at a port with nothing behind it, then let it through

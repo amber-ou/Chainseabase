@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -61,6 +61,30 @@ describe('WIN-03 service entry point', () => {
     expect(r.json.at(-1)).toMatchObject({ event: 'db.unavailable', reason: 'fatal' });
     expect(r.out).not.toContain('definitely-wrong-password');
   });
+
+  it('with --exit-with-parent it exits by itself when the service wrapper dies (no orphan holding the port)', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'csb-orphan-'));
+    const file = path.join(dir, 'chainseabase.env');
+    // a database that never answers keeps the entry point busy waiting
+    fs.writeFileSync(file, 'DATABASE_URL=postgresql://chainseabase@127.0.0.1:9/chainseabase\nPGPASSWORD=x\n', { mode: 0o600 });
+    const out = path.join(dir, 'child.log');
+    // the "wrapper": starts the entry point, reports its pid, then is killed
+    const wrapper = `const fs=require('fs');const c=require('child_process').spawn(process.execPath,[${JSON.stringify(entry)},'--exit-with-parent','--db-wait-seconds=120'],{cwd:${JSON.stringify(dir)},env:{...process.env,CHAINSEABASE_CONFIG_FILE:${JSON.stringify(file)}},stdio:['ignore',fs.openSync(${JSON.stringify(out)},'a'),'ignore']});console.log(c.pid);setInterval(()=>{},1000);`;
+    const env: Record<string, string> = {};
+    for (const k of ['PATH', 'Path', 'SystemRoot', 'TEMP', 'TMP', 'USERPROFILE', 'HOME']) { const v = process.env[k]; if (v) env[k] = v; }
+    const parent = spawn(process.execPath, ['-e', wrapper], { env: env as NodeJS.ProcessEnv, stdio: ['ignore', 'pipe', 'ignore'] });
+    const childPid = await new Promise<number>((resolve) => parent.stdout!.once('data', (d) => resolve(Number(String(d).trim()))));
+    const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(alive(childPid)).toBe(true);
+    parent.kill('SIGKILL');
+    const deadline = Date.now() + 15_000;
+    while (alive(childPid) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 250));
+    expect(alive(childPid)).toBe(false);
+    const events = fs.readFileSync(out, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l).event);
+    expect(events.at(-1)).toBe('service.wrapper_exited');
+    fs.rmSync(dir, { recursive: true, force: true });
+  }, 30_000);
 
   it('refuses bad arguments and a refused configuration before touching the database', () => {
     expect(run(testDb, ['--port=99999']).status).toBe(64);

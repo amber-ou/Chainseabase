@@ -207,7 +207,7 @@ function Write-ServiceXml($Paths, [string]$ServiceName, [string]$Release, $Setti
   <name>Chainseabase website ($(& $e $ServiceName))</name>
   <description>Chainseabase Next.js website on 127.0.0.1:$($Settings.Port) (WIN-03)</description>
   <executable>$(& $e $Settings.NodePath)</executable>
-  <arguments>"$(& $e $entry)" --port=$($Settings.Port) --db-wait-seconds=$($Settings.DbWaitSeconds)</arguments>
+  <arguments>"$(& $e $entry)" --port=$($Settings.Port) --db-wait-seconds=$($Settings.DbWaitSeconds) --exit-with-parent</arguments>
   <workingdirectory>$(& $e $Release)</workingdirectory>
   <env name="CHAINSEABASE_CONFIG_FILE" value="$(& $e $Settings.ConfigFile)"/>
   <env name="NODE_ENV" value="production"/>

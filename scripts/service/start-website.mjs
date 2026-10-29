@@ -3,8 +3,9 @@
 //   1. load the configuration with the same loader as `npm start` and the CLI scripts;
 //   2. wait for PostgreSQL with backoff (at boot it may still be starting);
 //   3. run `next start` in this same process, on loopback only, and log once the site answers.
-// Exit codes: 64 bad arguments, 75 database still unavailable (the service manager restarts us),
-// 78 configuration refused or a database error that waiting cannot fix.
+// Exit codes: 64 bad arguments, 70 the service wrapper exited (see --exit-with-parent),
+// 75 database still unavailable (the service manager restarts us), 78 configuration refused or a
+// database error that waiting cannot fix.
 // Log lines are JSON with identifiers and error classes only, never secrets.
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -23,9 +24,27 @@ const log = (line) => console.log(JSON.stringify({ at: new Date().toISOString(),
 const port = Number(arg('port', '3000'));
 const waitSeconds = Number(arg('db-wait-seconds', '600'));
 const waitOnly = process.argv.includes('--wait-only');
+// under the service: if the wrapper dies, this process must not live on unmanaged (it would hold
+// the port, and every restarted instance would fail with EADDRINUSE)
+const exitWithParent = process.argv.includes('--exit-with-parent');
 if (!Number.isInteger(port) || port < 1 || port > 65535 || !Number.isFinite(waitSeconds) || waitSeconds < 0) {
-  console.error('Usage: start-website.mjs [--port=3000] [--db-wait-seconds=600] [--wait-only]');
+  console.error('Usage: start-website.mjs [--port=3000] [--db-wait-seconds=600] [--wait-only] [--exit-with-parent]');
   process.exit(64);
+}
+
+if (exitWithParent) {
+  const parent = process.ppid;
+  const watch = setInterval(() => {
+    try {
+      process.kill(parent, 0); // existence check only, no signal is sent
+    } catch (e) {
+      if (e && e.code === 'ESRCH') {
+        log({ level: 'error', event: 'service.wrapper_exited', parentPid: parent });
+        process.exit(70);
+      }
+    }
+  }, 2000);
+  watch.unref();
 }
 
 applyConfigOrExit();
