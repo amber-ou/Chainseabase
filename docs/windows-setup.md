@@ -125,7 +125,7 @@ echo "exit=$LASTEXITCODE"
 npm start
 ```
 
-`npm start` 透過同一個載入器啟動 `next start`，只監聽 `127.0.0.1:3000`（`npm run dev` 相同），區網其他電腦無法連線。後台 <http://localhost:3000>、前台 <http://127.0.0.1:3000>，與 `ADMIN_ORIGIN`／`PORTAL_ORIGIN` 及 Google callback 一致。在 WIN-02（正式頭像）與 WIN-04（受邀讀取）完成前，只供本機使用，**不得**經 Tunnel 或路由器對外開放；Windows 服務化、開機自動恢復與日誌在 WIN-03 處理，不以開著的 PowerShell 視窗代替。
+`npm start` 透過同一個載入器啟動 `next start`，只監聽 `127.0.0.1:3000`（`npm run dev` 相同），區網其他電腦無法連線。後台 <http://localhost:3000>、前台 <http://127.0.0.1:3000>，與 `ADMIN_ORIGIN`／`PORTAL_ORIGIN` 及 Google callback 一致。WIN-02（正式頭像）已完成、WIN-04（受邀讀取）已實作，但在 WIN-03 服務與 WIN-06 Tunnel 完成並取得授權前，仍只供本機使用，**不得**經 Tunnel 或路由器對外開放；Windows 服務化、開機自動恢復與日誌在 WIN-03 處理，不以開著的 PowerShell 視窗代替。
 
 ## 7. 頭像儲存（WIN-02）
 
@@ -148,6 +148,36 @@ echo "exit=$LASTEXITCODE"
 
 重新啟動網站（`npm start`）後上傳一張頭像、重新整理頁面，再停止並重新啟動網站，確認頭像仍在；檔案應出現在頭像目錄的 `<使用者 id>` 子目錄下，應用目錄內不應出現新的 `.data\avatars` 檔案。
 
+## 8. 受邀讀取（WIN-04）本機驗證
+
+前台（`http://127.0.0.1:3000`）與後台（`http://localhost:3000`）的公司內容只提供給已登入且受邀的成員：未登入 API 回 401，未受邀、已移除或沒有該產品資格的帳號回 404（與不存在相同）。頭像也需登入並每次重新驗證，不由共用快取保存。
+
+```powershell
+git pull origin claude/keen-lamport-4qb974
+npm ci;            echo "exit=$LASTEXITCODE"
+npm run build;     echo "exit=$LASTEXITCODE"
+npm start
+```
+
+另開一個 PowerShell（不需系統管理員），檢查未登入的 API（PowerShell 5.1／7 皆可）：
+
+```powershell
+foreach ($p in '/api/v1/public/products', '/api/v1/public/products/product-1/feedback', '/api/v1/public/products/product-1/feedback?q=a') {
+  try { Invoke-WebRequest "http://127.0.0.1:3000$p" -UseBasicParsing | Out-Null; "$p -> 200 (不應發生)" }
+  catch { "$p -> $([int]$_.Exception.Response.StatusCode)" }
+}
+```
+
+預期三行都是 `-> 401`（若產品網址代稱不是 `product-1`，改用前台首頁連結中的代稱）。
+
+瀏覽器：
+
+1. **無痕視窗**開 `http://127.0.0.1:3000/` 與 `http://127.0.0.1:3000/p/product-1/feedback`：只顯示「請先登入」，看不到產品名稱或任何回饋標題。
+2. 一般視窗以團隊帳號登入前台：可看到所有產品的回饋、Roadmap 與自己的頭像；後台功能不變。
+3. 在已登入頁面的頭像上按右鍵「複製圖片網址」，貼到無痕視窗：應顯示錯誤（未登入），不是圖片。開發人員工具 → Network → 該頭像的回應標頭應有 `cache-control: private, no-cache` 與 `vary: Cookie`。
+4. （若有第二個 Google 帳號）以**未受邀**帳號登入前台：顯示「尚未受邀」與「改用其他帳號」，沒有產品清單或內容。
+5. （若有測試者帳號）測試者只看到受邀產品；在後台把該帳號的產品資格移除或移除成員後，測試者重新整理即看不到內容。
+
 ## 回報內容
 
-請回報每個步驟的輸出與 `exit=` 值（不要包含秘密），特別是：前置檢查表、`Test-ChainseabaseConfig.ps1` 的兩個 PASS／FAIL、`config:check` 的來源表、`db:migrate` 兩次與 `build` 的結尾，以及第 7 節的匯入數量與重新啟動後頭像是否仍在。這些會記為「使用者 Windows 11 主機實測」，與 CI 執行器的結果分開記錄。
+請回報每個步驟的輸出與 `exit=` 值（不要包含秘密），特別是：前置檢查表、`Test-ChainseabaseConfig.ps1` 的兩個 PASS／FAIL、`config:check` 的來源表、`db:migrate` 兩次與 `build` 的結尾，以及第 7 節的匯入數量與重新啟動後頭像是否仍在、第 8 節的狀態碼與各瀏覽器步驟結果。這些會記為「使用者 Windows 11 主機實測」，與 CI 執行器的結果分開記錄。

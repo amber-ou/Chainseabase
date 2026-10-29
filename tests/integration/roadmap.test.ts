@@ -246,16 +246,16 @@ describe('Roadmap single-dimension boards', () => {
     const pub = await createFeedback(w, { title: '公開卡', visibility: 'public' });
     await createFeedback(w, { title: '內部卡', visibility: 'internal' });
     const ver = expectOk(await api.post(`${P()}/roadmaps`, { as: w.teamA, body: { name: '版本', dimension: 'tag_group', tagGroupId: w.versionGroup } }), 201);
-    expect((await api.get(`/public/products/${w.productA.slug}/roadmaps/${def.id}`, { site: 'portal' })).status).toBe(404);
+    expect((await api.get(`/public/products/${w.productA.slug}/roadmaps/${def.id}`, { site: 'portal', as: w.tester })).status).toBe(404);
     expect((await api.patch(`${P()}/roadmaps/${ver.id}`, { as: w.teamA, body: { portalPublished: true, expectedRevision: ver.revision } })).status).toBe(400);
     expectOk(await api.patch(`${P()}/roadmaps/${def.id}`, { as: w.teamA, body: { portalPublished: true, expectedRevision: def.revision } }));
-    const list = expectOk(await api.get(`/public/products/${w.productA.slug}/roadmaps`, { site: 'portal' }));
+    const list = expectOk(await api.get(`/public/products/${w.productA.slug}/roadmaps`, { site: 'portal', as: w.tester }));
     expect(list.map((r: any) => r.id)).toEqual([def.id]);
-    const b = expectOk(await api.get(`/public/products/${w.productA.slug}/roadmaps/${def.id}`, { site: 'portal' }));
+    const b = expectOk(await api.get(`/public/products/${w.productA.slug}/roadmaps/${def.id}`, { site: 'portal', as: w.tester }));
     expect(b.columns[0].count).toBe(1);
     expect(b.columns[0].cards.map((c: any) => c.title)).toEqual(['公開卡']);
     expect(JSON.stringify(b)).not.toContain('內部卡');
-    expect((await api.get(`/public/products/${w.productA.slug}/roadmaps/${ver.id}`, { site: 'portal' })).status).toBe(404);
+    expect((await api.get(`/public/products/${w.productA.slug}/roadmaps/${ver.id}`, { site: 'portal', as: w.tester })).status).toBe(404);
     // no write endpoint on the portal host
     const write = await api.post(`/products/${w.productA.id}/roadmaps/${def.id}/moves`, { site: 'portal', as: w.teamA, key: true, body: {} });
     expect(write.status).toBe(404);
@@ -441,7 +441,7 @@ describe('Roadmap move concurrency scope', () => {
     expect(typeof b.columns[0].cards[0].placementRevision).toBe('number');
     expectOk(await api.patch(`${P()}/roadmaps/${def.id}`, { as: w.teamA, body: { portalPublished: true, expectedRevision: b.roadmap.revision } }));
     await getSql()`update feedback set visibility = 'public'`;
-    const pub = expectOk(await api.get(`/public/products/${w.productA.slug}/roadmaps/${def.id}`, { site: 'portal' }));
+    const pub = expectOk(await api.get(`/public/products/${w.productA.slug}/roadmaps/${def.id}`, { site: 'portal', as: w.tester }));
     expect(JSON.stringify(pub)).not.toContain('placementRevision');
   });
 });

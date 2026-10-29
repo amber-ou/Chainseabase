@@ -21,13 +21,31 @@ test('setup: team publishes one item and keeps one internal', async ({ page }) =
   }
 });
 
-test('F09/R14: anonymous visitors see only public items and cannot interact', async ({ page }) => {
+test('WIN-04: anonymous visitors get a login prompt and no content (pages, direct links, API)', async ({ page }) => {
+  for (const path of ['/', '/p/product-1/feedback', '/p/product-1/roadmap', '/p/product-1/feedback?item=00000000-0000-4000-8000-000000000000']) {
+    await page.goto(`${PORTAL}${path}`);
+    await expect(page.getByText('請先登入')).toBeVisible();
+    await expect(page.getByText(publicTitle)).toHaveCount(0);
+    await expect(page.getByText('產品1')).toHaveCount(0);
+  }
+  await page.getByRole('link', { name: '前往登入' }).click();
+  await page.waitForURL(/\/login\?returnTo=/);
+  for (const path of ['/public/products', '/public/products/product-1/feedback', `/public/products/product-1/feedback?q=${encodeURIComponent('公開需求')}`]) {
+    const r = await page.request.get(`${PORTAL}/api/v1${path}`);
+    expect(r.status(), path).toBe(401);
+    expect(await r.text()).not.toContain(publicTitle);
+  }
+});
+
+test('F09/R14: the invited tester sees only public items, never internal ones', async ({ page }) => {
+  await login(page, 'portal', 'tester@e2e.test', '測試者', '/p/product-1/feedback');
   await page.goto(`${PORTAL}/p/product-1/feedback`);
   await expect(page.getByText(publicTitle)).toBeVisible();
   await expect(page.getByText(internalTitle)).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: '後台導覽' })).toHaveCount(0);
-  await page.getByRole('button', { name: /投票，目前 0 票/ }).first().click();
-  await page.waitForURL(/\/login/);
+  const r = await page.request.get(`${PORTAL}/api/v1/public/products/product-1/feedback?q=${encodeURIComponent('內部需求')}`);
+  expect(r.status()).toBe(200);
+  expect(await r.text()).not.toContain(internalTitle);
 });
 
 test('F08/F12: invited tester creates feedback, votes once and comments', async ({ page }) => {
@@ -48,13 +66,20 @@ test('F08/F12: invited tester creates feedback, votes once and comments', async 
   await view.getByLabel('新增留言').fill('期待這個功能');
   await view.getByRole('button', { name: '送出留言' }).click();
   await expect(view.getByText('期待這個功能')).toBeVisible();
-  await expect(view.getByText('此留言會公開顯示')).toBeVisible();
+  await expect(view.getByText('此留言會顯示在前台網站')).toBeVisible();
 });
 
-test('A02: logged-in but uninvited account sees a clear no-membership notice', async ({ page }) => {
+test('A02/WIN-04: a logged-in but uninvited account sees a no-membership notice and no content', async ({ page }) => {
   await login(page, 'portal', 'stranger@e2e.test', '路人', '/p/product-1/feedback');
-  await page.goto(`${PORTAL}/p/product-1/feedback`);
-  await expect(page.getByText('尚未受邀參與「產品1」')).toBeVisible();
+  for (const path of ['/', '/p/product-1/feedback', '/p/product-1/roadmap']) {
+    await page.goto(`${PORTAL}${path}`);
+    await expect(page.getByRole('alert').getByText('尚未受邀', { exact: true })).toBeVisible();
+    await expect(page.getByText(publicTitle)).toHaveCount(0);
+  }
+  const r = await page.request.get(`${PORTAL}/api/v1/public/products/product-1/feedback`);
+  expect(r.status()).toBe(404);
+  expect(await r.text()).not.toContain(publicTitle);
+  await expect(page.getByRole('button', { name: '改用其他帳號' })).toBeVisible();
 });
 
 test('host separation: portal host does not serve admin pages; admin host does not serve portal pages', async ({ page }) => {

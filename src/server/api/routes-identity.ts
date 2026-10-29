@@ -4,7 +4,7 @@ import { uuidParam } from '../http';
 import { getConfig, originForSite } from '../config';
 import { getSql, withTx } from '../db';
 import { AppError } from '../errors';
-import { requireTeam, requireUser } from '../authz';
+import { requireMember, requireReader, requireTeam, requireUser } from '../authz';
 import { clearSessionCookie, createSession, revokeSession, sessionCookie } from '../session';
 import { getGoogleOAuth, LOGIN_SCOPES, CALENDAR_SCOPES } from '../adapters/google-oauth';
 import { getAvatarStorage, StorageError } from '../adapters/storage';
@@ -131,7 +131,8 @@ export function registerIdentityRoutes(r: Router) {
   });
 
   r.post('/me/avatar-upload', ['admin', 'portal'], async (ctx) => {
-    const user = requireUser(ctx);
+    // invited members only: an uninvited Google account cannot store files on the server
+    const user = requireMember(ctx);
     const ct = ctx.header('content-type') ?? '';
     if (!/^image\/(jpeg|png|webp)$/.test(ct)) throw new AppError('INVALID_REQUEST', '只接受 JPEG、PNG 或 WebP。', { fieldErrors: { file: '不支援的格式' } });
     const declared = Number(ctx.header('content-length') ?? '0');
@@ -143,9 +144,29 @@ export function registerIdentityRoutes(r: Router) {
   });
 
   r.get('/avatars/:u', ['admin', 'portal'], async (ctx) => {
+    // WIN-04: members only. Team sees every avatar; a tester sees their own, team members', and those
+    // of people in their products (co-members, authors there). Anything else answers 404 like no avatar.
+    const viewer = requireReader(ctx);
     const id = uuidParam(ctx, 'u');
-    const [u] = await getSql()<{ avatarPath: string | null }[]>`select avatar_path from users where id = ${id}`;
+    const isTeam = viewer.role === 'team';
+    const [u] = await getSql()<{ avatarPath: string | null }[]>`
+      select u.avatar_path from users u
+      where u.id = ${id} and (
+        ${isTeam} or u.id = ${viewer.id} or u.role = 'team'
+        or exists (select 1 from product_access a join product_access b on b.product_id = a.product_id
+                   where a.user_id = ${viewer.id} and b.user_id = u.id)
+        or exists (select 1 from feedback f join product_access a on a.product_id = f.product_id and a.user_id = ${viewer.id}
+                   where f.author_id = u.id)
+        or exists (select 1 from comments c join product_access a on a.product_id = c.product_id and a.user_id = ${viewer.id}
+                   where c.author_id = u.id and c.stream = 'general')
+      )
+    `;
     if (!u?.avatarPath) throw new AppError('NOT_FOUND');
+    // revalidated on every use, so access is re-checked: never stored by shared caches (Tunnel/CDN),
+    // and a browser that switched accounts asks again instead of reusing another identity's copy
+    const etag = `"${u.avatarPath.slice(u.avatarPath.lastIndexOf('/') + 1)}"`;
+    const cacheHeaders = { 'cache-control': 'private, no-cache', vary: 'Cookie', etag };
+    if (ctx.header('if-none-match') === etag) return new Response(null, { status: 304, headers: cacheHeaders });
     const storage = getAvatarStorage();
     let obj: Awaited<ReturnType<typeof storage.get>>;
     try {
@@ -158,7 +179,7 @@ export function registerIdentityRoutes(r: Router) {
     }
     if (!obj) throw new AppError('NOT_FOUND');
     return new Response(new Uint8Array(obj.data), {
-      headers: { 'content-type': 'image/webp', 'cache-control': 'public, max-age=86400, immutable', 'x-content-type-options': 'nosniff' },
+      headers: { 'content-type': 'image/webp', 'x-content-type-options': 'nosniff', ...cacheHeaders },
     });
   });
 

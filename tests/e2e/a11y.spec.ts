@@ -39,6 +39,11 @@ test('axe: admin feedback modal with schedule tab', async ({ page }) => {
 test('axe: login and portal pages', async ({ page }) => {
   await page.goto(`${PORTAL}/login`);
   await axe(page, 'portal login');
+  // the login prompt shown to anonymous visitors (WIN-04)
+  await page.goto(`${PORTAL}/p/product-1/feedback`);
+  await page.getByText('請先登入').waitFor();
+  await axe(page, 'portal login prompt');
+  await login(page, 'portal', 'tester@e2e.test', '測試者', '/p/product-1/feedback');
   for (const path of ['/p/product-1/feedback', '/p/product-1/roadmap']) {
     await page.goto(`${PORTAL}${path}`);
     await axe(page, `portal ${path}`);

@@ -41,6 +41,7 @@ test('feedback modal and schedule keep five columns with container scrolling', a
 });
 
 test('portal pages fit the viewport', async ({ page }, info) => {
+  await login(page, 'portal', 'tester@e2e.test', '測試者', '/p/product-1/feedback');
   for (const path of ['/p/product-1/feedback', '/p/product-1/roadmap']) {
     await page.goto(`${PORTAL}${path}`);
     await page.waitForLoadState('networkidle');

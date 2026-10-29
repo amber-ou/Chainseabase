@@ -288,7 +288,7 @@ before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 nul
 | GET `/products/:p/personal/feedback/:f/tags` | 本人對該 Feedback 的私人 Tag 與 revision（首次為 0）。 |
 | GET `/products/:p/calendar/events/:eventId` | 取得單一活動；整系列編輯先以此讀 master 與其 ETag。 |
 | GET／PUT `/portal/products/:p/notifications…` | 測試成員在前台的本人通知（只含可存取的公開內容）。 |
-| GET `/public/products` | 前台首頁的產品入口清單（名稱與 slug）。 |
+| GET `/public/products` | 前台首頁的產品入口清單（名稱與 slug）：需登入；團隊為全部產品、測試者只列受邀產品、未受邀或已移除帳號為空陣列。 |
 | POST `/test-support/login`、`/test-support/calendar/connect` | **僅開發／E2E**：需 `E2E_TEST_LOGIN=enabled`，production 設定下永遠回 404。 |
 
 其他確定行為：
@@ -301,4 +301,10 @@ before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 nul
 
 ## Windows 自架存取修訂（WIN-04）
 
-保留 `/public/` 路由與 public DTO 名稱以降低遷移範圍，但它們不再允許匿名。所有公司資料讀取（含 Roadmap、搜尋、留言、頭像、通知及直接 URL）先驗證 session 與產品／資源資格；未登入 401，無資格資源 404。頁面可導向登入，API 不得以登入頁 HTML 代替 401。只有登入、OAuth callback、邀請接受必要入口及不含敏感內容的健康檢查可例外。快取不得跨使用者洩漏內容，撤銷資格後每次請求重新檢查。這是待實作的新契約，不是宣稱現有測試已通過。
+保留 `/public/` 路由與 public DTO 名稱以降低遷移範圍，但它們不再允許匿名。所有公司資料讀取（含 Roadmap、搜尋、留言、頭像、通知及直接 URL）先驗證 session 與產品／資源資格；未登入 401，無資格資源 404。頁面可導向登入，API 不得以登入頁 HTML 代替 401。只有登入、OAuth callback、邀請接受必要入口及不含敏感內容的健康檢查可例外。快取不得跨使用者洩漏內容，撤銷資格後每次請求重新檢查。
+
+實作（WIN-04）：
+- 讀取（`/public/*`、`/avatars/:u`、通知列表）：未登入 401；未受邀、已移除帳號及測試者讀其他產品一律 404，與不存在的 slug／ID 相同回應，且在查詢產品前判斷，無法探測產品是否存在。前台以 `/me` 的 `role: none` 說明「尚未受邀」。
+- 頭像：團隊可讀全部；測試者可讀自己、團隊成員、同產品成員及其受邀產品中的作者，其餘 404。回應 `Cache-Control: private, no-cache`、`Vary: Cookie` 與 ETag；`If-None-Match` 也要先通過授權才回 304。JSON 維持 `private, no-store`。
+- 寫入（前台互動、頭像上傳）：未登入 401，未受邀或已移除帳號 403 `NOT_A_MEMBER`（在查詢產品前判斷）。
+- 例外：登入、OAuth callback、邀請接受、`/me`、`/site`、`/health`（只有模式與後端名稱）。

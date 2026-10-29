@@ -11,7 +11,7 @@
 | Production | 獨立資料庫與非 superuser runtime 帳號、HTTPS host、備份與服務；不可沿用有 schema 所有權的開發帳號。 |
 | Test／drill | 名稱須符合既有 test／drill 防呆；不可指向公司正式資料。 |
 
-WIN-02 已實作正式 filesystem 頭像後端（待主機實測）；未完成 WIN-04 前，匿名讀取（含頭像）不得透過 Tunnel 開放。正式環境維持禁止 fake／測試登入，不以 APP_ENV=development 規避防護。
+WIN-02 已完成（使用者實機回報）；WIN-04 已實作受邀讀取（匿名 401、無資格 404，含頭像與搜尋），待使用者本機驗證。在 WIN-03 服務、WIN-06 Tunnel 與當次授權前，網站仍只在本機使用，不得對外開放。正式環境維持禁止 fake／測試登入，不以 APP_ENV=development 規避防護。
 
 ## 設定保存（WIN-01）
 

@@ -3,7 +3,7 @@ import type { Ctx, Router } from '../http';
 import { uuidParam } from '../http';
 import { getSql } from '../db';
 import { AppError } from '../errors';
-import { hasProductInteraction, productBySlug, requireProduct, requireTeam, requireUser } from '../authz';
+import { hasProductInteraction, requireProduct, requireProductReader, requireReader, requireTeam, requireUser } from '../authz';
 import { addRow, getSchedule, getScheduleHistory, hideOperation, postScheduleComment } from '@/modules/schedule/service';
 import { getCommentDto, listComments } from '@/modules/feedback/comments';
 import {
@@ -169,17 +169,17 @@ export function registerWorkRoutes(r: Router) {
     return mutate(ctx, { keyRequired: true, body }, async (tx) => ({ data: await moveRoadmapCard(tx, user, productId, roadmapId, body) }));
   });
 
+  // tester-visible projection: invited members only (WIN-04)
   r.get('/public/products/:slug/roadmaps', ['admin', 'portal'], async (ctx) => {
-    const p = await productBySlug(getSql(), ctx.params.slug);
+    const { product: p } = await requireProductReader(ctx, getSql(), ctx.params.slug);
     const list = await listRoadmaps(getSql(), p.id, { publicOnly: true });
     return { data: list.map((rm) => ({ id: rm.id, name: rm.name, description: rm.description })) };
   });
 
   r.get('/public/products/:slug/roadmaps/:r', ['admin', 'portal'], async (ctx) => {
-    const p = await productBySlug(getSql(), ctx.params.slug);
-    const canInteract = await hasProductInteraction(getSql(), ctx.user, p.id);
+    const { user, product: p, isTeam } = await requireProductReader(ctx, getSql(), ctx.params.slug);
     const board = await getBoard(getSql(), p.id, uuidParam(ctx, 'r'), {
-      limitPerColumn: 50, publicOnly: true, viewerId: ctx.user?.id ?? null, viewerCanInteract: canInteract, viewerIsTeam: ctx.user?.role === 'team',
+      limitPerColumn: 50, publicOnly: true, viewerId: user.id, viewerCanInteract: true, viewerIsTeam: isTeam,
     });
     return {
       data: {
@@ -190,11 +190,10 @@ export function registerWorkRoutes(r: Router) {
   });
 
   r.get('/public/products/:slug/roadmaps/:r/columns/:c/feedback', ['admin', 'portal'], async (ctx) => {
-    const p = await productBySlug(getSql(), ctx.params.slug);
+    const { user, product: p, isTeam } = await requireProductReader(ctx, getSql(), ctx.params.slug);
     const q = ctx.query(z.object({ cursor: z.string().max(100).optional(), limit: zLimit }));
-    const canInteract = await hasProductInteraction(getSql(), ctx.user, p.id);
     const res = await getColumnPage(getSql(), p.id, uuidParam(ctx, 'r'), uuidParam(ctx, 'c'), {
-      ...q, publicOnly: true, viewerId: ctx.user?.id ?? null, viewerCanInteract: canInteract, viewerIsTeam: ctx.user?.role === 'team',
+      ...q, publicOnly: true, viewerId: user.id, viewerCanInteract: true, viewerIsTeam: isTeam,
     });
     return { data: res.items, meta: { nextCursor: res.nextCursor, total: res.total } };
   });
@@ -300,10 +299,11 @@ export function registerWorkRoutes(r: Router) {
   // ---------------- Notifications (own only; admin and portal) ----------------
   for (const [prefix, sites] of [['/products/:p', ['admin']], ['/portal/products/:p', ['portal']]] as const) {
     r.get(`${prefix}/notifications`, [...sites], async (ctx) => {
-      const user = requireUser(ctx);
+      // membership before the product lookup: non-members get the 404 of an unknown product
+      const user = requireReader(ctx);
       const productId = uuidParam(ctx, 'p');
       await requireProduct(getSql(), productId);
-      if (!(await hasProductInteraction(getSql(), user, productId))) throw new AppError(user.role === 'none' ? 'NOT_A_MEMBER' : 'ACTION_FORBIDDEN');
+      if (!(await hasProductInteraction(getSql(), user, productId))) throw new AppError('NOT_FOUND');
       if (prefix === '/products/:p') requireTeam(ctx);
       const q = ctx.query(z.object({ unread: z.enum(['true', 'false']).optional(), cursor: z.string().max(200).optional(), limit: zLimit }));
       const res = await listNotifications(getSql(), user, productId, { unreadOnly: q.unread === 'true', cursor: q.cursor, limit: q.limit });

@@ -28,7 +28,7 @@ describe('avatar upload (account feature, not a Feedback attachment)', () => {
     const r = await upload(png, 'image/png');
     expect(r.status).toBe(200);
     const body = await r.json();
-    const img = await handleApiRequest(new Request(`${ADMIN}${body.data.avatarUrl}`, { headers: { host: new URL(ADMIN).host } }));
+    const img = await handleApiRequest(new Request(`${ADMIN}${body.data.avatarUrl}`, { headers: { host: new URL(ADMIN).host, cookie: `csb_session=${u.admin}` } }));
     expect(img.status).toBe(200);
     expect(img.headers.get('content-type')).toBe('image/webp');
     const out = Buffer.from(await img.arrayBuffer());
@@ -57,7 +57,7 @@ describe('WIN-02 avatars on the filesystem backend', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
   const png = () => sharp({ create: { width: 64, height: 64, channels: 3, background: '#aa3311' } }).png().toBuffer();
-  const get = (url: string) => handleApiRequest(new Request(`${ADMIN}${url}`, { headers: { host: new URL(ADMIN).host } }));
+  const get = (url: string) => handleApiRequest(new Request(`${ADMIN}${url}`, { headers: { host: new URL(ADMIN).host, cookie: `csb_session=${u.admin}` } }));
   const avatarPath = async () => (await getSql()<{ avatarPath: string | null }[]>`select avatar_path from users where id = ${u.id}`)[0].avatarPath;
 
   it('stores the processed image at the database path under the root and serves it after a restart', async () => {

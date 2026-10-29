@@ -56,7 +56,7 @@ function PersonalSettings() {
           try { await api.patch('/me', { body: { displayName: name, expectedRevision: me.revision } }); await reloadMe(); toast('success', '已更新名稱'); } catch (e) { setError(errorMessage(e)); } finally { setPending(false); }
         }}>儲存名稱</Button></div>
       </Section>
-      <Section title="頭像" description={<>接受 JPEG、PNG、WebP，最大 2 MB；伺服器會重新編碼並移除中繼資料。{site.providers.storage === 'fake' ? '（目前使用本機開發儲存，尚未連接 Supabase Storage）' : ''}</>}>
+      <Section title="頭像" description={<>接受 JPEG、PNG、WebP，最大 2 MB；伺服器會重新編碼並移除中繼資料。{site.providers.storage === 'fake' ? '（目前使用開發用暫存替身，尚未設定正式頭像目錄）' : ''}</>}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Avatar name={me.displayName} url={me.avatarUrl} id={me.id} size={56} />
           <label className="btn">

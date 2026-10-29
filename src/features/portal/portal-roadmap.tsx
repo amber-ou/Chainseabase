@@ -20,7 +20,7 @@ export function PortalRoadmapPage() {
   const board = useResource<PublicBoard>(current ? `/public/products/${product.slug}/roadmaps/${current}` : null);
   return (
     <>
-      <div className="page-head"><div><h1>Roadmap</h1><p className="sub">公開的處理進度。只顯示公開的回饋，看板為唯讀。</p></div></div>
+      <div className="page-head"><div><h1>Roadmap</h1><p className="sub">受邀成員可見的處理進度。只顯示公開範圍的回饋，看板為唯讀。</p></div></div>
       {list.loading ? <LoadingState /> : list.error ? <ErrorState message={list.error.message} onRetry={list.reload} /> : (list.data ?? []).length === 0 ? (
         <EmptyState title="尚未發布 Roadmap" />
       ) : (

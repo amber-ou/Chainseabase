@@ -1,6 +1,6 @@
 # 開發計畫與進度
 
-更新日期：2026-10-28。以既有實作 `82b7641` 為基礎；不重做 M1–M7。舊任務與測試證據見 [歷史任務紀錄](docs/history/tasks.md)，本輪依 [Windows 原生規格](docs/windows-native-deployment.md) 改造。
+更新日期：2026-10-29。以既有實作 `82b7641` 為基礎；不重做 M1–M7。舊任務與測試證據見 [歷史任務紀錄](docs/history/tasks.md)，本輪依 [Windows 原生規格](docs/windows-native-deployment.md) 改造。
 
 ## 目前狀態
 
@@ -9,10 +9,10 @@
 | ID | 交付 | 依賴 | 狀態 |
 | --- | --- | --- | --- |
 | DOC-WIN | 現行需求、權限、架構、維運、驗收與 Claude 指令一致化 | 使用者確認原生部署 | 完成（文件）；不代表功能實作完成 |
-| WIN-01 | PowerShell 設定持久化／安全載入、版本與安裝文件、Windows 建置和隔離測試 | 現有實作 | 進行中：載入器、PowerShell 工具、文件與 CI（Windows Server 執行器、Node 24＋PostgreSQL 18）已實作；使用者 Windows 11 實機回報前置檢查、設定檔、config:check、migration、npm start＋Google 登入成功，並回報 `Test-ChainseabaseConfig.ps1` 預設目錄問題（已修正，待主機重新確認）；bootstrap 重跑、lint／typecheck／build 與各步退出碼待回報 |
-| WIN-02 | 正式 filesystem 頭像、provider 設定及路徑防護 | WIN-01 設定契約 | 進行中：filesystem 後端、設定與 health、PowerShell 建立／匯入／ACL 檢查、測試與 CI 已實作；使用者主機依 [Windows 設定與安裝](docs/windows-setup.md) 第 7 節實測待回報 |
+| WIN-01 | PowerShell 設定持久化／安全載入、版本與安裝文件、Windows 建置和隔離測試 | 現有實作 | 完成（依規格完成條件；證據為使用者 Windows 11 實機回報 2026-10-28／29＋CI Windows Server）；主機未執行 npm test 與 E2E，服務帳號／排程讀取設定檔留待 WIN-03／05 |
+| WIN-02 | 正式 filesystem 頭像、provider 設定及路徑防護 | WIN-01 設定契約 | 完成（依規格完成條件；使用者 Windows 11 實機回報 2026-10-29：初始化、ACL、重啟持久化）；服務帳號 Modify 權限（WIN-03）、頭像備份還原（WIN-05）、舊檔清理未做 |
 | WIN-03 | Windows 網站／資料庫服務、重開機恢復、權限與日誌 | WIN-01、WIN-02 | 待開始 |
-| WIN-04 | 全面受邀資料讀取與角色／產品界線 | 既有身分實作 | 待開始；可與 WIN-02 並行 |
+| WIN-04 | 全面受邀資料讀取與角色／產品界線 | 既有身分實作 | 進行中：已實作並有自動化測試（見下方 WIN-04 紀錄）；使用者本機依 [Windows 設定與安裝](docs/windows-setup.md) 第 8 節驗證待回報 |
 | WIN-05 | 排程、獨立備份、隔離還原與告警 | WIN-02、WIN-03、備份裝置 | 待開始 |
 | WIN-06 | Tunnel、正式 host、Google／寄信／sandbox 日曆 | WIN-02～05、網域與公司政策 | 待開始 |
 | WIN-07 | 30 人負載、斷網／重開機／回退與發布 | WIN-01～06 | 待開始 |
@@ -55,4 +55,32 @@ CI 新增：win-native（PowerShell 5.1／7 解析、前置檢查、npm ci／lin
 本機檢查（Linux）：lint 0、typecheck 0、npm test 0（17 檔 180 tests 全過）、build 0、security:scan 0；放寬路徑白名單時穿越測試失敗（變異檢查）；複製的應用目錄以 npm start＋設定檔實測：上傳、停止、重新啟動後頭像位元組相同，檔案只在 AVATAR_STORAGE_DIR
 CI 新增（win-native）：Initialize 腳本拒絕應用目錄內／UNC 路徑、匯入與冪等、拒絕改指向、頭像目錄 ACL 正反測試、config:check 回報 filesystem；npm start 重新啟動前後頭像相同且只監聽 loopback；Windows 上 junction 防護單元測試
 未完成：使用者主機的第 7 節實測；WIN-03 服務帳號的 Modify 權限與服務重啟；WIN-05 頭像備份與還原；頭像讀取需登入與快取改為 private 屬 WIN-04（目前 /api/v1/avatars 仍允許匿名讀取與 public 快取，不得經 Tunnel 開放）；舊頭像檔案在更換後不刪除（無清理）
+```
+
+## 使用者 Windows 11 實機回報（2026-10-29，e4e6e41）
+
+```text
+來源：使用者在自己的 Windows 11 主機執行並回報；代理未在該主機執行，與 CI（Windows Server 執行器）分開記錄
+WIN-01：Test-ChainseabaseConfig.ps1 不帶 -AppDirectory exit=0（f59e1bb 修正已確認）；db:migrate、db:bootstrap、lint、typecheck、build 皆 exit=0
+WIN-02：Initialize-ChainseabaseAvatarStorage.ps1 與其後的 Test-ChainseabaseConfig.ps1（設定／ACL）皆 exit=0；上傳頭像後停止並重新啟動網站，重新整理仍保留；C:\ProgramData\Chainseabase\data\avatars 檔案數 1；網站監聽 127.0.0.1:3000
+評估：WIN-01 完成條件（管理員權限、Node／npm／Git／PostgreSQL、原生 install／lint／typecheck／build）與 WIN-02 完成條件（路徑防護、權限、重啟持久化、正式拒絕 fake）已有證據 → 標為完成
+仍未驗證（不屬已完成範圍，保留）：主機上的 npm test 與 Windows E2E；WIN-03 服務帳號讀取設定檔與頭像目錄 Modify 權限、服務重啟；WIN-05 排程讀取設定檔、頭像與資料庫備份還原；重開機後自動恢復
+```
+
+## WIN-04 紀錄（2026-10-29）
+
+```text
+任務：WIN-04 公司內容全面受邀登入控制
+狀態：進行中（實作與自動化測試完成；使用者本機驗證待回報）
+平台：Linux 雲端容器（Node 22.22.0、PostgreSQL 16）；CI 另在 Windows Server 執行器跑同一套 npm test
+規則（依 data-permissions.md 與 API 契約 WIN-04 修訂）：
+  讀取 /public/*（產品、Feedback、搜尋、留言、Roadmap 與欄分頁）、/avatars/:u、通知列表：未登入 401；未受邀、已移除帳號、測試者讀其他產品 → 404，與不存在相同，且在查詢產品前判斷
+  /public/products：團隊全部、測試者只列受邀產品、未受邀／已移除為 []
+  頭像：團隊全部；測試者可讀自己、團隊、同產品成員與其受邀產品中的作者；Cache-Control private, no-cache＋Vary: Cookie＋ETag，304 也先驗證授權
+  寫入（前台互動、頭像上傳）：未受邀／已移除 403 NOT_A_MEMBER，在查詢產品前判斷
+  撤銷資格：每次請求重新讀取 session 與 product_access，無快取；移除成員或產品資格後下一個請求即失效
+  前台頁面：未登入顯示「請先登入」、未受邀顯示「尚未受邀」（依 /me 的 role），不預載任何產品內容；手機版頁首改為可換行
+測試：新增 tests/integration/invited-access.test.ts（8 tests：匿名、未受邀、已移除 team／tester、跨產品 404 與不存在相同、撤銷產品資格、團隊全產品、頭像可見範圍與快取、通知與寫入不可探測產品）；既有 F09～F15、R14、A02、N05 改以受邀測試者讀取或改為新規則（斷言保留）；E2E 新增匿名登入提示、未受邀提示、受邀測試者只見公開項目
+本機檢查（Linux）：lint 0、typecheck 0、npm test 0（18 檔 188 tests）、test:e2e 0（65 passed）、build 0、security:scan 0；移除成員資格檢查的變異使 WIN-04 測試失敗（5／8、3／23）；複製的應用目錄以 npm start 驗證：匿名 API 401、未受邀 []／404、頭像 401／404／200 與快取標頭、頁面 HTML no-store 且不含標題
+未完成：使用者本機第 8 節驗證；真實 Google 未受邀帳號流程（需第二個帳號）；Tunnel／對外仍待 WIN-03／06 與授權
 ```

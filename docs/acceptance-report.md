@@ -64,6 +64,37 @@
 
 第三方服務仍為 fake；頭像為真實本機檔案系統。使用者 Windows 11 主機尚未執行第 7 節；WIN-04（頭像需登入、快取 private）未開始。
 
+## 使用者 Windows 11 實機回報（2026-10-29，e4e6e41）
+
+使用者在自己的 Windows 11 主機執行並回報；代理未在該主機執行，與 CI 結果分開。
+
+| 項目 | 使用者回報 |
+| --- | --- |
+| `Test-ChainseabaseConfig.ps1`（不帶 `-AppDirectory`） | exit=0（`f59e1bb` 修正已確認） |
+| `db:migrate`、`db:bootstrap`、`lint`、`typecheck`、`build` | 全部 exit=0 |
+| `Initialize-ChainseabaseAvatarStorage.ps1` 與其後的設定／ACL 檢查 | 全部 exit=0 |
+| 頭像上傳、停止並重新啟動網站後重新整理 | 仍保留 |
+| `C:\ProgramData\Chainseabase\data\avatars` 檔案數 | 1 |
+| 網站監聽位址 | 127.0.0.1:3000 |
+
+依規格完成條件，WIN-01 與 WIN-02 已有證據。仍未驗證：主機上的 `npm test` 與 Windows E2E、服務帳號（WIN-03）、排程與備份還原（WIN-05）、重開機自動恢復。
+
+## WIN-04 受邀讀取（2026-10-29，代理執行）
+
+| 檢查 | 平台 | 結果 |
+| --- | --- | --- |
+| 匿名：8 個前台讀取端點＋產品清單＋搜尋，前台與後台 host | Linux 容器、真實 PostgreSQL 16 | 全部 401，回應不含產品名稱或內容 |
+| 未受邀帳號：同一組端點 | 同上 | 產品清單 `[]`；其餘 404，與不存在的 slug 回應相同 |
+| 已移除的 tester 與 team（保留 session 驗證資格檢查本身） | 同上 | 404；後台 403；`/me` 為 `role: none` |
+| 測試者讀其他產品、撤銷產品資格 | 同上 | 404 與不存在相同；撤銷後下一個請求即 404 |
+| 頭像可見範圍與快取 | 同上 | 匿名 401、未受邀 404、其他產品成員 404、受邀共同成員 200；`private, no-cache`、`Vary: Cookie`、ETag，304 前先驗證授權 |
+| 通知與前台寫入 | 同上 | 非成員對存在與不存在的產品回應相同 |
+| 既有 F09～F15、R14、A02、N05 | 同上 | 改以受邀測試者讀取或改為新規則，斷言保留；`npm test` 18 檔 188 tests 全過 |
+| E2E（1440／768／390） | Linux 容器、Chromium | 65 passed；新增匿名「請先登入」、未受邀「尚未受邀」、測試者只見公開項目；修正手機頁首溢出 |
+| `npm start`＋設定檔 | Linux 容器（應用目錄副本、獨立資料庫） | 匿名 API 401、未受邀 `[]`／404、頭像標頭、頁面 HTML `no-store` 且不含內容 |
+
+第三方服務仍為 fake。使用者本機驗證（[Windows 設定與安裝](windows-setup.md) 第 8 節）、真實 Google 未受邀帳號流程尚未執行。
+
 ## 尚未驗證
 
 - Windows 原生完整 lint／typecheck／單元／整合／E2E、PostgreSQL 18 完整回歸與 30 人負載。

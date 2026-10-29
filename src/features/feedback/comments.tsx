@@ -121,7 +121,7 @@ export function CommentThread({ productId, feedbackId, isPublic, endpoints, canI
       )}
       {ep.create ? (
         <div className="composer">
-          {isPublic ? <div className="banner banner-info small"><IconGlobe size={14} />此留言會公開顯示在前台網站。內部工作內容請使用 Schedule。</div> : <div className="small muted">此 Feedback 為內部內容，留言僅團隊可見。</div>}
+          {isPublic ? <div className="banner banner-info small"><IconGlobe size={14} />此留言會顯示在前台網站，受邀的 tester 也看得到。內部工作內容請使用 Schedule。</div> : <div className="small muted">此 Feedback 為內部內容，留言僅團隊可見。</div>}
           {replyTo ? <div className="quote" style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><span>回覆 @{replyTo.author.displayName}：{replyTo.body.slice(0, 80)}</span><Button size="sm" variant="ghost" onClick={() => setReplyTo(null)}>取消回覆</Button></div> : null}
           <label className="sr-only" htmlFor={`new-comment-${feedbackId}`}>新增留言</label>
           <textarea id={`new-comment-${feedbackId}`} className="textarea" rows={3} maxLength={5000} placeholder={canInteract ? '寫下留言…' : '登入並受邀後才能留言'} value={body} onChange={(e) => setBody(e.target.value)}

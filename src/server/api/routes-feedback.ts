@@ -3,13 +3,12 @@ import type { Ctx, Router } from '../http';
 import { uuidParam } from '../http';
 import { getSql } from '../db';
 import { AppError } from '../errors';
-import { hasProductInteraction, productBySlug, requirePortalMember, requireProduct, requireTeam } from '../authz';
+import { listReadableProducts, requireMember, requirePortalMember, requireProduct, requireProductReader, requireTeam, requireUser } from '../authz';
 import { createFeedback, listFeedback, listFeedbackIds, softDeleteFeedback, updateFeedback } from '@/modules/feedback/service';
 import { loadFeedbackDto, loadPublicFeedbackDtos, lockFeedback } from '@/modules/feedback/repo';
 import {
   createGeneralComment, deleteComment, editComment, getCommentDto, listComments, listPublicComments, setCommentLike, setVote,
 } from '@/modules/feedback/comments';
-import { listProducts } from '@/modules/products/service';
 import { text, zLimit, zRevision, zUuid } from '@/modules/shared/text';
 import { mutate } from './helpers';
 
@@ -67,9 +66,11 @@ async function teamProduct(ctx: Ctx) {
   return { user, productId };
 }
 
-async function viewerOf(ctx: Ctx, productId: string) {
-  const canInteract = await hasProductInteraction(getSql(), ctx.user, productId);
-  return { viewerId: ctx.user?.id ?? null, canInteract, isTeam: ctx.user?.role === 'team' && ctx.user.membershipState === 'active' };
+/** WIN-04: the tester-visible projection is read only by invited members (see requireProductReader). */
+async function reader(ctx: Ctx) {
+  const { user, product, isTeam } = await requireProductReader(ctx, getSql(), ctx.params.slug);
+  // a reader is always a member who may interact with this product
+  return { p: product, v: { viewerId: user.id, canInteract: true, isTeam } };
 }
 
 export function registerFeedbackRoutes(r: Router) {
@@ -156,44 +157,45 @@ export function registerFeedbackRoutes(r: Router) {
     });
   }
 
-  // ---------------- public (anonymous, allowlisted DTO) ----------------
-  r.get('/public/products', ['admin', 'portal'], async () => {
-    const products = await listProducts(getSql());
+  // ---------------- tester-visible projection (invited members only, WIN-04) ----------------
+  r.get('/public/products', ['admin', 'portal'], async (ctx) => {
+    // signed in: the products this account may read (none for uninvited or removed accounts)
+    const user = requireUser(ctx);
+    const products = await listReadableProducts(getSql(), user);
     return { data: products.map((p) => ({ id: p.id, name: p.name, slug: p.slug })) };
   });
 
   r.get('/public/products/:slug', ['admin', 'portal'], async (ctx) => {
-    const p = await productBySlug(getSql(), ctx.params.slug);
-    const v = await viewerOf(ctx, p.id);
-    return { data: { id: p.id, name: p.name, slug: p.slug, viewer: { loggedIn: Boolean(ctx.user), canInteract: v.canInteract, isTeam: v.isTeam } } };
+    const { p, v } = await reader(ctx);
+    return { data: { id: p.id, name: p.name, slug: p.slug, viewer: { loggedIn: true, canInteract: v.canInteract, isTeam: v.isTeam } } };
   });
 
   r.get('/public/products/:slug/feedback', ['admin', 'portal'], async (ctx) => {
-    const p = await productBySlug(getSql(), ctx.params.slug);
+    const { p, v } = await reader(ctx);
     const q = ctx.query(z.object({ q: z.string().max(200).optional(), cursor: z.string().max(200).optional(), limit: zLimit }));
-    const v = await viewerOf(ctx, p.id);
     const res = await listFeedbackIds(getSql(), p.id, { ...q, publicOnly: true });
     const items = await loadPublicFeedbackDtos(getSql(), p.id, res.ids, v.viewerId, v.canInteract, v.isTeam);
     return { data: items, meta: { nextCursor: res.nextCursor, total: res.total } };
   });
 
   r.get('/public/products/:slug/feedback/:f', ['admin', 'portal'], async (ctx) => {
-    const p = await productBySlug(getSql(), ctx.params.slug);
-    const v = await viewerOf(ctx, p.id);
+    const { p, v } = await reader(ctx);
     const [dto] = await loadPublicFeedbackDtos(getSql(), p.id, [uuidParam(ctx, 'f')], v.viewerId, v.canInteract, v.isTeam);
     if (!dto) throw new AppError('NOT_FOUND');
     return { data: dto };
   });
 
   r.get('/public/products/:slug/feedback/:f/comments', ['admin', 'portal'], async (ctx) => {
-    const p = await productBySlug(getSql(), ctx.params.slug);
+    const { p, v } = await reader(ctx);
     const q = ctx.query(z.object({ cursor: z.string().max(200).optional(), limit: zLimit }));
-    const res = await listPublicComments(getSql(), p.id, uuidParam(ctx, 'f'), ctx.user?.id ?? null, q);
+    const res = await listPublicComments(getSql(), p.id, uuidParam(ctx, 'f'), v.viewerId, q);
     return { data: res.items, meta: { nextCursor: res.nextCursor } };
   });
 
   // ---------------- portal interactions (team or invited tester) ----------------
   async function portalMember(ctx: Ctx) {
+    // membership first, so a non-member cannot tell which product IDs exist
+    requireMember(ctx);
     const productId = uuidParam(ctx, 'p');
     await requireProduct(getSql(), productId);
     const user = await requirePortalMember(ctx, getSql(), productId);

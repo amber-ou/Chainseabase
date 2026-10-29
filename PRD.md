@@ -44,4 +44,4 @@
 - 日曆可在平台內真實讀寫，正確處理 Google 權限、重複活動與更新衝突。
 - 以 [99 項驗收案例](docs/07-delivery-and-acceptance.md) 與約 30 人代表性負載實測判定完成；不以文件存在或假資料畫面代替驗收。
 
-既有應用已實作；使用者已回報 Windows 本機安裝、migration／bootstrap、建置、啟動與真實 Google 登入通過。Windows 正式服務、本機儲存與受邀讀取改造仍待實作；日曆、寄信及還原尚未驗證。進度與證據見 [tasks.md](tasks.md) 與 [驗收追蹤報告](docs/acceptance-report.md)。
+既有應用已實作；使用者已回報 Windows 本機安裝、migration／bootstrap、建置、啟動與真實 Google 登入通過。本機頭像儲存（WIN-02）已完成，受邀讀取（WIN-04）已實作待本機驗證；Windows 正式服務仍待實作；日曆、寄信及還原尚未驗證。進度與證據見 [tasks.md](tasks.md) 與 [驗收追蹤報告](docs/acceptance-report.md)。

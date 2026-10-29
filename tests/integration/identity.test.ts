@@ -87,10 +87,14 @@ describe('A02–A12 permissions, invitations and membership', () => {
     w = await seedWorld();
   });
 
-  it('A02 an uninvited Google account can browse public content but cannot interact or use admin APIs', async () => {
+  it('A02 an uninvited Google account cannot read company content, interact or use admin APIs (WIN-04)', async () => {
     const fb = await createFeedback(w, { visibility: 'public', title: '公開需求' });
+    // the anonymous-readable portal rule was retired (docs/windows-native-deployment.md, 存取規則變更)
     const pub = await api.get(`/public/products/${w.productA.slug}/feedback`, { site: 'portal', as: w.outsider });
-    expect(expectOk(pub).map((f: any) => f.id)).toContain(fb.id);
+    // reads answer 404 like an unknown resource (data-permissions.md); the account's own /me says why
+    expect(pub.status).toBe(404);
+    expect(JSON.stringify(pub.body)).not.toContain('公開需求');
+    expect(expectOk(await api.get('/public/products', { site: 'portal', as: w.outsider }))).toEqual([]);
     const me = expectOk(await api.get('/me', { site: 'portal', as: w.outsider }));
     expect(me.role).toBe('none');
     expect(me.interactiveProducts).toEqual([]);

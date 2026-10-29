@@ -37,7 +37,7 @@ export function PortalFeedbackPage() {
   return (
     <>
       <div className="page-head">
-        <div><h1>Feedback</h1><p className="sub">瀏覽公開的需求與回饋；受邀成員可以新增、投票與留言。</p></div>
+        <div><h1>Feedback</h1><p className="sub">受邀成員可見的需求與回饋；可以新增、投票與留言。</p></div>
         <Button variant="primary" onClick={() => (product.viewer.canInteract ? setCreating(true) : requireInteraction())}
           aria-describedby={!product.viewer.canInteract ? 'create-hint' : undefined}><IconPlus />新增回饋</Button>
       </div>
@@ -107,14 +107,14 @@ function CreatePortalFeedback({ productId, onClose, onCreated }: { productId: st
       setErrors({});
       try {
         const r = await api.post(`/portal/products/${productId}/feedback`, { key: key.current, body: { title, description } });
-        toast('success', '已送出回饋，內容公開顯示');
+        toast('success', '已送出回饋，受邀成員可以看到');
         onCreated(r.data.id);
       } catch (e) {
         setErrors(e instanceof ApiError ? { ...e.body.fieldErrors, _: e.message } : { _: errorMessage(e) });
       } finally { setPending(false); }
     }}>送出</Button></>}>
       {errors._ ? <div className="banner banner-error" role="alert">{errors._}（內容已保留）</div> : null}
-      <p className="small muted">送出後公開顯示於此網站。分類與處理狀態由團隊管理。</p>
+      <p className="small muted">送出後顯示給此產品的受邀成員。分類與處理狀態由團隊管理。</p>
       <Field label="標題" required error={errors.title}>{(p) => <input {...p} className="input" maxLength={200} value={title} onChange={(e) => { key.current = null; setTitle(e.target.value); }} data-autofocus />}</Field>
       <Field label="描述" hint="支援基本 Markdown（段落、清單、粗體、連結）" error={errors.description}>{(p) => <textarea {...p} className="textarea" rows={6} maxLength={20000} value={description} onChange={(e) => { key.current = null; setDescription(e.target.value); }} />}</Field>
     </Modal>

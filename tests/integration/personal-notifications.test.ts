@@ -214,7 +214,10 @@ describe('Notifications', () => {
     await runJobs();
     expect(expectOk(await notes(w.tester, 'portal'))).toHaveLength(1);
     await getSql()`delete from product_access where user_id = ${w.tester.id}`;
-    expect((await notes(w.tester, 'portal')).status).toBe(403);
+    // no access answers like an unknown product (data-permissions.md, WIN-04)
+    const after = await notes(w.tester, 'portal');
+    expect(after.status).toBe(404);
+    expect(JSON.stringify(after.body)).not.toContain('回覆');
   });
 
   it('N06 notifications are scoped to product and recipient; read marks are idempotent', async () => {

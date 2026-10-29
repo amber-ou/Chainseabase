@@ -346,7 +346,8 @@ main[tabindex="-1"]:focus { outline: none; }
   .fb-row { grid-template-columns: minmax(0, 1fr); }
   .btn, .menu-item, .tab, .nav-item, .list-row, .ms-option { min-height: 44px; }
   .btn-sm { min-height: 44px; }
-  .portal-top { padding: 0 16px; gap: 8px; }
+  /* a signed-in member's header (nav, notifications, account) wraps instead of widening the page */
+  .portal-top { flex-wrap: wrap; height: auto; min-height: 56px; padding: 8px 16px; gap: 4px 8px; }
   .portal-main { padding: 20px 16px 40px; }
   .page-head h1 { font-size: 20px; line-height: 28px; }
   .list-row { flex-wrap: wrap; }

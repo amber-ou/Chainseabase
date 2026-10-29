@@ -159,18 +159,18 @@ describe('Portal, visibility and public projection', () => {
     expect((await api.post(`/portal/products/${w.productA.id}/feedback`, { site: 'portal', as: w.tester, key: true, body: { title: 'x', priority: 'P3' } })).status).toBe(400);
   });
 
-  it('F09 anonymous responses contain only the allowlisted public fields', async () => {
+  it('F09 the invited tester projection contains only the allowlisted public fields', async () => {
     const fb = await createFeedback(w, { visibility: 'public', personTagIds: [w.ptUiux], versionTagId: w.v10, tagIds: [w.perf], priority: 'P1', title: '公開項目' });
     expectOk(await api.post(`/products/${w.productA.id}/feedback/${fb.id}/schedule/comments`, { as: w.teamA, key: true, body: { body: '/2-3 內部工作', expectedRevision: 1 } }), 201);
     expectOk(await api.post(`/products/${w.productA.id}/feedback/${fb.id}/comments`, { as: w.teamA, body: { body: '公開留言' } }), 201);
     const rms = expectOk(await api.get(`/products/${w.productA.id}/roadmaps`, { as: w.teamA }));
     expectOk(await api.patch(`/products/${w.productA.id}/roadmaps/${rms[0].id}`, { as: w.teamA, body: { portalPublished: true, expectedRevision: rms[0].revision } }));
     const responses = [
-      await api.get(`/public/products/${w.productA.slug}/feedback`, { site: 'portal' }),
-      await api.get(`/public/products/${w.productA.slug}/feedback/${fb.id}`, { site: 'portal' }),
-      await api.get(`/public/products/${w.productA.slug}/feedback?q=${encodeURIComponent('公開')}`, { site: 'portal' }),
-      await api.get(`/public/products/${w.productA.slug}/feedback/${fb.id}/comments`, { site: 'portal' }),
-      await api.get(`/public/products/${w.productA.slug}/roadmaps/${rms[0].id}`, { site: 'portal' }),
+      await api.get(`/public/products/${w.productA.slug}/feedback`, { site: 'portal', as: w.tester }),
+      await api.get(`/public/products/${w.productA.slug}/feedback/${fb.id}`, { site: 'portal', as: w.tester }),
+      await api.get(`/public/products/${w.productA.slug}/feedback?q=${encodeURIComponent('公開')}`, { site: 'portal', as: w.tester }),
+      await api.get(`/public/products/${w.productA.slug}/feedback/${fb.id}/comments`, { site: 'portal', as: w.tester }),
+      await api.get(`/public/products/${w.productA.slug}/roadmaps/${rms[0].id}`, { site: 'portal', as: w.tester }),
     ];
     for (const r of responses) {
       expect(r.status).toBe(200);
@@ -193,12 +193,12 @@ describe('Portal, visibility and public projection', () => {
     const internal = expectOk(await api.get(`/products/${w.productA.id}/feedback/${created.id}`, { as: w.teamA }));
     expectOk(await api.patch(`/products/${w.productA.id}/feedback/${created.id}`, { as: w.teamA, body: { visibility: 'internal', expectedRevision: internal.revision } }));
     expect((await api.get(`/public/products/${w.productA.slug}/feedback/${created.id}`, { site: 'portal', as: w.tester })).status).toBe(404);
-    expect(expectOk(await api.get(`/public/products/${w.productA.slug}/feedback?q=${encodeURIComponent('曾公開')}`, { site: 'portal' }))).toEqual([]);
+    expect(expectOk(await api.get(`/public/products/${w.productA.slug}/feedback?q=${encodeURIComponent('曾公開')}`, { site: 'portal', as: w.tester }))).toEqual([]);
     expect(expectOk(await api.get(`/portal/products/${w.productA.id}/notifications`, { site: 'portal', as: w.tester }))).toEqual([]);
     const edit = await api.patch(`/portal/products/${w.productA.id}/feedback/${created.id}`, { site: 'portal', as: w.tester, body: { title: '改', expectedRevision: internal.revision + 1 } });
     expect(edit.status).toBe(404);
-    expect((await api.get(`/public/products/${w.productA.slug}/feedback/${created.id}/comments`, { site: 'portal' })).status).toBe(404);
-    const r = await api.get(`/public/products/${w.productA.slug}/feedback/${created.id}`, { site: 'portal' });
+    expect((await api.get(`/public/products/${w.productA.slug}/feedback/${created.id}/comments`, { site: 'portal', as: w.tester })).status).toBe(404);
+    const r = await api.get(`/public/products/${w.productA.slug}/feedback/${created.id}`, { site: 'portal', as: w.tester });
     expect(r.headers.get('cache-control')).toContain('no-store');
   });
 
@@ -206,7 +206,7 @@ describe('Portal, visibility and public projection', () => {
     const fb = await createFeedback(w, { visibility: 'public' });
     expectOk(await api.post(`/products/${w.productA.id}/feedback/${fb.id}/comments`, { as: w.teamA, body: { body: '後台公開留言' } }), 201);
     expectOk(await api.post(`/products/${w.productA.id}/feedback/${fb.id}/schedule/comments`, { as: w.teamA, key: true, body: { body: '排程內部說明', expectedRevision: 1 } }), 201);
-    const pub = expectOk(await api.get(`/public/products/${w.productA.slug}/feedback/${fb.id}/comments`, { site: 'portal' }));
+    const pub = expectOk(await api.get(`/public/products/${w.productA.slug}/feedback/${fb.id}/comments`, { site: 'portal', as: w.tester }));
     expect(pub.map((c: any) => c.body)).toEqual(['後台公開留言']);
   });
 
@@ -227,7 +227,7 @@ describe('Portal, visibility and public projection', () => {
     expectOk(await api.del(`/portal/products/${w.productA.id}/comments/${c.id}/like`, { site: 'portal', as: w.tester }));
     pub = expectOk(await api.get(`/public/products/${w.productA.slug}/feedback/${fb.id}`, { site: 'portal', as: w.tester }));
     expect(pub.voteCount).toBe(0);
-    comments = expectOk(await api.get(`/public/products/${w.productA.slug}/feedback/${fb.id}/comments`, { site: 'portal' }));
+    comments = expectOk(await api.get(`/public/products/${w.productA.slug}/feedback/${fb.id}/comments`, { site: 'portal', as: w.tester }));
     expect(comments[0].likeCount).toBe(0);
   });
 
@@ -252,7 +252,7 @@ describe('Portal, visibility and public projection', () => {
     await createFeedback(w, { title: '搜尋欄位在乙' }, w.teamA, w.productB.id);
     const internal = expectOk(await api.get(`/products/${w.productA.id}/feedback?q=${encodeURIComponent('欄位')}`, { as: w.teamA }));
     expect(internal.map((f: any) => f.title).sort()).toEqual(['內部：搜尋欄位權限', '搜尋欄位支援繁體中文'].sort());
-    const pub = expectOk(await api.get(`/public/products/${w.productA.slug}/feedback?q=${encodeURIComponent('欄位')}`, { site: 'portal' }));
+    const pub = expectOk(await api.get(`/public/products/${w.productA.slug}/feedback?q=${encodeURIComponent('欄位')}`, { site: 'portal', as: w.tester }));
     expect(pub.map((f: any) => f.title)).toEqual(['搜尋欄位支援繁體中文']);
     expect(expectOk(await api.get(`/products/${w.productA.id}/feedback?q=${encodeURIComponent('%')}`, { as: w.teamA })).map((f: any) => f.title)).toEqual(['100% 完成_率']);
     expect(expectOk(await api.get(`/products/${w.productA.id}/feedback?q=${encodeURIComponent('_')}`, { as: w.teamA })).map((f: any) => f.title)).toEqual(['100% 完成_率']);
@@ -264,7 +264,7 @@ describe('Portal, visibility and public projection', () => {
   it('F15 (storage part) script/HTML are stored as text and returned verbatim for safe rendering', async () => {
     const payload = '<script>alert(1)</script> [x](javascript:alert(1)) <img src=x onerror=alert(1)>';
     const fb = await createFeedback(w, { title: '<b>粗體</b>', description: payload, visibility: 'public' });
-    const pub = expectOk(await api.get(`/public/products/${w.productA.slug}/feedback/${fb.id}`, { site: 'portal' }));
+    const pub = expectOk(await api.get(`/public/products/${w.productA.slug}/feedback/${fb.id}`, { site: 'portal', as: w.tester }));
     expect(pub.description).toBe(payload);
     expect(pub.title).toBe('<b>粗體</b>');
   });
@@ -285,7 +285,7 @@ describe('Portal, visibility and public projection', () => {
     expect((await api.del(`/products/${w.productA.id}/feedback/${fb.id}`, { as: w.teamA, ifMatch: fb.revision + 5 })).status).toBe(409);
     expectOk(await api.del(`/products/${w.productA.id}/feedback/${fb.id}`, { as: w.teamA, ifMatch: fb.revision }));
     expect((await api.get(`/products/${w.productA.id}/feedback/${fb.id}`, { as: w.teamA })).status).toBe(404);
-    expect(expectOk(await api.get(`/public/products/${w.productA.slug}/feedback`, { site: 'portal' }))).toEqual([]);
+    expect(expectOk(await api.get(`/public/products/${w.productA.slug}/feedback`, { site: 'portal', as: w.tester }))).toEqual([]);
     expect((await getSql()`select deleted_at from feedback where id = ${fb.id}`)[0].deletedAt).not.toBeNull();
   });
 });
