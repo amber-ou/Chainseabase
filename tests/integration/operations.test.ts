@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { getSql } from '@/server/db';
+import { createSql, getSql, setSql } from '@/server/db';
+import { getConfig } from '@/server/config';
 import { logError, logInfo } from '@/server/log';
 import { api, createFeedback, expectOk, installFakes, resetDb, runJobs, seedWorld, type World } from '../helpers/harness';
 
@@ -65,5 +66,22 @@ describe('operations', () => {
     const expected = { ok: true, environment: 'development', providers: { calendar: 'fake', email: 'fake', storage: 'fake' }, storageBackend: 'fake' };
     expect(expectOk(await api.get('/health'))).toEqual(expected);
     expect(expectOk(await api.get('/health', { site: 'portal' }))).toEqual(expected);
+  });
+
+  it('WIN-03 health answers 503 (not a generic 500) while the database is unreachable, then recovers', async () => {
+    const real = getSql();
+    const url = getConfig().databaseUrl;
+    const down = createSql('postgres://nobody@127.0.0.1:9/nothing', 1);
+    setSql(down, url);
+    try {
+      const r = await api.get('/health');
+      expect(r.status).toBe(503);
+      expect(r.body.data).toMatchObject({ ok: false, database: 'unavailable', environment: 'development' });
+      expect(JSON.stringify(r.body)).not.toContain('127.0.0.1:9');
+    } finally {
+      setSql(real, url);
+      await down.end({ timeout: 1 });
+    }
+    expect(expectOk(await api.get('/health')).ok).toBe(true);
   });
 });

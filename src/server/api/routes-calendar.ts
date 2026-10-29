@@ -4,6 +4,7 @@ import { uuidParam } from '../http';
 import { getConfig } from '../config';
 import { getSql, withTx } from '../db';
 import { AppError } from '../errors';
+import { logError } from '../log';
 import { requireProduct, requireTeam } from '../authz';
 import { safeEqual } from '../crypto';
 import { getGoogleOAuth } from '../adapters/google-oauth';
@@ -169,10 +170,17 @@ export function registerCalendarRoutes(r: Router) {
   });
 
   r.get('/health', ['admin', 'portal'], async () => {
-    await getSql()`select 1`;
     // modes only (real/fake) and the storage backend name, never credentials or paths: lets
     // staging prove it is not running on fakes
     const cfg = getConfig();
-    return { data: { ok: true, environment: cfg.deploymentEnv, providers: { calendar: cfg.calendarProvider, email: cfg.emailProvider, storage: cfg.storageProvider }, storageBackend: cfg.storageBackend } };
+    const info = { environment: cfg.deploymentEnv, providers: { calendar: cfg.calendarProvider, email: cfg.emailProvider, storage: cfg.storageProvider }, storageBackend: cfg.storageBackend };
+    try {
+      await getSql()`select 1`;
+    } catch (e) {
+      // the service keeps running while PostgreSQL restarts; monitors see 503, not a generic 500
+      logError('health.database', e);
+      return { status: 503, data: { ok: false, database: 'unavailable', ...info } };
+    }
+    return { data: { ok: true, ...info } };
   });
 }

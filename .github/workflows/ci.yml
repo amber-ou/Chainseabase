@@ -102,7 +102,7 @@ jobs:
   # tooling, NTFS ACLs, the configuration loader, migrations and the test suite.
   win-native:
     runs-on: windows-2025
-    timeout-minutes: 45
+    timeout-minutes: 90
     defaults:
       run:
         shell: pwsh
@@ -120,7 +120,7 @@ jobs:
         run: npm install -g npm@10.9.4
       - name: Parse PowerShell scripts (PowerShell 7)
         run: |
-          foreach ($f in Get-ChildItem scripts/windows/*.ps1) {
+          foreach ($f in Get-ChildItem scripts/windows/*.ps1, scripts/windows/*.psm1) {
             $errs = $null
             [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs) | Out-Null
             if ($errs) { $errs | Format-List | Out-String | Write-Output; throw "parse errors in $($f.Name)" }
@@ -129,7 +129,7 @@ jobs:
       - name: Parse PowerShell scripts (Windows PowerShell 5.1)
         shell: powershell
         run: |
-          foreach ($f in Get-ChildItem scripts/windows/*.ps1) {
+          foreach ($f in Get-ChildItem scripts/windows/*.ps1, scripts/windows/*.psm1) {
             $errs = $null
             [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs) | Out-Null
             if ($errs) { $errs | Format-List | Out-String | Write-Output; throw "parse errors in $($f.Name)" }
@@ -319,3 +319,106 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'createdb failed' }
           npm test
           if ($LASTEXITCODE -ne 0) { throw "npm test exit $LASTEXITCODE" }
+      - name: WIN-03 Windows service (virtual account, recovery, database wait, logs, update/rollback, uninstall)
+        run: |
+          $name = 'Chainseabase'
+          $cfg = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'
+          $logs = Join-Path $env:ProgramData 'Chainseabase\logs'
+          $releases = Join-Path $env:ProgramFiles 'Chainseabase\releases'
+          $avatars = Join-Path $env:ProgramData 'Chainseabase\data\avatars'
+          Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+          function Health { try { (Invoke-WebRequest 'http://127.0.0.1:3000/api/v1/health' -UseBasicParsing -TimeoutSec 5).StatusCode } catch { 0 } }
+          function WaitFor([scriptblock]$Condition, [int]$Seconds, [string]$What) {
+            for ($i = 0; $i -lt $Seconds; $i++) { if (& $Condition) { return } ; Start-Sleep -Seconds 1 }
+            Get-ChildItem $logs | Format-Table Name, Length, LastWriteTime | Out-String | Write-Output
+            Get-Content (Join-Path $logs "$name.out.log") -Tail 40 -ErrorAction SilentlyContinue
+            Get-Content (Join-Path $logs "$name.err.log") -Tail 40 -ErrorAction SilentlyContinue
+            throw "timed out: $What"
+          }
+          function WrapperPid { (Get-CimInstance Win32_Service -Filter "Name='$name'").ProcessId }
+          function NodePid { $w = WrapperPid; if ($w) { (Get-CimInstance Win32_Process -Filter "ParentProcessId=$w AND Name='node.exe'" | Select-Object -First 1).ProcessId } }
+          function OutLog { (Get-ChildItem $logs -Filter "$name.out*.log" | ForEach-Object { $fs = [IO.File]::Open($_.FullName, 'Open', 'Read', 'ReadWrite, Delete'); try { (New-Object IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Dispose() } }) -join "`n" }
+          # requests are logged so rotation can be exercised with a small threshold
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name LOG_REQUESTS -Value (ConvertTo-SecureString '1' -AsPlainText -Force)
+
+          # install (downloads WinSW and verifies the pinned SHA-256), then re-run the installer
+          .\scripts\windows\Install-ChainseabaseService.ps1 -ConfigFile $cfg -LogSizeKB 8 -LogKeepFiles 3 -DbWaitSeconds 300
+          if ($LASTEXITCODE -ne 0) { throw "install exit $LASTEXITCODE" }
+          $first = (Get-ChildItem $releases -Directory | Sort-Object Name | Select-Object -Last 1).FullName
+          .\scripts\windows\Install-ChainseabaseService.ps1 -ConfigFile $cfg -LogSizeKB 8 -LogKeepFiles 3 -DbWaitSeconds 300
+          if ($LASTEXITCODE -ne 0) { throw "re-run install exit $LASTEXITCODE" }
+          $second = (Get-ChildItem $releases -Directory | Sort-Object Name | Select-Object -Last 1).FullName
+          if ($first -eq $second) { throw 'the re-run did not build a new release' }
+          (Get-AuthenticodeSignature (Join-Path $env:ProgramFiles "Chainseabase\service\$name.exe")).Status | ForEach-Object { "WinSW Authenticode status: $_" }
+          .\scripts\windows\Test-ChainseabaseService.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseService exit $LASTEXITCODE" }
+          .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg -AllowedReader "NT SERVICE\$name"
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseConfig exit $LASTEXITCODE" }
+          .\scripts\windows\Set-ChainseabaseServiceState.ps1 -Action Status
+          if ($LASTEXITCODE -ne 0) { throw "status exit $LASTEXITCODE" }
+
+          # failure recovery: the website process dies, then the wrapper itself dies
+          $n1 = NodePid; Stop-Process -Id $n1 -Force
+          WaitFor { (Health) -eq 200 -and (NodePid) -and (NodePid) -ne $n1 } 150 'recovery after the website process was killed'
+          $w1 = WrapperPid; Stop-Process -Id $w1 -Force
+          WaitFor { (Health) -eq 200 -and (WrapperPid) -and (WrapperPid) -ne $w1 } 150 'recovery after the service wrapper was killed'
+          Write-Output 'PASS service restarted itself after the website process and the wrapper were killed'
+
+          # database not ready: point the service at a port with nothing behind it, then let it through
+          $url = (Get-Content $cfg | Where-Object { $_ -match '^DATABASE_URL=' }) -replace '^DATABASE_URL=', ''
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name DATABASE_URL -Value (ConvertTo-SecureString ($url -replace ':5432/', ':55432/') -AsPlainText -Force)
+          .\scripts\windows\Set-ChainseabaseServiceState.ps1 -Action Stop
+          if ($LASTEXITCODE -ne 0) { throw "stop exit $LASTEXITCODE" }
+          Start-Service $name
+          WaitFor { (OutLog) -match '"event":"db.wait".*"errorCode":"ECONNREFUSED"' } 60 'db.wait while the database is unreachable'
+          if ((Health) -eq 200) { throw 'healthy without a database' }
+          # a loopback TCP forwarder 55432 -> 5432 stands in for "PostgreSQL finished starting"
+          $proxyJs = Join-Path $env:RUNNER_TEMP 'db-proxy.js'
+          Set-Content -LiteralPath $proxyJs -Value "require('net').createServer(c=>{const s=require('net').connect(5432,'127.0.0.1');c.pipe(s).pipe(c);c.on('error',()=>s.destroy());s.on('error',()=>c.destroy())}).listen(55432,'127.0.0.1')"
+          $proxy = Start-Process -FilePath node -PassThru -ArgumentList $proxyJs
+          WaitFor { (Health) -eq 200 } 120 'healthy once the database answers'
+          if ((OutLog) -notmatch '"event":"db.ready","attempt":([2-9]|\d\d)') { throw 'db.ready after retries not logged' }
+          Write-Output 'PASS the service waited for the database and started when it answered'
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name DATABASE_URL -Value (ConvertTo-SecureString $url -AsPlainText -Force)
+          .\scripts\windows\Set-ChainseabaseServiceState.ps1 -Action Restart
+          if ($LASTEXITCODE -ne 0) { throw "restart exit $LASTEXITCODE" }
+          Stop-Process -Id $proxy.Id -Force
+
+          # log rotation by size (8 KB, keep 3)
+          for ($i = 0; $i -lt 400; $i++) { [void](Health) }
+          WaitFor { @(Get-ChildItem $logs -Filter "$name.out*.log").Count -ge 2 } 30 'rolled log files'
+          $outFiles = @(Get-ChildItem $logs -Filter "$name.out*.log")
+          $outFiles | Format-Table Name, Length | Out-String | Write-Output
+          if ($outFiles.Count -gt 4) { throw "kept $($outFiles.Count) log files, limit 4" }
+          if ((OutLog) -match 'PGPASSWORD|postgresql://|postgres://') { throw 'a connection string or password appeared in the log' }
+          Write-Output 'PASS logs roll by size and keep at most 3 old files; no connection strings in logs'
+
+          # update: switch releases, then an unhealthy release rolls back automatically
+          .\scripts\windows\Update-ChainseabaseService.ps1 -UseRelease (Split-Path -Leaf $first)
+          if ($LASTEXITCODE -ne 0) { throw "switch to the first release exit $LASTEXITCODE" }
+          Rename-Item (Join-Path $second '.next\server') 'server.disabled'
+          .\scripts\windows\Update-ChainseabaseService.ps1 -UseRelease (Split-Path -Leaf $second) -HealthTimeoutSec 60
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1 and a rollback, got $LASTEXITCODE" }
+          [xml]$x = Get-Content (Join-Path $env:ProgramFiles "Chainseabase\service\$name.xml") -Raw
+          if ($x.service.workingdirectory -ne $first -or (Health) -ne 200) { throw 'not rolled back to the healthy release' }
+          Rename-Item (Join-Path $second '.next\server.disabled') 'server'
+          .\scripts\windows\Update-ChainseabaseService.ps1 -UseRelease (Split-Path -Leaf $second)
+          if ($LASTEXITCODE -ne 0) { throw "switch to the second release exit $LASTEXITCODE" }
+          .\scripts\windows\Test-ChainseabaseService.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseService after update exit $LASTEXITCODE" }
+          Write-Output 'PASS release switch, automatic rollback of an unhealthy release, switch forward'
+
+          # uninstall keeps configuration, secrets, avatars and logs; re-running is harmless
+          $cfgHash = (Get-FileHash $cfg).Hash
+          $avatarCount = @(Get-ChildItem $avatars -Recurse -File).Count
+          .\scripts\windows\Uninstall-ChainseabaseService.ps1
+          if ($LASTEXITCODE -ne 0) { throw "uninstall exit $LASTEXITCODE" }
+          .\scripts\windows\Uninstall-ChainseabaseService.ps1
+          if ($LASTEXITCODE -ne 0) { throw "uninstall re-run exit $LASTEXITCODE" }
+          if (Get-Service $name -ErrorAction SilentlyContinue) { throw 'service still installed' }
+          if ((Get-FileHash $cfg).Hash -ne $cfgHash) { throw 'configuration file changed' }
+          if (@(Get-ChildItem $avatars -Recurse -File).Count -ne $avatarCount -or $avatarCount -lt 1) { throw 'avatar files changed' }
+          if (@(Get-ChildItem $logs -File).Count -lt 1) { throw 'logs removed' }
+          if (@((Get-Acl $cfg).Access | Where-Object { $_.IdentityReference.Value -like "*$name*" -or $_.IdentityReference.Value -like 'S-1-5-80-*' }).Count) { throw 'service account permission left on the configuration file' }
+          if (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue) { throw 'port 3000 still in use' }
+          Write-Output 'PASS uninstall removed the service and its permissions; configuration, avatars and logs kept'
