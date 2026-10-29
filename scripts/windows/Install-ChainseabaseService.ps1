@@ -114,8 +114,7 @@ $settings = [pscustomobject]@{
   DbWaitSeconds = $DbWaitSeconds; LogSizeKB = $LogSizeKB; LogKeepFiles = $LogKeepFiles; LogRoot = $paths.Logs; ProgramRoot = $ProgramRoot
 }
 if ($existing) {
-  if ($existing.Status -ne 'Stopped') { Stop-Service -Name $ServiceName -Force }
-  if (-not (Wait-PortReleased $Port 30)) { Fail "port $Port still in use after stopping $ServiceName" }
+  if (-not (Stop-ChainseabaseService $ServiceName $Port)) { Fail "$ServiceName did not stop (or port $Port stayed in use)" }
 }
 Write-ServiceXml $paths $ServiceName $release $settings
 if (-not $existing) {

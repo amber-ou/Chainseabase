@@ -263,10 +263,18 @@ function Wait-Healthy([int]$Port, [int]$TimeoutSec) {
   return $false
 }
 
-function Wait-PortReleased([int]$Port, [int]$TimeoutSec) {
+function Stop-ChainseabaseService([string]$ServiceName, [int]$Port, [int]$TimeoutSec = 90) {
+  # a failing release is restarted by the recovery actions, so a stop request can arrive while the
+  # service is starting or stopping, when it cannot accept controls (Stop-Service then fails). Retry
+  # until it is stopped and the port is free; a stop issued during a recovery restart is re-issued.
   $deadline = (Get-Date).AddSeconds($TimeoutSec)
   while ((Get-Date) -lt $deadline) {
-    if (-not (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)) { return $true }
+    $s = Get-Service -Name $ServiceName
+    if ($s.Status -eq 'Stopped') {
+      if (-not (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)) { return $true }
+    } elseif ($s.Status -in @('Running', 'Paused')) {
+      try { $s.Stop() } catch { }
+    }
     Start-Sleep -Seconds 1
   }
   return $false

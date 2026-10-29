@@ -36,8 +36,7 @@ $settings = Get-Content -LiteralPath $installJson -Raw | ConvertFrom-Json
 $port = [int]$settings.Port
 
 if ($Action -in @('Stop', 'Restart')) {
-  Stop-Service -Name $ServiceName -Force
-  if (-not (Wait-PortReleased $port 30)) { Write-Output "FAIL port $port still in use after stopping"; exit 1 }
+  if (-not (Stop-ChainseabaseService $ServiceName $port)) { Write-Output "FAIL $ServiceName did not stop (or port $port stayed in use)"; exit 1 }
   Write-Output "stopped; port $port released"
 }
 if ($Action -in @('Start', 'Restart')) {

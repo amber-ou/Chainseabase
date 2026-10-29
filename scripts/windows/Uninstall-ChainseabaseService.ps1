@@ -36,8 +36,9 @@ if (Test-Path -LiteralPath $installJson) { $settings = Get-Content -LiteralPath 
 $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($svc) {
   $sid = Get-ServiceSid $ServiceName
-  if ($svc.Status -ne 'Stopped') { Stop-Service -Name $ServiceName -Force }
-  if ($settings) { [void](Wait-PortReleased ([int]$settings.Port) 30) }
+  if ($settings) {
+    if (-not (Stop-ChainseabaseService $ServiceName ([int]$settings.Port))) { Write-Output "FAIL $ServiceName did not stop (or port $($settings.Port) stayed in use); nothing was removed"; exit 1 }
+  } elseif ($svc.Status -ne 'Stopped') { Stop-Service -Name $ServiceName -Force }
   # permissions granted at install, removed by SID (files and folders stay)
   if ($settings) {
     foreach ($p in @($settings.ConfigFile, (Split-Path -Parent $settings.ConfigFile), $settings.LogRoot)) { Remove-PathAccess $p $sid }

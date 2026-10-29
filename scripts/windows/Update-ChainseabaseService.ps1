@@ -75,9 +75,12 @@ if ($Migrate) {
 # 3. switch, verify, roll back on failure
 function Switch-To([string]$Dir) {
   Write-ServiceXml $paths $ServiceName $Dir $settings
-  Stop-Service -Name $ServiceName -Force
-  if (-not (Wait-PortReleased $settings.Port 30)) { throw "port $($settings.Port) still in use after stopping" }
-  Start-Service -Name $ServiceName
+  if (-not (Stop-ChainseabaseService $ServiceName ([int]$settings.Port))) {
+    # Write-Host: anything written to the output here would become part of the return value
+    Write-Host "$ServiceName did not stop (or port $($settings.Port) stayed in use)"
+    return $false
+  }
+  try { Start-Service -Name $ServiceName } catch { Write-Host "start failed: $($_.Exception.Message)"; return $false }
   return (Wait-Healthy $settings.Port $HealthTimeoutSec)
 }
 if (Switch-To $release) {
