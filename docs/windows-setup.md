@@ -244,7 +244,7 @@ Restart-Computer
 ```powershell
 .\scripts\windows\Test-ChainseabaseService.ps1 -BootReport
 echo "exit=$LASTEXITCODE"
-Select-String -Path 'C:\ProgramData\Chainseabase\logs\Chainseabase.out*.log' -Pattern '"event":"(db\.wait|db\.ready|website\.ready)"' | Select-Object -Last 6
+Select-String -Path 'C:\ProgramData\Chainseabase\logs\Chainseabase.*out.log' -Pattern '"event":"(db\.wait|db\.ready|website\.ready)"' | Select-Object -Last 6
 ```
 
 `-BootReport` 比較開機時間、開機後第一次 `website.ready` 與第一次互動登入時間；網站必須在有人登入前就已就緒。最後一行會列出開機時是否等待過資料庫（`db.wait`）以及就緒時間；PostgreSQL 若先完成啟動則不會出現 `db.wait`，此時等待邏輯的證據來自 CI。

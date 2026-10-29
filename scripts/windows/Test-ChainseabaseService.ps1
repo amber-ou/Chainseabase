@@ -111,7 +111,7 @@ Check ((Get-Acl -LiteralPath $release).AreAccessRulesProtected) 'release folder 
 # logs
 [xml]$x = [IO.File]::ReadAllText($paths.Xml)
 Check ($x.service.log.mode -eq 'roll-by-size') "log rotation: roll-by-size, $($x.service.log.sizeThreshold) KB, keep $($x.service.log.keepFiles)"
-$outLogs = @(Get-ChildItem -LiteralPath $paths.Logs -Filter "$ServiceName.out*.log" -File -ErrorAction SilentlyContinue)
+$outLogs = @(Get-ChildItem -LiteralPath $paths.Logs -Filter "$ServiceName.*out.log" -File -ErrorAction SilentlyContinue)
 Check ($outLogs.Count -ge 1 -and $outLogs.Count -le ([int]$x.service.log.keepFiles + 1)) "log files: $($outLogs.Count) (limit $([int]$x.service.log.keepFiles + 1))"
 $wrapperStart = (Get-CimInstance Win32_Process -Filter "ProcessId=$($svc.ProcessId)").CreationDate
 # the running website process logs its own pid at start; finding it proves the service account wrote

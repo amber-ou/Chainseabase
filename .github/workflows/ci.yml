@@ -337,7 +337,7 @@ jobs:
           }
           function WrapperPid { (Get-CimInstance Win32_Service -Filter "Name='$name'").ProcessId }
           function NodePid { $w = WrapperPid; if ($w) { (Get-CimInstance Win32_Process -Filter "ParentProcessId=$w AND Name='node.exe'" | Select-Object -First 1).ProcessId } }
-          function OutLog { (Get-ChildItem $logs -Filter "$name.out*.log" | ForEach-Object { $fs = [IO.File]::Open($_.FullName, 'Open', 'Read', 'ReadWrite, Delete'); try { (New-Object IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Dispose() } }) -join "`n" }
+          function OutLog { (Get-ChildItem $logs -Filter "$name.*out.log" | ForEach-Object { $fs = [IO.File]::Open($_.FullName, 'Open', 'Read', 'ReadWrite, Delete'); try { (New-Object IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Dispose() } }) -join "`n" }
           # requests are logged so rotation can be exercised with a small threshold
           .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name LOG_REQUESTS -Value (ConvertTo-SecureString '1' -AsPlainText -Force)
 
@@ -391,8 +391,8 @@ jobs:
 
           # log rotation by size (8 KB, keep 3)
           for ($i = 0; $i -lt 400; $i++) { [void](Health) }
-          WaitFor { @(Get-ChildItem $logs -Filter "$name.out*.log").Count -ge 2 } 30 'rolled log files'
-          $outFiles = @(Get-ChildItem $logs -Filter "$name.out*.log")
+          WaitFor { @(Get-ChildItem $logs -Filter "$name.*out.log").Count -ge 2 } 30 'rolled log files'
+          $outFiles = @(Get-ChildItem $logs -Filter "$name.*out.log")
           $outFiles | Format-Table Name, Length | Out-String | Write-Output
           if ($outFiles.Count -gt 4) { throw "kept $($outFiles.Count) log files, limit 4" }
           if ((OutLog) -match 'PGPASSWORD|postgresql://|postgres://') { throw 'a connection string or password appeared in the log' }
