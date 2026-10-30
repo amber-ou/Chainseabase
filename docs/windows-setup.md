@@ -239,15 +239,57 @@ echo "exit=$LASTEXITCODE"
 Restart-Computer
 ```
 
-重新開機後**至少 3 分鐘不要登入**，再登入並執行：
+重新開機後停在登入畫面**至少 6 分鐘不要登入**（實機一次開機到網站就緒約 4.5 分鐘，見下方耗時說明），再登入並執行：
 
 ```powershell
 .\scripts\windows\Test-ChainseabaseService.ps1 -BootReport
 echo "exit=$LASTEXITCODE"
-Select-String -Path 'C:\ProgramData\Chainseabase\logs\Chainseabase.*out.log' -Pattern '"event":"(db\.wait|db\.ready|website\.ready)"' | Select-Object -Last 6
 ```
 
-`-BootReport` 比較開機時間、開機後第一次 `website.ready` 與第一次互動登入時間；網站必須在有人登入前就已就緒。最後一行會列出開機時是否等待過資料庫（`db.wait`）以及就緒時間；PostgreSQL 若先完成啟動則不會出現 `db.wait`，此時等待邏輯的證據來自 CI。
+`-BootReport` 列出開機後的時間軸（PostgreSQL 服務程序、服務 wrapper、`website.starting`、資料庫等待次數、`db.ready`、`website.ready`，各附開機後經過時間），再列出開機後所有互動式登入工作階段：時間、分類、LogonType、帳號、SID、LogonId、Windows 工作階段編號與來源。來源有兩個：仍存在的登入工作階段，以及安全性記錄檔事件 4624（含已結束的工作階段）。
+
+分類依 SID 判斷，不依顯示文字：
+- `person`：本機或網域帳號 `S-1-5-21-…`、Microsoft Entra ID 帳號 `S-1-12-1-…`。
+- `windows`：Windows 自己的工作階段，包括 Window Manager `DWM-n`（`S-1-5-90-…`）、Font Driver Host `UMFD-n`（`S-1-5-96-…`）、SYSTEM 與服務帳號。DWM 與 UMFD 每次開機都會在幾秒內以 LogonType 2（互動式）建立，不代表有人登入。
+- `unknown`：無法辨識的帳號，**視同有人登入**。
+
+判定：網站必須在第一個非 `windows` 的登入之前就緒，而且必須讀得到安全性記錄檔（否則無法排除已結束的登入），兩者皆通過才 PASS。報告同時顯示自動登入設定（Winlogon `AutoAdminLogon`；自動重新啟動登入 ARSO 的原則與各帳號紀錄），只讀取、不顯示密碼。第一個登入若屬自動登入，會標示出來，但仍算已登入。
+
+若判定結果與實際情況不符，可用以下**唯讀**指令自行核對（不修改任何設定）：
+
+```powershell
+$boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime; "Boot: $boot"
+# 1. 開機後的互動式登入工作階段：帳號、SID、LogonType、LogonId、Windows 工作階段編號
+$acct = @{}; foreach ($l in Get-CimInstance Win32_LoggedOnUser) { $acct["$($l.Dependent.LogonId)"] = "$($l.Antecedent.Domain)\$($l.Antecedent.Name)" }
+Get-CimInstance Win32_LogonSession | Where-Object { $_.StartTime -ge $boot -and $_.LogonType -in 2,10,11,12 } | Sort-Object StartTime | ForEach-Object {
+  $a = $acct["$($_.LogonId)"]
+  $sid = '?'; try { $sid = (New-Object Security.Principal.NTAccount($a)).Translate([Security.Principal.SecurityIdentifier]).Value } catch { }
+  [pscustomobject]@{ Start = $_.StartTime; LogonType = $_.LogonType; Account = $a; Sid = $sid; LogonId = $_.LogonId
+    Session = (@(Get-CimAssociatedInstance -InputObject $_ -ResultClassName Win32_Process -ErrorAction SilentlyContinue | ForEach-Object SessionId | Sort-Object -Unique) -join ',') }
+} | Format-Table -AutoSize
+# 2. 安全性記錄檔 4624（含已結束的登入）：LogonType 2 互動、10 遠端、11/12 快取；LogonId 換成十進位以便對照上表
+Get-WinEvent -FilterHashtable @{ LogName = 'Security'; Id = 4624; StartTime = $boot } | ForEach-Object {
+  $d = @{}; foreach ($n in ([xml]$_.ToXml()).Event.EventData.Data) { $d[$n.GetAttribute('Name')] = $n.InnerText }
+  if ($d.LogonType -in '2','10','11','12') { [pscustomobject]@{ Time = $_.TimeCreated; LogonType = $d.LogonType; Account = "$($d.TargetDomainName)\$($d.TargetUserName)"; Sid = $d.TargetUserSid
+    LogonId = [Convert]::ToUInt64(($d.TargetLogonId -replace '^0x',''), 16); Process = $d.ProcessName; Elevated = $d.ElevatedToken } }
+} | Sort-Object Time | Format-Table -AutoSize
+# 3. 使用者登入通知（Winlogon 7001，只有真正的使用者工作階段才有）
+Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Microsoft-Windows-Winlogon'; Id = 7001; StartTime = $boot } -ErrorAction SilentlyContinue | ForEach-Object {
+  $x = [xml]$_.ToXml(); $v = @{}; foreach ($n in $x.Event.EventData.Data) { $v[$n.GetAttribute('Name')] = $n.InnerText }
+  [pscustomobject]@{ Time = $_.TimeCreated; UserSid = $v.UserSid; Session = $v.TSId } } | Format-Table -AutoSize
+# 4. 自動登入設定（只讀取開關與帳號名稱，不讀密碼）
+$w = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+"AutoAdminLogon=$($w.AutoAdminLogon) DefaultUserName=$($w.DefaultUserName)"
+"ARSO policy DisableAutomaticRestartSignOn=$((Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -ErrorAction SilentlyContinue).DisableAutomaticRestartSignOn)"
+Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserARSO' -ErrorAction SilentlyContinue | ForEach-Object { "UserARSO $($_.PSChildName) OptOut=$((Get-ItemProperty $_.PSPath).OptOut)" }
+```
+
+判讀：
+- 開機後數秒出現、SID 為 `S-1-5-90-…`（DWM）或 `S-1-5-96-…`（UMFD）、工作階段 0 或 1 的紀錄，是 Windows 系統工作階段。
+- `S-1-5-21-…` 帳號同時出現在第 2、3 項，才是使用者登入。若時間點早於你實際登入、且第 4 項顯示 `AutoAdminLogon=1` 或 ARSO 紀錄，是 Windows 代為登入（ARSO 登入後會鎖定，畫面看起來像登入畫面）。
+- 是否調整這些設定由你決定；未調整前，報告維持 FAIL。
+
+開機耗時：`delayed-auto` 服務由 Windows 在一般自動啟動服務完成後，再延後約 2 分鐘才啟動，並且要等相依的 PostgreSQL 服務；網站本身的啟動（Node 與 Next.js 冷啟動、首次讀取檔案）另需數十秒。時間軸的各段經過時間可看出耗時落在哪一段。
 
 ### 9.5 日誌與 loopback
 

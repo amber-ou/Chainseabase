@@ -352,6 +352,127 @@ function Get-WebsiteProcess([string]$ServiceName) {
   return Get-CimInstance Win32_Process -Filter "ParentProcessId=$($svc.ProcessId) AND Name='node.exe'" | Select-Object -First 1
 }
 
+function Test-CimNotFound($ErrorRecord) {
+  # WBEM_E_NOT_FOUND (0x80041002): the instance, here a process, no longer exists
+  if ("$($ErrorRecord.FullyQualifiedErrorId)" -like 'HRESULT 0x80041002*') { return $true }
+  $e = $ErrorRecord.Exception
+  while ($e) {
+    if ($e.GetType().FullName -eq 'Microsoft.Management.Infrastructure.CimException' -and "$($e.NativeErrorCode)" -eq 'NotFound') { return $true }
+    $e = $e.InnerException
+  }
+  return $false
+}
+
+function Get-ProcessOwner($Process) {
+  # DOMAIN\user of a Win32_Process; $null only when the process exited after it was listed.
+  # Every other failure (access denied, GetOwner returning an error) is thrown for the caller to report.
+  try { $r = Invoke-CimMethod -InputObject $Process -MethodName GetOwner -ErrorAction Stop }
+  catch { if (Test-CimNotFound $_) { return $null }; throw }
+  if ($r.ReturnValue -ne 0) { throw "GetOwner for process $($Process.ProcessId) returned $($r.ReturnValue)" }
+  return "$($r.Domain)\$($r.User)"
+}
+
+function Get-ProcessesOwnedBy([string]$Name, [string]$Account, [int]$Attempts = 3) {
+  # processes named $Name running as $Account. A process that exits between the listing and the owner
+  # lookup leaves the sample incomplete: take a new one, at most $Attempts times, then throw.
+  for ($i = 1; $i -le $Attempts; $i++) {
+    $owned = @(); $vanished = 0
+    foreach ($p in @(Get-CimInstance Win32_Process -Filter "Name='$Name'")) {
+      $o = Get-ProcessOwner $p
+      if ($null -eq $o) { $vanished++ } elseif ($o -eq $Account) { $owned += $p }
+    }
+    if ($vanished -eq 0) { return $owned }
+    Start-Sleep -Milliseconds 500
+  }
+  throw "$Name processes kept exiting while their owners were read ($Attempts samples)"
+}
+
+function Get-WebsiteProcessOwner([string]$ServiceName, [int]$Attempts = 3) {
+  # the website process and its owner; $null when the service runs no website process
+  for ($i = 1; $i -le $Attempts; $i++) {
+    $p = Get-WebsiteProcess $ServiceName
+    if (-not $p) { return $null }
+    $o = Get-ProcessOwner $p
+    if ($null -ne $o) { return [pscustomobject]@{ Process = $p; Owner = $o } }
+    Start-Sleep -Milliseconds 500
+  }
+  throw "the website process kept exiting while its owner was read ($Attempts samples)"
+}
+
+function Get-SidKind([string]$Sid) {
+  # person: local and domain accounts (S-1-5-21-...) and Microsoft Entra ID accounts (S-1-12-1-...).
+  # windows: Window Manager DWM-n (S-1-5-90-...) and Font Driver Host UMFD-n (S-1-5-96-...), which start
+  # interactive (type 2) logon sessions at every boot, SYSTEM, LOCAL/NETWORK SERVICE and service SIDs.
+  # Anything else is unknown and is treated like a person: it can never turn the boot check into a pass.
+  if (-not $Sid) { return 'unknown' }
+  if ($Sid -like 'S-1-5-21-*' -or $Sid -like 'S-1-12-1-*') { return 'person' }
+  if ($Sid -like 'S-1-5-90-*' -or $Sid -like 'S-1-5-96-*' -or $Sid -like 'S-1-5-80-*' -or $Sid -in @('S-1-5-18', 'S-1-5-19', 'S-1-5-20')) { return 'windows' }
+  return 'unknown'
+}
+
+function Get-InteractiveSignIns([datetime]$Since) {
+  # interactive (2), remote desktop (10) and cached (11, 12) sign-ins since $Since, from the logon
+  # sessions that still exist (account, SID, Windows session IDs) and from the Security log (event 4624,
+  # which also keeps sessions that ended). Read as SIDs and numbers, never as translated display text.
+  $types = @(2, 10, 11, 12)
+  $records = @{}
+  $accounts = @{}
+  foreach ($l in @(Get-CimInstance Win32_LoggedOnUser -ErrorAction SilentlyContinue)) { $accounts["$($l.Dependent.LogonId)"] = "$($l.Antecedent.Domain)\$($l.Antecedent.Name)" }
+  foreach ($s in @(Get-CimInstance Win32_LogonSession | Where-Object { $_.LogonType -in $types -and $_.StartTime -ge $Since })) {
+    $id = "$($s.LogonId)"
+    $account = $null; $sid = $null
+    if ($accounts.ContainsKey($id)) { $account = $accounts[$id] }
+    if ($account) { try { $sid = (New-Object Security.Principal.NTAccount($account)).Translate([Security.Principal.SecurityIdentifier]).Value } catch { } }
+    $sessions = @(Get-CimAssociatedInstance -InputObject $s -ResultClassName Win32_Process -ErrorAction SilentlyContinue | ForEach-Object { $_.SessionId } | Sort-Object -Unique)
+    $records[$id] = [pscustomobject]@{ Time = $s.StartTime; LogonType = [int]$s.LogonType; LogonId = $id; Account = $account; Sid = $sid; SessionIds = ($sessions -join ','); Source = 'session'; Kind = $null }
+  }
+  $logReadable = $true; $logError = $null; $events = @()
+  $from = $Since.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+  $typeFilter = ($types | ForEach-Object { "Data[@Name='LogonType']='$_'" }) -join ' or '
+  try { $events = @(Get-WinEvent -LogName Security -FilterXPath "*[System[EventID=4624 and TimeCreated[@SystemTime>='$from']]] and *[EventData[$typeFilter]]" -ErrorAction Stop) }
+  catch { if ("$($_.FullyQualifiedErrorId)" -notlike 'NoMatchingEventsFound*') { $logReadable = $false; $logError = $_.Exception.Message } }
+  foreach ($e in $events) {
+    $d = @{}
+    foreach ($n in @(([xml]$e.ToXml()).Event.EventData.Data)) { $d[$n.GetAttribute('Name')] = $n.InnerText }
+    if (-not $d['TargetLogonId']) { continue }
+    $id = "$([Convert]::ToUInt64(($d['TargetLogonId'] -replace '^0x', ''), 16))"
+    if ($records.ContainsKey($id)) {
+      $r = $records[$id]
+      if (-not $r.Sid) { $r.Sid = $d['TargetUserSid'] }
+      $r.Source = 'session+log'
+      continue
+    }
+    $records[$id] = [pscustomobject]@{ Time = $e.TimeCreated; LogonType = [int]$d['LogonType']; LogonId = $id; Account = "$($d['TargetDomainName'])\$($d['TargetUserName'])"; Sid = $d['TargetUserSid']; SessionIds = ''; Source = 'log'; Kind = $null }
+  }
+  foreach ($r in $records.Values) { $r.Kind = Get-SidKind $r.Sid }
+  [pscustomobject]@{ SignIns = @($records.Values | Sort-Object Time); LogReadable = $logReadable; LogError = $logError }
+}
+
+function Select-FirstPersonSignIn($SignIns) {
+  # the earliest sign-in that is not Windows itself (a person, or an account that cannot be identified)
+  return @($SignIns | Where-Object { $_.Kind -ne 'windows' } | Sort-Object Time) | Select-Object -First 1
+}
+
+function Get-AutomaticSignInSettings {
+  # read only, and never the stored password: whether Windows signs a user in by itself
+  # (Winlogon AutoAdminLogon, or automatic restart sign-on, ARSO, for which an opt-out is kept per SID)
+  $w = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -ErrorAction SilentlyContinue
+  $auto = $false; $user = $null
+  if ($w -and $w.PSObject.Properties['AutoAdminLogon']) { $auto = ("$($w.AutoAdminLogon)" -eq '1') }
+  if ($w -and $w.PSObject.Properties['DefaultUserName']) { $user = "$($w.DefaultUserName)" }
+  $policy = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -ErrorAction SilentlyContinue
+  $arsoPolicyOff = [bool]($policy -and $policy.PSObject.Properties['DisableAutomaticRestartSignOn'] -and "$($policy.DisableAutomaticRestartSignOn)" -eq '1')
+  $arso = @{}
+  $key = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserARSO'
+  if (Test-Path -LiteralPath $key) {
+    foreach ($k in @(Get-ChildItem -LiteralPath $key)) {
+      $p = Get-ItemProperty -LiteralPath $k.PSPath
+      $arso[$k.PSChildName] = $(if ($p.PSObject.Properties['OptOut']) { "OptOut=$($p.OptOut)" } else { 'no OptOut value' })
+    }
+  }
+  [pscustomobject]@{ AutoAdminLogon = $auto; DefaultUserName = $user; ArsoDisabledByPolicy = $arsoPolicyOff; ArsoBySid = $arso }
+}
+
 function Read-SharedText([string]$Path) {
   # read a log the service is still writing
   $fs = [IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite, Delete')

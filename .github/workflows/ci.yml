@@ -144,6 +144,15 @@ jobs:
         run: |
           .\tests\windows\ServiceRecovery.Tests.ps1
           if ($LASTEXITCODE -ne 0) { throw "ServiceRecovery.Tests.ps1 exit $LASTEXITCODE" }
+      - name: WIN-03 boot report sign-in classification and process owner race (PowerShell 7)
+        run: |
+          .\tests\windows\BootReport.Tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw "BootReport.Tests.ps1 exit $LASTEXITCODE" }
+      - name: WIN-03 boot report sign-in classification and process owner race (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          .\tests\windows\BootReport.Tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw "BootReport.Tests.ps1 exit $LASTEXITCODE" }
       - name: Start PostgreSQL as an automatic Windows service, loopback only
         run: |
           $svc = Get-Service -Name 'postgresql*' | Select-Object -First 1
@@ -388,6 +397,19 @@ jobs:
           .\scripts\windows\Test-ChainseabaseService.ps1
           if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseService after restoring the recovery settings exit $LASTEXITCODE" }
           Write-Output 'PASS wrong recovery settings fail the check; the installed settings pass it'
+
+          # -BootReport runs end to end; the runner booted long before the service was installed, so its
+          # ready-before-sign-in result is not boot evidence (that stays a host test) and may go either way
+          $br = @(.\scripts\windows\Test-ChainseabaseService.ps1 -BootReport)
+          $brCode = $LASTEXITCODE
+          $br | Write-Output
+          foreach ($label in @('Boot:', 'PostgreSQL service process started:', 'Service wrapper started:', 'First website.starting after boot:', 'First db.ready after boot:', 'First website.ready after boot:', 'Interactive logon sessions since boot', 'First interactive sign-in by a person after boot:')) {
+            if (-not ($br -match ('^' + [regex]::Escape($label)))) { throw "BootReport output lacks '$label'" }
+          }
+          if (-not ($br -match '^PASS Security log readable')) { throw 'BootReport could not read the Security log' }
+          $otherFails = @($br -match '^FAIL' | Where-Object { $_ -notmatch 'website was ready after the reboot before anyone signed in' })
+          if ($otherFails.Count -or $brCode -notin @(0, 1)) { throw "BootReport: unexpected failures (exit $brCode): $($otherFails -join '; ')" }
+          Write-Output 'PASS BootReport runs end to end (timeline, sign-in classification, Security log)'
           .\scripts\windows\Set-ChainseabaseServiceState.ps1 -Action Status
           if ($LASTEXITCODE -ne 0) { throw "status exit $LASTEXITCODE" }
 

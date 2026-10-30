@@ -137,7 +137,9 @@ CI 為 GitHub Actions `windows-2025`（Windows Server、PostgreSQL 17 服務）�
 | `sc.exe qfailure Chainseabase` | `RESET_PERIOD (單位: 秒) : 3600`；`RESTART -- 延遲 = 10000／30000／60000 毫秒` |
 | 判定 | **設定正確、驗證工具誤判**：舊檢查依英文 `sc.exe` 輸出格式解析，繁中標籤內的冒號使比對失敗 |
 | 修正 | 改讀服務設定的結構化數值（登錄 `FailureActions`、`FailureActionsOnNonCrashFailures`），逐項比對安裝設定；缺值或格式不明判 FAIL；繁中輸出列為回歸案例，錯誤設定反例在 CI 實際服務上驗證 |
-| 故障恢復、頭像上傳、未登入桌面的重開機恢復 | **未測** |
+| 故障恢復、頭像上傳、未登入桌面的重開機恢復 | 當時未測 |
+
+使用者實機回報（2026-10-30 下午）：服務身分、ACL、loopback、設定讀取、頭像、故障恢復**通過**。`-BootReport` **FAIL**：Boot 14:02:19、wrapper 14:05:45、website.ready 14:06:47，工具判定 14:02:30 已有互動登入，使用者表示停在登入畫面。舊判定未依帳號篩選，會把 Windows 每次開機建立的 DWM／UMFD 工作階段（LogonType 2）算成登入；已改為依 SID 分類並讀取安全性記錄檔，該筆紀錄的實際帳號待使用者以唯讀指令確認。**登入前開機恢復仍未確認**，不以修正工具推定通過。
 
 ## 尚未驗證
 

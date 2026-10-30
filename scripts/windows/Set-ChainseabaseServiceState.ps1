@@ -47,11 +47,12 @@ if ($Action -in @('Start', 'Restart')) {
 if ($Action -eq 'Status') {
   $svc = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'"
   Write-Output "State: $($svc.State); start mode: $($svc.StartMode) (delayed: $($svc.DelayedAutoStart)); account: $($svc.StartName)"
-  $p = Get-WebsiteProcess $ServiceName
-  if ($p) {
-    $owner = Invoke-CimMethod -InputObject $p -MethodName GetOwner
+  $w = $null
+  try { $w = Get-WebsiteProcessOwner $ServiceName } catch { Write-Output "FAIL website process owner could not be read: $($_.Exception.Message)"; exit 1 }
+  if ($w) {
+    $p = $w.Process
     $listen = @(Get-NetTCPConnection -OwningProcess $p.ProcessId -State Listen -ErrorAction SilentlyContinue | ForEach-Object { "$($_.LocalAddress):$($_.LocalPort)" })
-    Write-Output "Website process: node.exe $($p.ProcessId) as $($owner.Domain)\$($owner.User), started $($p.CreationDate); listening: $($listen -join ', ')"
+    Write-Output "Website process: node.exe $($p.ProcessId) as $($w.Owner), started $($p.CreationDate); listening: $($listen -join ', ')"
   }
   $healthy = Wait-Healthy $port 5
   Write-Output "Health: $(if ($healthy) { 'ok' } else { 'not answering' })"

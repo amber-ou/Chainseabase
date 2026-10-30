@@ -11,7 +11,7 @@
 | DOC-WIN | 現行需求、權限、架構、維運、驗收與 Claude 指令一致化 | 使用者確認原生部署 | 完成（文件）；不代表功能實作完成 |
 | WIN-01 | PowerShell 設定持久化／安全載入、版本與安裝文件、Windows 建置和隔離測試 | 現有實作 | 完成（依規格完成條件；證據為使用者 Windows 11 實機回報 2026-10-28／29＋CI Windows Server）；主機未執行 npm test 與 E2E，服務帳號／排程讀取設定檔留待 WIN-03／05 |
 | WIN-02 | 正式 filesystem 頭像、provider 設定及路徑防護 | WIN-01 設定契約 | 完成（依規格完成條件；使用者 Windows 11 實機回報 2026-10-29：初始化、ACL、重啟持久化）；服務帳號 Modify 權限（WIN-03）、頭像備份還原（WIN-05）、舊檔清理未做 |
-| WIN-03 | Windows 網站／資料庫服務、重開機恢復、權限與日誌 | WIN-01、WIN-02 | 進行中：實作完成；CI `windows-2025`（非使用者主機）完整服務生命週期通過（`bd35a9c`）；使用者實機回報（2026-10-30，繁中 Windows 11）：安裝 exit 0、Test-ChainseabaseService 僅 recovery 一項 FAIL，經 `sc.exe qfailure` 確認設定正確、屬驗證工具誤判（依英文輸出），已改為讀取結構化設定；主機的故障恢復、頭像上傳、未登入桌面的重開機恢復未測 |
+| WIN-03 | Windows 網站／資料庫服務、重開機恢復、權限與日誌 | WIN-01、WIN-02 | 進行中：實作完成；CI `windows-2025`（非使用者主機）完整服務生命週期通過（`bd35a9c`）；使用者實機回報（2026-10-30，繁中 Windows 11）：安裝 exit 0、Test-ChainseabaseService 僅 recovery 一項 FAIL，經 `sc.exe qfailure` 確認設定正確、屬驗證工具誤判（依英文輸出），已改為讀取結構化設定；使用者實機回報（2026-10-30 下午）：服務身分、ACL、loopback、設定讀取、頭像、故障恢復通過；`-BootReport` FAIL（判定開機後 11 秒有互動登入，使用者表示停在登入畫面），篩選未排除 Windows 系統工作階段，已修正待重測；登入前開機恢復未確認 |
 | WIN-04 | 全面受邀資料讀取與角色／產品界線 | 既有身分實作 | 進行中：實作與自動化測試完成；使用者實機回報（2026-10-29）通過更新／建置、匿名 API 401、無痕頁面無內容、後台登入；頭像匿名直接存取、快取標頭、第二個未受邀 Google 帳號未實機驗證 |
 | WIN-05 | 排程、獨立備份、隔離還原與告警 | WIN-02、WIN-03、備份裝置 | 待開始 |
 | WIN-06 | Tunnel、正式 host、Google／寄信／sandbox 日曆 | WIN-02～05、網域與公司政策 | 待開始 |
@@ -125,4 +125,18 @@ recovery 項目：FAIL，但 sc.exe qfailure Chainseabase 顯示 RESET_PERIOD 36
 修正：recovery 改讀服務登錄機碼的結構化數值（FailureActions 二進位：重設秒數、各動作類型與延遲；FailureActionsOnNonCrashFailures），不讀任何顯示文字，且改為逐項比對安裝設定（恰 3 個 restart、10／30／60 秒、3600 秒、錯誤結束也套用）；缺值或無法辨識的格式判 FAIL。Administrators 成員的備援檢查同樣由 net.exe 文字改為 ADSI 讀 SID
 測試：tests/windows/ServiceRecovery.Tests.ps1（正確設定、重設 60 秒、延遲不同、2 個或 0 個動作、無動作／重新開機、錯誤結束不套用、旗標缺少、缺值、截斷、筆數不符；繁中輸出使舊樣式誤判的回歸案例；ADSI 與 Get-LocalGroupMember 一致）於 CI PowerShell 7 與 5.1；CI 服務測試另在已安裝服務上改成錯誤設定，確認只有 recovery 一項 FAIL，還原後全檢通過
 未測（不推定通過）：使用者主機上的故障恢復（第 9.3 節）、頭像上傳、未登入桌面的重開機恢復（第 9.4 節）；修正後的 Test-ChainseabaseService 尚待主機重跑
+```
+
+## 使用者 Windows 11 實機回報：WIN-03 開機（2026-10-30 下午）
+
+```text
+來源：使用者在自己的 Windows 11 主機執行並回報；代理未在該主機執行
+通過（使用者回報）：服務身分、ACL、loopback、設定讀取、頭像、故障恢復
+BootReport：FAIL。Boot 14:02:19；wrapper 14:05:45；第一次 website.ready 14:06:47；工具判定第一次互動登入 14:02:30（開機後 11 秒），使用者表示停在登入畫面等待
+原因（程式）：舊判定只看 Win32_LogonSession 的 LogonType 2／10／11 與時間，未檢查帳號；Windows 每次開機都會以 LogonType 2 建立 DWM-n（S-1-5-90-…）與 UMFD-n（S-1-5-96-…）工作階段。14:02:30 那筆的帳號類型尚待使用者以 docs/windows-setup.md 9.4 的唯讀指令確認（也可能是 ARSO 代為登入）；未改判為通過
+修正：登入以 SID 分類（person／windows／unknown，unknown 視同登入），來源為現存工作階段與安全性記錄檔 4624（含已結束者），列出帳號、SID、LogonType、LogonId、Windows 工作階段編號；讀不到安全性記錄檔判 FAIL；顯示 AutoAdminLogon 與 ARSO 設定（唯讀、不讀密碼）。BootReport 另列開機時間軸（PostgreSQL 服務程序、wrapper、website.starting、資料庫等待、db.ready、website.ready 與開機後經過時間）
+另修正：Test-ChainseabaseService 與 Set-ChainseabaseServiceState 讀取程序擁有者時，程序在列舉後結束（HRESULT 0x80041002）改為有限次（3 次）重新取樣；其他錯誤（拒絕存取、GetOwner 回傳錯誤）仍回報 FAIL
+測試：tests/windows/BootReport.Tests.ps1（SID 分類、依實機時間序列挑出第一個使用者登入、舊篩選的回歸案例、無法辨識的帳號視同登入、已結束程序的 0x80041002、其他 GetOwner 錯誤仍拋出、CI 主機的實際 DWM／UMFD 工作階段分類）於 CI PowerShell 7 與 5.1；CI 服務測試另以 -BootReport 跑完整流程（CI 主機開機早於服務安裝，其登入判定不作為開機證據）
+耗時分析（開機到就緒 4 分 28 秒）：開機→wrapper 3 分 26 秒，主要為 delayed-auto（一般自動啟動服務完成後再延後約 2 分鐘）與相依 PostgreSQL 服務；wrapper→website.ready 62 秒，含 Node／Next.js 冷啟動，是否有資料庫等待需新版時間軸確認
+未測：登入前開機恢復（待修正後的 BootReport 與唯讀診斷）
 ```
