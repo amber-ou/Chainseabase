@@ -48,7 +48,6 @@ $settings = Get-Content -LiteralPath $installJson -Raw | ConvertFrom-Json
 $paths = Get-ChainseabasePaths $ProgramRoot $ServiceName $settings.LogRoot
 $port = [int]$settings.Port
 $sid = Get-ServiceSid $ServiceName
-$sc = "$env:SystemRoot\System32\sc.exe"
 
 # service definition
 Check ($svc.State -eq 'Running') "service state: $($svc.State)"
@@ -56,18 +55,17 @@ Check ($svc.StartName -eq "NT SERVICE\$ServiceName") "runs as the virtual accoun
 Check ($svc.StartMode -eq 'Auto' -and $svc.DelayedAutoStart) "start type Automatic (delayed): $($svc.StartMode), delayed=$($svc.DelayedAutoStart)"
 $deps = @((Get-Service -Name $ServiceName).ServicesDependedOn | ForEach-Object Name)
 Check ($deps -contains $settings.PostgresService) "depends on PostgreSQL ($($settings.PostgresService)): $($deps -join ', ')"
-$qf = ((Invoke-Native $sc @('qfailure', $ServiceName)).Output -join "`n")
-Check (([regex]::Matches($qf, 'RESTART')).Count -ge 3 -and $qf -match 'RESET_PERIOD[^:]*:\s*3600') 'recovery: restart after 1st/2nd/3rd failure, counter reset after 3600 s'
-$qff = ((Invoke-Native $sc @('qfailureflag', $ServiceName)).Output -join "`n")
-Check ($qff -match 'TRUE') 'recovery also applies when the process exits with an error'
+# recovery read as numbers from the service configuration, not from sc.exe text (translated, e.g. zh-TW)
+$rec = Get-ServiceRecovery $ServiceName
+$recProblems = @(Get-RecoveryProblems $rec.Recovery $rec.NonCrashFlag)
+$actionProblems = @($recProblems | Where-Object { $_ -notmatch 'FailureActionsOnNonCrashFailures' })
+$policy = Get-RecoveryPolicy
+Check ($actionProblems.Count -eq 0) "recovery: restart after $(($policy.DelaysMs | ForEach-Object { $_ / 1000 }) -join '/') s, counter reset after $($policy.ResetSeconds) s (read: $(Format-Recovery $rec.Recovery $rec.NonCrashFlag)$(if ($null -eq $rec.Recovery) { ", FailureActions $($rec.Length) bytes" }))"
+foreach ($p in $actionProblems) { Write-Output "     $p" }
+Check ($rec.NonCrashFlag -eq 1) "recovery also applies when the process exits with an error (FailureActionsOnNonCrashFailures: $(if ($null -eq $rec.NonCrashFlag) { 'missing' } else { $rec.NonCrashFlag }))"
 # membership read by SID (group names are localized); an unreadable group is a failure, not a pass
 $adminCheck = $null
-try { $adminCheck = -not (@(Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction Stop | ForEach-Object { $_.SID.Value }) -contains $sid) }
-catch {
-  $group = (New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')).Translate([Security.Principal.NTAccount]).Value.Split('\')[-1]
-  $r = Invoke-Native "$env:SystemRoot\System32\net.exe" @('localgroup', $group)
-  if ($r.ExitCode -eq 0) { $adminCheck = -not (($r.Output -join "`n") -match [regex]::Escape("NT SERVICE\$ServiceName")) }
-}
+try { $adminCheck = -not (@(Get-LocalAdministratorSids) -contains $sid) } catch { }
 Check ($adminCheck -eq $true) "NT SERVICE\$ServiceName is not a member of Administrators"
 
 # the running process (this is the service account at work, not this PowerShell)

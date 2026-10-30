@@ -126,6 +126,19 @@ CI 為 GitHub Actions `windows-2025`（Windows Server、PostgreSQL 17 服務）�
 | 解除安裝（兩次） | 同上 | 服務與其權限移除；設定檔雜湊、頭像數量不變；日誌保留；埠釋放 |
 | 未登入桌面的重開機恢復 | 使用者主機 | **未驗證**（CI 不能代替；步驟見 [Windows 設定與安裝](windows-setup.md) 9.4） |
 
+## 使用者 Windows 11 實機回報：WIN-03（2026-10-30，繁體中文顯示語言）
+
+使用者在自己的 Windows 11 主機執行並回報；代理未在該主機執行。
+
+| 項目 | 使用者回報 |
+| --- | --- |
+| `Install-ChainseabaseService.ps1` | exit 0 |
+| `Test-ChainseabaseService.ps1` | recovery 一項 FAIL，其餘全部 PASS |
+| `sc.exe qfailure Chainseabase` | `RESET_PERIOD (單位: 秒) : 3600`；`RESTART -- 延遲 = 10000／30000／60000 毫秒` |
+| 判定 | **設定正確、驗證工具誤判**：舊檢查依英文 `sc.exe` 輸出格式解析，繁中標籤內的冒號使比對失敗 |
+| 修正 | 改讀服務設定的結構化數值（登錄 `FailureActions`、`FailureActionsOnNonCrashFailures`），逐項比對安裝設定；缺值或格式不明判 FAIL；繁中輸出列為回歸案例，錯誤設定反例在 CI 實際服務上驗證 |
+| 故障恢復、頭像上傳、未登入桌面的重開機恢復 | **未測** |
+
 ## 尚未驗證
 
 - Windows 原生完整 lint／typecheck／單元／整合／E2E、PostgreSQL 18 完整回歸與 30 人負載。

@@ -120,7 +120,7 @@ jobs:
         run: npm install -g npm@10.9.4
       - name: Parse PowerShell scripts (PowerShell 7)
         run: |
-          foreach ($f in Get-ChildItem scripts/windows/*.ps1, scripts/windows/*.psm1) {
+          foreach ($f in Get-ChildItem scripts/windows/*.ps1, scripts/windows/*.psm1, tests/windows/*.ps1) {
             $errs = $null
             [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs) | Out-Null
             if ($errs) { $errs | Format-List | Out-String | Write-Output; throw "parse errors in $($f.Name)" }
@@ -129,12 +129,21 @@ jobs:
       - name: Parse PowerShell scripts (Windows PowerShell 5.1)
         shell: powershell
         run: |
-          foreach ($f in Get-ChildItem scripts/windows/*.ps1, scripts/windows/*.psm1) {
+          foreach ($f in Get-ChildItem scripts/windows/*.ps1, scripts/windows/*.psm1, tests/windows/*.ps1) {
             $errs = $null
             [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs) | Out-Null
             if ($errs) { $errs | Format-List | Out-String | Write-Output; throw "parse errors in $($f.Name)" }
             Write-Output "parsed $($f.Name)"
           }
+      - name: WIN-03 recovery and membership checks read numbers and SIDs, not display text (PowerShell 7)
+        run: |
+          .\tests\windows\ServiceRecovery.Tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw "ServiceRecovery.Tests.ps1 exit $LASTEXITCODE" }
+      - name: WIN-03 recovery and membership checks (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          .\tests\windows\ServiceRecovery.Tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw "ServiceRecovery.Tests.ps1 exit $LASTEXITCODE" }
       - name: Start PostgreSQL as an automatic Windows service, loopback only
         run: |
           $svc = Get-Service -Name 'postgresql*' | Select-Object -First 1
@@ -354,6 +363,31 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseService exit $LASTEXITCODE" }
           .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg -AllowedReader "NT SERVICE\$name"
           if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseConfig exit $LASTEXITCODE" }
+
+          # wrong recovery settings on the installed service must fail the check (counterexamples), and
+          # the installer's own settings must pass it again
+          $sc = "$env:SystemRoot\System32\sc.exe"
+          function ExpectRecoveryFail([string]$What) {
+            $out = @(.\scripts\windows\Test-ChainseabaseService.ps1)
+            $code = $LASTEXITCODE
+            $out | Where-Object { $_ -match 'recovery|^\s{5}' } | Write-Output
+            if ($code -ne 1 -or -not ($out -match '^FAIL recovery')) { $out | Write-Output; throw "Test-ChainseabaseService did not fail the recovery check for $What (exit $code)" }
+            if (@($out -match '^FAIL').Count -ne 1) { $out | Write-Output; throw "other checks failed too for $What" }
+          }
+          & $sc failure $name reset= 60 actions= restart/5000/restart/30000/restart/60000 | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "sc.exe failure exit $LASTEXITCODE" }
+          ExpectRecoveryFail 'reset 60 s and a 5 s first delay'
+          & $sc failure $name reset= 3600 actions= restart/10000/restart/30000 | Out-Null
+          ExpectRecoveryFail 'two actions'
+          Import-Module .\scripts\windows\ChainseabaseService.psm1 -Force
+          $pgService = (Get-Content (Join-Path $env:ProgramFiles 'Chainseabase\service\install.json') -Raw | ConvertFrom-Json).PostgresService
+          Set-ServiceRegistration $name $pgService
+          & $sc failureflag $name 0 | Out-Null
+          ExpectRecoveryFail 'recovery not applied on an error exit'
+          Set-ServiceRegistration $name $pgService
+          .\scripts\windows\Test-ChainseabaseService.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseService after restoring the recovery settings exit $LASTEXITCODE" }
+          Write-Output 'PASS wrong recovery settings fail the check; the installed settings pass it'
           .\scripts\windows\Set-ChainseabaseServiceState.ps1 -Action Status
           if ($LASTEXITCODE -ne 0) { throw "status exit $LASTEXITCODE" }
 

@@ -215,7 +215,7 @@ echo "exit=$LASTEXITCODE"
 echo "exit=$LASTEXITCODE"
 ```
 
-`Test-ChainseabaseService.ps1` 以執行中的服務為證據：網站程序必須以 `NT SERVICE\Chainseabase` 執行、health 回 200（代表服務帳號讀得到設定檔）、只監聽 loopback；並依 SID 檢查各位置的權限、復原設定、相依 PostgreSQL、日誌輪替與 WinSW 檢查碼。系統管理員 PowerShell 能讀寫，不代表服務帳號能，所以不以此為證據。
+`Test-ChainseabaseService.ps1` 以執行中的服務為證據：網站程序必須以 `NT SERVICE\Chainseabase` 執行、health 回 200（代表服務帳號讀得到設定檔）、只監聽 loopback；並依 SID 檢查各位置的權限、復原設定、相依 PostgreSQL、日誌輪替與 WinSW 檢查碼。復原設定與 Administrators 成員以數值與 SID 讀取，不解析 `sc.exe`／`net.exe` 的顯示文字，因此與 Windows 顯示語言無關。系統管理員 PowerShell 能讀寫，不代表服務帳號能，所以不以此為證據。
 
 接著在瀏覽器登入並**上傳一張新頭像**、重新整理：這一步由服務帳號寫入頭像目錄。
 

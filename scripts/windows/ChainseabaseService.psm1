@@ -238,12 +238,78 @@ function Get-CurrentRelease($Paths) {
   return [string]$x.service.workingdirectory
 }
 
+function Get-RecoveryPolicy {
+  # the one definition of the recovery actions: applied at install, checked by Test-ChainseabaseService
+  [pscustomobject]@{ ResetSeconds = 3600; DelaysMs = @(10000, 30000, 60000) }
+}
+
+function ConvertFrom-FailureActions([byte[]]$Bytes) {
+  # SERVICE_FAILURE_ACTIONS as the service manager stores it (registry value FailureActions):
+  # reset period in seconds, two unused pointer slots, action count, one unused pointer slot (4 bytes
+  # each), then per action its type (0 none, 1 restart, 2 reboot, 3 run command) and delay in ms.
+  # Numbers, not sc.exe display text, so the result does not depend on the display language.
+  # $null for a missing value or any other layout (the check then fails, it does not pass).
+  if ($null -eq $Bytes -or $Bytes.Length -lt 20) { return $null }
+  $count = [BitConverter]::ToUInt32($Bytes, 12)
+  if ($count -gt 64 -or $Bytes.Length -ne 20 + 8 * $count) { return $null }
+  $actions = @(for ($i = 0; $i -lt $count; $i++) {
+      [pscustomobject]@{ Type = [BitConverter]::ToUInt32($Bytes, 20 + 8 * $i); DelayMs = [BitConverter]::ToUInt32($Bytes, 24 + 8 * $i) } })
+  [pscustomobject]@{ ResetSeconds = [BitConverter]::ToUInt32($Bytes, 0); Actions = $actions }
+}
+
+function Get-RecoveryProblems($Recovery, $NonCrashFlag) {
+  # differences from Get-RecoveryPolicy, as messages; none means the recovery is configured as installed
+  $policy = Get-RecoveryPolicy
+  if ($null -eq $Recovery) { return @('failure actions missing or in an unrecognised layout') }
+  $problems = @()
+  if ($Recovery.ResetSeconds -ne $policy.ResetSeconds) { $problems += "failure counter reset after $($Recovery.ResetSeconds) s (expected $($policy.ResetSeconds) s)" }
+  if ($Recovery.Actions.Count -ne $policy.DelaysMs.Count) { $problems += "$($Recovery.Actions.Count) failure actions (expected $($policy.DelaysMs.Count))" }
+  for ($i = 0; $i -lt [Math]::Min($Recovery.Actions.Count, $policy.DelaysMs.Count); $i++) {
+    $a = $Recovery.Actions[$i]
+    if ($a.Type -ne 1) { $problems += "failure $($i + 1): action type $($a.Type), not restart (1)" }
+    if ($a.DelayMs -ne $policy.DelaysMs[$i]) { $problems += "failure $($i + 1): restart after $($a.DelayMs) ms (expected $($policy.DelaysMs[$i]) ms)" }
+  }
+  if ($NonCrashFlag -ne 1) { $problems += "not applied when the process exits with an error (FailureActionsOnNonCrashFailures: $(if ($null -eq $NonCrashFlag) { 'missing' } else { $NonCrashFlag }), expected 1)" }
+  return $problems
+}
+
+function Format-Recovery($Recovery, $NonCrashFlag) {
+  if ($null -eq $Recovery) { return 'unreadable' }
+  $kinds = @{ 0 = 'none'; 1 = 'restart'; 2 = 'reboot'; 3 = 'command' }
+  $steps = @($Recovery.Actions | ForEach-Object { "$(if ($kinds.ContainsKey([int]$_.Type)) { $kinds[[int]$_.Type] } else { "type $($_.Type)" }) $($_.DelayMs) ms" })
+  return "reset $($Recovery.ResetSeconds) s; $($steps -join ', '); on error exit: $NonCrashFlag"
+}
+
+function Get-ServiceRecovery([string]$ServiceName) {
+  # read from the service's registry key, where the service manager keeps its configuration
+  $item = Get-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName" -ErrorAction Stop
+  $bytes = $null; $flag = $null
+  if ($item.PSObject.Properties['FailureActions']) { $bytes = [byte[]]$item.FailureActions }
+  if ($item.PSObject.Properties['FailureActionsOnNonCrashFailures']) { $flag = [int]$item.FailureActionsOnNonCrashFailures }
+  [pscustomobject]@{ Recovery = (ConvertFrom-FailureActions $bytes); NonCrashFlag = $flag; Length = $(if ($bytes) { $bytes.Length } else { 0 }) }
+}
+
+function Get-LocalAdministratorSids([ValidateSet('Auto', 'Adsi')][string]$Method = 'Auto') {
+  # member SIDs of the local Administrators group (S-1-5-32-544), never display text. Get-LocalGroupMember
+  # fails when the group holds an unresolvable member; ADSI reads the SIDs directly. Throws if neither works.
+  if ($Method -eq 'Auto') {
+    try { return @(Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction Stop | ForEach-Object { $_.SID.Value }) } catch { }
+  }
+  $group = (New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')).Translate([Security.Principal.NTAccount]).Value.Split('\')[-1]
+  $adsi = [ADSI]"WinNT://$env:COMPUTERNAME/$group,group"
+  return @($adsi.Invoke('Members') | ForEach-Object {
+      $raw = [byte[]]$_.GetType().InvokeMember('objectSid', 'GetProperty', $null, $_, $null)
+      (New-Object Security.Principal.SecurityIdentifier($raw, 0)).Value })
+}
+
 function Set-ServiceRegistration([string]$ServiceName, [string]$PostgresService) {
   # account, start type, dependency and recovery, applied explicitly (idempotent)
   $sc = "$env:SystemRoot\System32\sc.exe"
+  $policy = Get-RecoveryPolicy
+  $actions = (@($policy.DelaysMs | ForEach-Object { "restart/$_" })) -join '/'
   foreach ($a in @(
       @('config', $ServiceName, 'obj=', "NT SERVICE\$ServiceName", 'start=', 'delayed-auto', 'depend=', $PostgresService),
-      @('failure', $ServiceName, 'reset=', '3600', 'actions=', 'restart/10000/restart/30000/restart/60000'),
+      @('failure', $ServiceName, 'reset=', "$($policy.ResetSeconds)", 'actions=', $actions),
       @('failureflag', $ServiceName, '1'),
       @('sidtype', $ServiceName, 'unrestricted'))) {
     $r = Invoke-Native $sc $a

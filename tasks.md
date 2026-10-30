@@ -11,7 +11,7 @@
 | DOC-WIN | 現行需求、權限、架構、維運、驗收與 Claude 指令一致化 | 使用者確認原生部署 | 完成（文件）；不代表功能實作完成 |
 | WIN-01 | PowerShell 設定持久化／安全載入、版本與安裝文件、Windows 建置和隔離測試 | 現有實作 | 完成（依規格完成條件；證據為使用者 Windows 11 實機回報 2026-10-28／29＋CI Windows Server）；主機未執行 npm test 與 E2E，服務帳號／排程讀取設定檔留待 WIN-03／05 |
 | WIN-02 | 正式 filesystem 頭像、provider 設定及路徑防護 | WIN-01 設定契約 | 完成（依規格完成條件；使用者 Windows 11 實機回報 2026-10-29：初始化、ACL、重啟持久化）；服務帳號 Modify 權限（WIN-03）、頭像備份還原（WIN-05）、舊檔清理未做 |
-| WIN-03 | Windows 網站／資料庫服務、重開機恢復、權限與日誌 | WIN-01、WIN-02 | 進行中：實作完成；CI `windows-2025`（非使用者主機）完整服務生命週期通過（`bd35a9c`）；未登入桌面的重開機恢復與使用者主機上的服務安裝、頭像上傳待實機 |
+| WIN-03 | Windows 網站／資料庫服務、重開機恢復、權限與日誌 | WIN-01、WIN-02 | 進行中：實作完成；CI `windows-2025`（非使用者主機）完整服務生命週期通過（`bd35a9c`）；使用者實機回報（2026-10-30，繁中 Windows 11）：安裝 exit 0、Test-ChainseabaseService 僅 recovery 一項 FAIL，經 `sc.exe qfailure` 確認設定正確、屬驗證工具誤判（依英文輸出），已改為讀取結構化設定；主機的故障恢復、頭像上傳、未登入桌面的重開機恢復未測 |
 | WIN-04 | 全面受邀資料讀取與角色／產品界線 | 既有身分實作 | 進行中：實作與自動化測試完成；使用者實機回報（2026-10-29）通過更新／建置、匿名 API 401、無痕頁面無內容、後台登入；頭像匿名直接存取、快取標頭、第二個未受邀 Google 帳號未實機驗證 |
 | WIN-05 | 排程、獨立備份、隔離還原與告警 | WIN-02、WIN-03、備份裝置 | 待開始 |
 | WIN-06 | Tunnel、正式 host、Google／寄信／sandbox 日曆 | WIN-02～05、網域與公司政策 | 待開始 |
@@ -113,4 +113,16 @@ CI win-native（GitHub Actions windows-2025、PostgreSQL 17 服務；push 跑 bd
   版本切換、故障版本（移除 .next\server）exit 1 並自動回退到健康版本、再切回；解除安裝兩次：設定檔雜湊、頭像數量不變，日誌保留，設定檔無服務 SID，3000 埠釋放
 修正（CI 發現）：wrapper 被終止時 node 成為孤兒佔用 3000 埠（加 --exit-with-parent 看門狗與「恰一個服務 node」檢查）；故障版本被自動重啟時 Stop-Service 失敗導致回退中斷（停止改為重試至停妥且埠釋放）
 未完成：使用者主機第 9 節（安裝、權限、頭像上傳、故障恢復、Restart-Computer 後未登入 -BootReport）；開機時資料庫較晚就緒的等待只在 CI 以延遲連線模擬；WIN-05 排程、備份
+```
+
+## 使用者 Windows 11 實機回報：WIN-03（2026-10-30，繁體中文顯示語言）
+
+```text
+來源：使用者在自己的 Windows 11 主機執行並回報；代理未在該主機執行
+通過（使用者回報）：Install-ChainseabaseService.ps1 exit 0；Test-ChainseabaseService.ps1 除 recovery 一項外全部 PASS
+recovery 項目：FAIL，但 sc.exe qfailure Chainseabase 顯示 RESET_PERIOD 3600 秒、RESTART 10000／30000／60000 毫秒，與安裝設定相同
+判定：設定正確、驗證工具誤判。原檢查以 RESET_PERIOD[^:]*:\s*3600 解析 sc.exe 文字；繁中輸出為「RESET_PERIOD (單位: 秒) : 3600」，標籤內的冒號使比對失敗
+修正：recovery 改讀服務登錄機碼的結構化數值（FailureActions 二進位：重設秒數、各動作類型與延遲；FailureActionsOnNonCrashFailures），不讀任何顯示文字，且改為逐項比對安裝設定（恰 3 個 restart、10／30／60 秒、3600 秒、錯誤結束也套用）；缺值或無法辨識的格式判 FAIL。Administrators 成員的備援檢查同樣由 net.exe 文字改為 ADSI 讀 SID
+測試：tests/windows/ServiceRecovery.Tests.ps1（正確設定、重設 60 秒、延遲不同、2 個或 0 個動作、無動作／重新開機、錯誤結束不套用、旗標缺少、缺值、截斷、筆數不符；繁中輸出使舊樣式誤判的回歸案例；ADSI 與 Get-LocalGroupMember 一致）於 CI PowerShell 7 與 5.1；CI 服務測試另在已安裝服務上改成錯誤設定，確認只有 recovery 一項 FAIL，還原後全檢通過
+未測（不推定通過）：使用者主機上的故障恢復（第 9.3 節）、頭像上傳、未登入桌面的重開機恢復（第 9.4 節）；修正後的 Test-ChainseabaseService 尚待主機重跑
 ```
