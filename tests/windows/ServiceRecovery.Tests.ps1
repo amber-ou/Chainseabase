@@ -22,7 +22,7 @@ function New-FailureActions([uint32]$Reset, [object[]]$Actions) {
 function Problems([byte[]]$Bytes, $Flag) { @(Get-RecoveryProblems (ConvertFrom-FailureActions $Bytes) $Flag) }
 
 $good = New-FailureActions 3600 @(@(1, 10000), @(1, 30000), @(1, 60000))
-$p = Problems $good 1
+$p = @(Problems $good 1)  # @(): an empty result comes back from a function as $null
 Case 'installed policy (reset 3600 s; restart 10/30/60 s; on error exit) has no problems' ($p.Count -eq 0)
 $r = ConvertFrom-FailureActions $good
 Case 'decoded values' ($r.ResetSeconds -eq 3600 -and $r.Actions.Count -eq 3 -and $r.Actions[2].Type -eq 1 -and $r.Actions[2].DelayMs -eq 60000)
