@@ -20,6 +20,8 @@ function New-FailureActions([uint32]$Reset, [object[]]$Actions) {
   return , $b.ToArray()
 }
 function Problems([byte[]]$Bytes, $Flag) { @(Get-RecoveryProblems (ConvertFrom-FailureActions $Bytes) $Flag) }
+# true when any problem matches (-match on several problems returns the matches, not a boolean)
+function Reports($Problems, [string]$Pattern) { return (@(@($Problems) -match $Pattern).Count -gt 0) }
 
 $good = New-FailureActions 3600 @(@(1, 10000), @(1, 30000), @(1, 60000))
 $p = @(Problems $good 1)  # @(): an empty result comes back from a function as $null
@@ -28,18 +30,17 @@ $r = ConvertFrom-FailureActions $good
 Case 'decoded values' ($r.ResetSeconds -eq 3600 -and $r.Actions.Count -eq 3 -and $r.Actions[2].Type -eq 1 -and $r.Actions[2].DelayMs -eq 60000)
 
 # counterexamples: each wrong setting is reported, none passes
-Case 'reset period 60 s is reported' ((Problems (New-FailureActions 60 @(@(1, 10000), @(1, 30000), @(1, 60000))) 1) -match 'reset after 60 s')
-Case 'a different delay is reported' ((Problems (New-FailureActions 3600 @(@(1, 5000), @(1, 30000), @(1, 60000))) 1) -match 'failure 1: restart after 5000 ms')
-Case 'two actions instead of three are reported' ((Problems (New-FailureActions 3600 @(@(1, 10000), @(1, 30000))) 1) -match '2 failure actions')
-Case 'no actions at all are reported' ((Problems (New-FailureActions 3600 @()) 1) -match '0 failure actions')
-Case '"take no action" on the 3rd failure is reported' ((Problems (New-FailureActions 3600 @(@(1, 10000), @(1, 30000), @(0, 0))) 1) -match 'failure 3: action type 0')
-Case 'reboot instead of restart is reported' ((Problems (New-FailureActions 3600 @(@(2, 10000), @(1, 30000), @(1, 60000))) 1) -match 'failure 1: action type 2')
-Case 'not applied on an error exit (flag 0) is reported' ((Problems $good 0) -match 'FailureActionsOnNonCrashFailures: 0')
-Case 'flag missing is reported' ((Problems $good $null) -match 'FailureActionsOnNonCrashFailures: missing')
-Case 'value missing is reported, not passed' ((Problems $null 1) -match 'missing or in an unrecognised layout')
-Case 'truncated value is reported, not passed' ((Problems ($good[0..30]) 1) -match 'unrecognised layout')
-Case 'count larger than the data is reported, not passed' ((Problems ([byte[]](@(16, 14, 0, 0) + (, 0 * 8) + @(9, 0, 0, 0) + (, 0 * 4))) 1) -match 'unrecognised layout')
-
+Case 'reset period 60 s is reported' (Reports (Problems (New-FailureActions 60 @(@(1, 10000), @(1, 30000), @(1, 60000))) 1) 'reset after 60 s')
+Case 'a different delay is reported' (Reports (Problems (New-FailureActions 3600 @(@(1, 5000), @(1, 30000), @(1, 60000))) 1) 'failure 1: restart after 5000 ms')
+Case 'two actions instead of three are reported' (Reports (Problems (New-FailureActions 3600 @(@(1, 10000), @(1, 30000))) 1) '2 failure actions')
+Case 'no actions at all are reported' (Reports (Problems (New-FailureActions 3600 @()) 1) '0 failure actions')
+Case '"take no action" on the 3rd failure is reported' (Reports (Problems (New-FailureActions 3600 @(@(1, 10000), @(1, 30000), @(0, 0))) 1) 'failure 3: action type 0')
+Case 'reboot instead of restart is reported' (Reports (Problems (New-FailureActions 3600 @(@(2, 10000), @(1, 30000), @(1, 60000))) 1) 'failure 1: action type 2')
+Case 'not applied on an error exit (flag 0) is reported' (Reports (Problems $good 0) 'FailureActionsOnNonCrashFailures: 0')
+Case 'flag missing is reported' (Reports (Problems $good $null) 'FailureActionsOnNonCrashFailures: missing')
+Case 'value missing is reported, not passed' (Reports (Problems $null 1) 'missing or in an unrecognised layout')
+Case 'truncated value is reported, not passed' (Reports (Problems ($good[0..30]) 1) 'unrecognised layout')
+Case 'count larger than the data is reported, not passed' (Reports (Problems ([byte[]](@(16, 14, 0, 0) + (, 0 * 8) + @(9, 0, 0, 0) + (, 0 * 4))) 1) 'unrecognised layout')
 # the zh-TW host case: sc.exe qfailure translates its labels, which the old text check misread
 $zh = [regex]::Unescape("RESET_PERIOD (單位: 秒) : 3600`nFAILURE_ACTIONS : RESTART -- 延遲 = 10000 毫秒。")
 Case 'regression: the old text pattern misreads the zh-TW output of a correct setting' (-not ($zh -match 'RESET_PERIOD[^:]*:\s*3600'))
