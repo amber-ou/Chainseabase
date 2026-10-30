@@ -21,7 +21,12 @@ describe('token encryption with key rotation', () => {
     expect(decryptSecret(old.ciphertext)).toBe('refresh-token-value');
     const fresh = encryptSecret('new');
     expect(fresh.keyVersion).toBe(2);
-    const tampered = fresh.ciphertext.slice(0, -2) + (fresh.ciphertext.endsWith('A') ? 'B' : 'A') + fresh.ciphertext.slice(-1);
+    // flip one bit of the encrypted data (replacing a base64 character could leave it unchanged)
+    const parts = fresh.ciphertext.split('.');
+    const data = Buffer.from(parts[3], 'base64url');
+    data[0] ^= 0x01;
+    const tampered = [...parts.slice(0, 3), data.toString('base64url')].join('.');
+    expect(tampered).not.toBe(fresh.ciphertext);
     expect(() => decryptSecret(tampered)).toThrow();
     process.env.TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
     process.env.TOKEN_ENCRYPTION_KEY_VERSION = '1';
