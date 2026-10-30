@@ -363,11 +363,27 @@ function Test-CimNotFound($ErrorRecord) {
   return $false
 }
 
+function Test-ProcessGone($Process) {
+  # true only when no process with this id and start time exists any more
+  $id = $null
+  if ($Process -and $Process.PSObject.Properties['ProcessId']) { $id = $Process.ProcessId }
+  if ($null -eq $id) { return $false }
+  $now = Get-CimInstance Win32_Process -Filter "ProcessId=$id" -ErrorAction SilentlyContinue
+  return ($null -eq $now -or $now.CreationDate -ne $Process.CreationDate)
+}
+
+function Resolve-ProcessOwnerError($ErrorRecord, $Process) {
+  # the listing race: "not found" (0x80041002) for a process that has exited. "Not found" for a process
+  # that still exists, or for something that is not a process, and every other error are raised.
+  if ((Test-CimNotFound $ErrorRecord) -and (Test-ProcessGone $Process)) { return $null }
+  throw $ErrorRecord
+}
+
 function Get-ProcessOwner($Process) {
   # DOMAIN\user of a Win32_Process; $null only when the process exited after it was listed.
   # Every other failure (access denied, GetOwner returning an error) is thrown for the caller to report.
   try { $r = Invoke-CimMethod -InputObject $Process -MethodName GetOwner -ErrorAction Stop }
-  catch { if (Test-CimNotFound $_) { return $null }; throw }
+  catch { return (Resolve-ProcessOwnerError $_ $Process) }
   if ($r.ReturnValue -ne 0) { throw "GetOwner for process $($Process.ProcessId) returned $($r.ReturnValue)" }
   return "$($r.Domain)\$($r.User)"
 }

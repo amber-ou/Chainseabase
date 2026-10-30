@@ -49,10 +49,20 @@ $ping.WaitForExit(); Start-Sleep -Seconds 1
 $raised = $null; $owner = 'not called'
 try { $owner = Get-ProcessOwner $gone } catch { $raised = $_ }
 Case 'an exited process gives no owner instead of an error (0x80041002)' ($null -eq $raised -and $null -eq $owner)
-# ... while any other failure is still raised
+# ... while any other failure is still raised: the decision itself, with controlled error records
+function ErrorWith([string]$Id) { New-Object System.Management.Automation.ErrorRecord((New-Object System.Exception 'test'), $Id, 'NotSpecified', $null) }
+$raised = $null
+try { [void](Resolve-ProcessOwnerError (ErrorWith 'HRESULT 0x80041002,Test') $self) } catch { $raised = $_ }
+Case '"not found" for a process that is still running is raised (not taken for the race)' ($null -ne $raised)
+$raised = $null
+try { [void](Resolve-ProcessOwnerError (ErrorWith 'HRESULT 0x80041003,Test') $gone) } catch { $raised = $_ }
+Case 'access denied (0x80041003) is raised even for an exited process' ($null -ne $raised -and "$($raised.FullyQualifiedErrorId)" -like 'HRESULT 0x80041003*')
+$raised = $null
+try { [void](Resolve-ProcessOwnerError (ErrorWith 'HRESULT 0x80041002,Test') $gone) } catch { $raised = $_ }
+Case '"not found" for the exited process is the race: no owner, no error' ($null -eq $raised)
 $raised = $null
 try { [void](Get-ProcessOwner (Get-CimInstance Win32_OperatingSystem)) } catch { $raised = $_ }
-Case 'a different GetOwner failure is raised, not ignored' ($null -ne $raised -and -not (Test-CimNotFound $raised))
+Case 'GetOwner on something that is not a process is raised' ($null -ne $raised)
 $ping = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\PING.EXE') -ArgumentList '-n', '30', '127.0.0.1' -WindowStyle Hidden -PassThru
 try { Case 'processes owned by an account are listed' (@(Get-ProcessesOwnedBy 'PING.EXE' $me | ForEach-Object ProcessId) -contains $ping.Id) }
 finally { Stop-Process -Id $ping.Id -Force -ErrorAction SilentlyContinue }
