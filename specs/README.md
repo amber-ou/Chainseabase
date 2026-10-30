@@ -1,5 +1,7 @@
 # 功能規格入口
 
+現行部署入口：[Windows 原生規格與 WIN 任務](../docs/windows-native-deployment.md)。核心功能沿用既有實作；部署與受邀讀取改造尚待驗收。
+
 詳細規格已分布於 `docs/`，本目錄集中提供功能、規則與驗收對照，不複製正文。修改功能時同步更新對應詳細文件、API 與驗收，避免產生兩套版本。
 
 | 功能 | 詳細行為 | API | 驗收案例 |
@@ -16,7 +18,7 @@
 | UI／UX、響應式與可及性 | [Design System](../docs/05-design-system.md) | — | V01–V04 |
 | 雲端與維運 | [部署與維運](../docs/06-calendar-and-deployment.md) | [API 慣例](../docs/04-api-contracts.md) | O01–O05 |
 
-案例的操作與預期結果統一在 [交付與驗收](../docs/07-delivery-and-acceptance.md)。目前全部為待執行案例。
+案例的操作與預期結果統一在 [交付與驗收](../docs/07-delivery-and-acceptance.md)。目前的實際驗證狀態見 [驗收追蹤報告](../docs/acceptance-report.md)。
 
 ## 實作前要守住的規則
 
@@ -24,6 +26,6 @@
 - 版本顯示與版本 Tag 共用來源；拖曳只修改選定維度。
 - Personal 保留負責人切換，但私人欄位沒有條件篩選；操作自動儲存。
 - Schedule 的歷史移除不等於全面 undo，清空過的內容不復活。
-- 匿名可瀏覽公開前台不代表可互動；Google 登入也不等於受邀或有 Calendar 權限。
+- 公司內容禁止匿名讀取；Google 登入不等於受邀或有 Calendar 權限。新版 A02／F09 與 WIN-04 必須重新驗證。
 
 已確認與被取代的規則見 [決策紀錄](../docs/08-decisions.md)。

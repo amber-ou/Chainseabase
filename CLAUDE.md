@@ -1,12 +1,16 @@
 # Chainseabase 專案工作規則
 
+現行部署入口：[Windows 原生規格與 WIN 任務](docs/windows-native-deployment.md)。核心功能沿用既有實作；部署與受邀讀取改造尚待驗收。
+
 適用於 Claude 在此專案的後續工作。使用者最新明確指示與當前工具／平台規則優先；本文件不授予額外外部服務權限。
 
 ## 先了解現況
 
-目前是文件專案，尚無應用程式、package.json、lockfile、migration 或測試 runner。不要宣稱功能可執行，也不要為了跑不存在的指令任意建立假測試。只有在使用者要求進行開發後，才從任務清單開始實作。
+應用程式已實作（Next.js 16.4.2／TypeScript／PostgreSQL），M1–M7 功能與自動化測試完成；Google 登入已由使用者在 Windows 驗證；Calendar、Resend、Supabase Storage 的真實流程仍未完整實測，Windows 基本建置、資料庫及 Google 登入已有使用者實機回報；Windows 網站服務（WIN-03）已實作並通過 CI，重開機恢復待主機驗證。開工前先讀 [tasks.md](tasks.md) 的狀態與證據，以及 [驗收追蹤報告](docs/acceptance-report.md)，不要重做已完成的任務。
 
-約 30 人使用的單公司多產品平台，Google 登入、前後台分站、Feedback／Schedule／Roadmap／Personal、站內通知，以及 Google Calendar 讀寫。已選 Next.js／TypeScript、Vercel、Supabase、Resend。
+約 30 人使用的單公司多產品平台，Google 登入、前後台分站、Feedback／Schedule／Roadmap／Personal、站內通知，以及 Google Calendar 讀寫。已選 Windows 原生 Next.js／TypeScript、PostgreSQL、正式本機頭像（待實作），寄信暫保留 Resend。先讀 [Windows 規格](docs/windows-native-deployment.md) 與 WIN 任務。
+
+程式位置：`src/modules/`（領域服務，業務規則在這裡）、`src/server/`（HTTP 路由、授權、冪等、outbox、adapters）、`src/features/`（UI）、`db/migrations/`（SQL）、`tests/`。所有 API 走 `src/server/api` 的單一路由器，新增端點時同時加 zod 白名單 schema、權限檢查與整合測試。
 
 ## 必讀文件
 
@@ -41,25 +45,31 @@
 
 ## 開發與測試指令
 
-目前可以從儲存庫根目錄執行：
+以下指令都在儲存庫根目錄執行；細節與環境變數見 [README.md](README.md)。
 
 ```bash
 git status --short
 git diff --check
+npm ci
+npm run lint
+npm run typecheck
+npm test                 # 需要 PostgreSQL；TEST_DATABASE_URL 名稱須含 test，會重建 schema
+npm run build
+npm run security:scan    # build 之後
+npm run test:e2e         # 需要空的 chainseabase_e2e（或 E2E_DATABASE_URL）；port 3100
 ```
 
-第二個指令只涵蓋 Git diff 的格式，不能取代未追蹤文件、連結、業務規則或功能測試。若只有解壓縮文件而沒有 Git 儲存庫，這兩個指令不適用。
-
-| 用途 | 現況 |
+| 用途 | 現況（已實際執行成功） |
 | --- | --- |
-| 安裝相依 | 尚未定義；建立 manifest 與 lockfile 後補上已執行成功的 frozen install 指令。 |
-| 啟動開發 | 尚未定義；M1-01 補上實際腳本與工作目錄。 |
-| lint／typecheck／build | 尚未定義；M1-01 建立並驗證。 |
-| 單元／整合／E2E 測試 | 尚未定義；M1-01／M1-02 建立 runner 與隔離測試資料。 |
-| DB migration／seed | 尚未定義；M1-02 建立、重跑驗證並記錄。 |
-| 部署／復原 | 依真實雲端配置補上，不假造已驗證命令。 |
+| 安裝相依 | `npm ci`（npm 10、Node ≥ 22.12，lockfile 已提交） |
+| 啟動開發 | `npm run dev`（根目錄，port 3000；後台 `http://admin.localhost:3000`、前台 `http://portal.localhost:3000`） |
+| lint／typecheck／build | `npm run lint`、`npm run typecheck`、`npm run build`；一次全跑：`npm run check` |
+| 單元／整合／E2E 測試 | `npm test`（Vitest，真實 PostgreSQL）、`npm run test:e2e`（Playwright 1440／768／390） |
+| DB migration／seed | `npm run db:migrate`（冪等）、`npm run db:bootstrap`（冪等、無示範資料）、`ALLOW_DEV_SEED=1 npm run db:seed-dev`（只限 dev／e2e／test 資料庫） |
+| 背景工作 | `npm run jobs:run`；正式改由 Windows 工作排程器啟動受保護 runner（待 WIN-05） |
+| 部署／復原 | Windows 網站服務見 [Windows 設定與安裝](docs/windows-setup.md) 第 9 節（尚未對外部署）；`vercel.json` 僅留作舊環境設定，現行流程見 [operations.md](operations.md)。還原演練：`npm run db:restore-drill`（目標名稱須含 drill） |
 
-第一個實作任務必須把此表與 README 更新成精確、可重現的指令。
+測試只用替身（fake）驗證第三方時，回報必須標示為 mock，不可寫成真實整合完成。
 
 ## 需求衝突與外部操作
 

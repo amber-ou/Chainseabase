@@ -1,75 +1,142 @@
 # 開發計畫與進度
 
-基準：文件包 1.0。狀態用 `完成／待開始／進行中／待外部條件／受阻`；只有交付與驗證證據齊全才能標完成。每次實作更新此檔，不把里程碑計畫當成已交付程式。
+更新日期：2026-10-29。以既有實作 `82b7641` 為基礎；不重做 M1–M7。舊任務與測試證據見 [歷史任務紀錄](docs/history/tasks.md)，本輪依 [Windows 原生規格](docs/windows-native-deployment.md) 改造。
 
-## 目前進度
+## 目前狀態
 
-- 完成：已確認需求、架構與 8 類文件入口、詳細規格、設計方向、99 項待執行驗收案例。
-- 待開始：所有應用程式、migration、功能測試與雲端部署。
-- 沒有未回答的產品架構問題；真實整合與發布仍需下列外部資源。
+使用者回報 Windows 11 Pro、Node 24.11.1、PostgreSQL 18.6：套件安裝、migrations 0001／0002、bootstrap 與重跑、build 退出碼 0、本機網站及 Google 真實登入成功。尚未由代理在該 Windows 主機重跑完整檢查，不能標示完整相容性通過。
 
-## 任務清單
-
-規格縮寫：REQ=[產品需求](docs/01-product-requirements.md)、DATA=[架構資料](docs/02-architecture-and-data.md)、RULE=[互動規則](docs/03-interaction-rules.md)、API=[契約](docs/04-api-contracts.md)、UI=[設計](docs/05-design-system.md)、OPS=[日曆與部署](docs/06-calendar-and-deployment.md)。案例 ID 對照 [驗收文件](docs/07-delivery-and-acceptance.md)。
-
-| ID | 任務與交付 | 依賴 | 規格／驗收 | 狀態 |
-| --- | --- | --- | --- | --- |
-| DOC-01 | 需求、架構、API、UI、決策與驗收文件。 | — | 文件連結與結構檢查 | 完成 |
-| DOC-02 | 根目錄 8 類入口、Claude 規則、任務清單。 | DOC-01 | 閱讀路徑、任務依賴檢查 | 完成 |
-| M1-01 | 建立 Next.js／TypeScript、鎖版、基本 shell、runner 與實際啟動／測試指令。 | DOC-02 | DATA、UI；可重現 install/build | 待開始 |
-| M1-02 | 身分、產品、分類基礎 migration；可重跑 seed 與隔離測試 DB。 | M1-01 | DATA；A01 | 待開始 |
-| M1-03 | Google 登入、session、首位團隊、後端權限。 | M1-02；EXT-02 實測 | REQ、API；A02、A05–A07 | 待開始 |
-| M1-04 | Email 邀請、接受、撤銷、角色修改與最後團隊保護。 | M1-03；EXT-03 實測 | REQ、API；A03–A04、A06、A11–A12 | 待開始 |
-| M1-05 | 產品新增／命名／切換，兩站路由與安全 host。 | M1-03 | REQ、DATA；A08–A09 | 待開始 |
-| M2-01 | 狀態、類別、Tag 群組、版本單一來源與引用處理。 | M1-02、M1-05 | REQ、DATA；F03–F07 | 待開始 |
-| M2-02 | Feedback API、公開投影、文字搜尋、併發與冪等。 | M2-01 | REQ、API；F03–F04、F09–F10、F14–F15 | 待開始 |
-| M2-03 | 建立／編輯 Modal、兩排欄位、連續新增與草稿。 | M2-02 | REQ、UI；F01–F02 | 待開始 |
-| M2-04 | 普通留言、引用、按讚、投票與測試者互動。 | M2-02、M1-04 | REQ、API；F08、F11–F13 | 待開始 |
-| M2-05 | User 列表／個人頁、Person tag、個資與頭像。 | M2-01、M2-04 | REQ、DATA；A10、F05 | 待開始 |
-| M3-01 | Schedule schema、指令 parser、交易與 request 去重。 | M2-02 | RULE、DATA；S02–S10 | 待開始 |
-| M3-02 | 歷史、移除連動、留言／引用與操作追蹤。 | M3-01、M2-04 | RULE、API；S04–S06、S13–S16 | 待開始 |
-| M3-03 | 五欄 UI、追加列、草稿原子提交與成功回饋。 | M3-02、M2-03 | RULE、UI；S01、S11–S12、S17 | 待開始 |
-| M4-01 | 單維度看板、完整唯一欄位、多 Tab 與設定。 | M2-01、M2-02 | RULE、DATA；R01–R05、R09 | 待開始 |
-| M4-02 | 拖曳／選單移動、rank、排序切換與併發。 | M4-01 | RULE、API；R06–R08、R10–R13 | 待開始 |
-| M4-03 | 公開狀態看板投影與前台不可寫保護。 | M4-02、M2-02 | REQ、API；R14、F09–F10 | 待開始 |
-| M5-01 | 責任清單、私人 views／columns／placements、Tag 隔離。 | M2-05、M2-02 | RULE、DATA；P01–P02、P05–P07 | 待開始 |
-| M5-02 | Personal UI、負責人切換、拖曳、自動儲存與失敗回復。 | M5-01 | RULE、UI；P03–P04、P08 | 待開始 |
-| M5-03 | Domain events／outbox、通知接收者、去重與浮層。 | M2-04、M2-05、M3-02 | REQ、RULE；N01–N06、O02 | 待開始 |
-| M6-01 | 個別 Calendar 授權、token 加密／刷新、日曆 ACL 與綁定。 | M1-03、M1-05；EXT-02、EXT-04 實測 | OPS、API；C01–C04、C15、C17 | 待開始 |
-| M6-02 | Google adapter、單次／全天 CRUD、ETag 與 mutation 核對。 | M6-01 | OPS、API；C05–C07、C12–C14、C18 | 待開始 |
-| M6-03 | 重複活動本次／整系列、例外與不支援型別保護。 | M6-02 | OPS；C08–C11 | 待開始 |
-| M6-04 | Dashboard 日曆、編輯 Modal、拖曳改期、分頁與刷新。 | M6-03、M2-02 | UI、OPS；C05–C06、C16、C18 | 待開始 |
-| M7-01 | 公開前台完整流程與匿名／測試／團隊 E2E。 | M2-04、M4-03、M5-03 | REQ、API；F08–F13、R14 | 待開始 |
-| M7-02 | 響應式、鍵盤、focus、狀態、taste inspector 與截圖修正。 | M3-03、M4-02、M5-02、M6-04、M7-01 | UI；V01–V04 | 待開始 |
-| M8-01 | CI、staging 隔離、secret 管理、工作程序與觀測。 | M1-01、M5-03；EXT-01、EXT-03 | OPS；O01–O02、O04 | 待開始 |
-| M8-02 | 備份／復原演練、約 30 人負載與相容 migration 驗證。 | M8-01、M7-02 | OPS；O03、O05 | 待開始 |
-| M8-03 | 完整驗收報告、發布／回退計畫與正式部署。 | M8-02；全部外部條件、實際發布授權 | 全部適用驗收 | 待開始 |
-
-依賴代表交付先後，不代表所有程式必須等待第三方帳號；Calendar／Email 可先實作 adapter 與隔離測試。外部實測未完成時，不把整合任務標成完成。
-
-## 外部條件與待提供資料
-
-| ID | 內容 | 影響 | 狀態 |
+| ID | 交付 | 依賴 | 狀態 |
 | --- | --- | --- | --- |
-| EXT-01 | Vercel／Supabase 專案、區域、正式與 staging 網域。 | 真實雲端建置與部署。 | 待外部條件 |
-| EXT-02 | Google Cloud OAuth client、consent 設定與 callbacks。 | 登入／Calendar 真實整合。 | 待外部條件 |
-| EXT-03 | Resend 已驗證寄件網域與測試寄件資格。 | 邀請信實測。 | 待外部條件 |
-| EXT-04 | sandbox／正式產品日曆、成員分享權限。 | Calendar ACL 與讀寫驗收。 | 待外部條件 |
-| EXT-05 | 指定首位團隊 Email、正式 secret 注入、備份方案及發布授權。 | 正式初始化與上線。 | 待外部條件 |
+| DOC-WIN | 現行需求、權限、架構、維運、驗收與 Claude 指令一致化 | 使用者確認原生部署 | 完成（文件）；不代表功能實作完成 |
+| WIN-01 | PowerShell 設定持久化／安全載入、版本與安裝文件、Windows 建置和隔離測試 | 現有實作 | 完成（依規格完成條件；證據為使用者 Windows 11 實機回報 2026-10-28／29＋CI Windows Server）；主機未執行 npm test 與 E2E，服務帳號／排程讀取設定檔留待 WIN-03／05 |
+| WIN-02 | 正式 filesystem 頭像、provider 設定及路徑防護 | WIN-01 設定契約 | 完成（依規格完成條件；使用者 Windows 11 實機回報 2026-10-29：初始化、ACL、重啟持久化）；服務帳號 Modify 權限（WIN-03）、頭像備份還原（WIN-05）、舊檔清理未做 |
+| WIN-03 | Windows 網站／資料庫服務、重開機恢復、權限與日誌 | WIN-01、WIN-02 | 進行中：實作完成；CI `windows-2025`（非使用者主機）完整服務生命週期通過（`bd35a9c`）；使用者實機回報（2026-10-30，繁中 Windows 11）：安裝 exit 0、Test-ChainseabaseService 僅 recovery 一項 FAIL，經 `sc.exe qfailure` 確認設定正確、屬驗證工具誤判（依英文輸出），已改為讀取結構化設定；使用者實機回報（2026-10-30 下午）：服務身分、ACL、loopback、設定讀取、頭像、故障恢復通過；`-BootReport` FAIL（判定開機後 11 秒有互動登入，使用者表示停在登入畫面），篩選未排除 Windows 系統工作階段，已修正待重測；登入前開機恢復未確認 |
+| WIN-04 | 全面受邀資料讀取與角色／產品界線 | 既有身分實作 | 進行中：實作與自動化測試完成；使用者實機回報（2026-10-29）通過更新／建置、匿名 API 401、無痕頁面無內容、後台登入；頭像匿名直接存取、快取標頭、第二個未受邀 Google 帳號未實機驗證 |
+| WIN-05 | 排程、獨立備份、隔離還原與告警 | WIN-02、WIN-03、備份裝置 | 待開始 |
+| WIN-06 | Tunnel、正式 host、Google／寄信／sandbox 日曆 | WIN-02～05、網域與公司政策 | 待開始 |
+| WIN-07 | 30 人負載、斷網／重開機／回退與發布 | WIN-01～06 | 待開始 |
 
-不要在此表填秘密值；只記是否已配置、配置位置名稱與驗證結果。實際操作前先檢查已提供的設定，避免重複向使用者索取。
+## 外部條件
 
-## 任務更新與完成條件
+- Windows 服務管理權限、主機電源／休眠／更新維護時段仍須驗證。
+- 獨立備份裝置尚未提供；域名、Tunnel 政策、寄件網域及 sandbox 日曆待設定。
+- Google 本機 OAuth 已成功，不能據此標示 Calendar API、正式 HTTPS callback 或長期 token 刷新成功。
+- Supabase staging 及 Vercel 舊資源保留；本輪不合併既有 PR、不部署、不刪資料。
 
-每個進行中／完成任務需記錄負責人、PR／commit（若有）、實際檢查命令與結果、未完成項目與阻擋原因。用以下格式追加，不填虛構結果：
+每個 WIN 任務須記錄 commit、命令、退出碼、執行平台、mock／真實服務與未執行項目。只有證據齊全才標完成；文件與安裝指南不得含密碼或 token。
+
+## WIN-01 紀錄（2026-10-28）
 
 ```text
-任務：
-狀態：
-負責人：
-交付檔案／PR／commit：
-實際檢查與結果：
-未完成或阻擋：
+任務：WIN-01 設定持久化與安全載入
+狀態：進行中（實作完成；使用者主機實測待回報）
+平台：Linux 雲端容器（Node 22.22.0、PostgreSQL 16）；Windows 部分另由 CI 的 windows-2025 執行器執行，不是使用者的 Windows 11 主機
+交付：scripts/config/load-config.mjs（單一載入器，網站以 node --import 預載、CLI 第一個 import）、scripts/config-check.ts（npm run config:check）、scripts/windows/*.ps1（前置檢查、建立／設定／驗證受 NTFS ACL 保護的設定檔）、docs/windows-setup.md、migration 目錄與 CRLF／LF 檢查碼相容、npm run dev／start 只監聽 127.0.0.1、測試環境隔離 APP_ENV／CHAINSEABASE_CONFIG_FILE
+本機檢查（Linux）：lint 0、typecheck 0、npm test 0（16 檔 164 tests 全過）、build 0、security:scan 0、test:e2e 0（64 passed）；npm start 在繼承 APP_ENV=staging 時 exit 78 拒絕、乾淨 development 時 health 200 且只監聽 127.0.0.1
+CI 新增：win-native（PowerShell 5.1／7 解析、前置檢查、npm ci／lint／typecheck／build、建立設定檔與 ACL 正反測試、URL 無密碼＋PGPASSWORD 的 migrate／bootstrap、衝突 exit 78、Windows 上 npm test）；pg18-node24（Linux 上 Node 24.11.1＋PostgreSQL 18 的 migration 與 npm test）；結果記於 PR
+未完成：使用者主機的 bootstrap 重跑、lint／typecheck／build 與各步 exit 值；E2E 未在 Windows 執行；WIN-03 服務帳號讀取設定檔、WIN-05 排程讀取設定檔尚待驗證
 ```
 
-沒有固定工期承諾；在 M1 完成、第三方條件確認後，再依實際進度估算。需求變更先記錄決策，再更新受影響任務與驗收。
+```text
+來源：使用者 Windows 11 實機回報（2026-10-28；代理未在該主機執行，與 CI 分開記錄）
+通過（使用者回報）：PostgreSQL 改為只監聽 localhost 後前置檢查通過；受保護設定檔建立；NTFS ACL 與 config:check 通過；以設定檔執行 migration 顯示 Database schema is up to date；npm start 與 Google 重新登入成功
+問題：Test-ChainseabaseConfig.ps1 參數預設值的 $PSScriptRoot 為空字串，Split-Path 失敗；明確 -AppDirectory 可通過
+修正：預設目錄改在腳本本體計算並驗證應用目錄（不符時 exit 1 並提示 -AppDirectory）；CI win-native 在 PowerShell 7／5.1 重現空 $PSScriptRoot 並檢查；待主機以不帶 -AppDirectory 重新確認
+```
+
+## WIN-02 紀錄（2026-10-28）
+
+```text
+任務：WIN-02 正式 filesystem 頭像儲存與設定
+狀態：進行中（實作完成；使用者主機實測待回報）
+平台：Linux 雲端容器（Node 22.22.0、PostgreSQL 16）；Windows 部分由 CI 的 windows-2025 執行器執行，不是使用者的 Windows 11 主機
+交付：FilesystemAvatarStorage（固定根目錄、物件路徑白名單＝<uuid>/<16 字元>.webp、拒絕穿越／裝置名稱／ADS／連結與 junction、暫存檔＋fsync＋rename 原子寫入、錯誤拋出並記錄 avatar_store_failed／avatar_read_failed）；STORAGE_PROVIDER=filesystem|supabase|fake（舊值 real＝supabase）與 AVATAR_STORAGE_DIR（絕對本機路徑、須在應用目錄外，所有環境皆檢查）；health 回報 storageBackend；上傳串流讀取超過 2 MB 即中止；config:check 檢查根目錄存在且可寫；Initialize-ChainseabaseAvatarStorage.ps1（建立／ACL／匯入 .data\avatars、不覆寫不刪來源、拒絕改指向既有根目錄）；Test-ChainseabaseConfig.ps1 檢查頭像目錄 ACL
+本機檢查（Linux）：lint 0、typecheck 0、npm test 0（17 檔 180 tests 全過）、build 0、security:scan 0；放寬路徑白名單時穿越測試失敗（變異檢查）；複製的應用目錄以 npm start＋設定檔實測：上傳、停止、重新啟動後頭像位元組相同，檔案只在 AVATAR_STORAGE_DIR
+CI 新增（win-native）：Initialize 腳本拒絕應用目錄內／UNC 路徑、匯入與冪等、拒絕改指向、頭像目錄 ACL 正反測試、config:check 回報 filesystem；npm start 重新啟動前後頭像相同且只監聽 loopback；Windows 上 junction 防護單元測試
+未完成：使用者主機的第 7 節實測；WIN-03 服務帳號的 Modify 權限與服務重啟；WIN-05 頭像備份與還原；頭像讀取需登入與快取改為 private 屬 WIN-04（目前 /api/v1/avatars 仍允許匿名讀取與 public 快取，不得經 Tunnel 開放）；舊頭像檔案在更換後不刪除（無清理）
+```
+
+## 使用者 Windows 11 實機回報（2026-10-29，e4e6e41）
+
+```text
+來源：使用者在自己的 Windows 11 主機執行並回報；代理未在該主機執行，與 CI（Windows Server 執行器）分開記錄
+WIN-01：Test-ChainseabaseConfig.ps1 不帶 -AppDirectory exit=0（f59e1bb 修正已確認）；db:migrate、db:bootstrap、lint、typecheck、build 皆 exit=0
+WIN-02：Initialize-ChainseabaseAvatarStorage.ps1 與其後的 Test-ChainseabaseConfig.ps1（設定／ACL）皆 exit=0；上傳頭像後停止並重新啟動網站，重新整理仍保留；C:\ProgramData\Chainseabase\data\avatars 檔案數 1；網站監聽 127.0.0.1:3000
+評估：WIN-01 完成條件（管理員權限、Node／npm／Git／PostgreSQL、原生 install／lint／typecheck／build）與 WIN-02 完成條件（路徑防護、權限、重啟持久化、正式拒絕 fake）已有證據 → 標為完成
+仍未驗證（不屬已完成範圍，保留）：主機上的 npm test 與 Windows E2E；WIN-03 服務帳號讀取設定檔與頭像目錄 Modify 權限、服務重啟；WIN-05 排程讀取設定檔、頭像與資料庫備份還原；重開機後自動恢復
+```
+
+## WIN-04 紀錄（2026-10-29）
+
+```text
+任務：WIN-04 公司內容全面受邀登入控制
+狀態：進行中（實作與自動化測試完成；使用者本機驗證待回報）
+平台：Linux 雲端容器（Node 22.22.0、PostgreSQL 16）；CI 另在 Windows Server 執行器跑同一套 npm test
+規則（依 data-permissions.md 與 API 契約 WIN-04 修訂）：
+  讀取 /public/*（產品、Feedback、搜尋、留言、Roadmap 與欄分頁）、/avatars/:u、通知列表：未登入 401；未受邀、已移除帳號、測試者讀其他產品 → 404，與不存在相同，且在查詢產品前判斷
+  /public/products：團隊全部、測試者只列受邀產品、未受邀／已移除為 []
+  頭像：團隊全部；測試者可讀自己、團隊、同產品成員與其受邀產品中的作者；Cache-Control private, no-cache＋Vary: Cookie＋ETag，304 也先驗證授權
+  寫入（前台互動、頭像上傳）：未受邀／已移除 403 NOT_A_MEMBER，在查詢產品前判斷
+  撤銷資格：每次請求重新讀取 session 與 product_access，無快取；移除成員或產品資格後下一個請求即失效
+  前台頁面：未登入顯示「請先登入」、未受邀顯示「尚未受邀」（依 /me 的 role），不預載任何產品內容；手機版頁首改為可換行
+測試：新增 tests/integration/invited-access.test.ts（8 tests：匿名、未受邀、已移除 team／tester、跨產品 404 與不存在相同、撤銷產品資格、團隊全產品、頭像可見範圍與快取、通知與寫入不可探測產品）；既有 F09～F15、R14、A02、N05 改以受邀測試者讀取或改為新規則（斷言保留）；E2E 新增匿名登入提示、未受邀提示、受邀測試者只見公開項目
+本機檢查（Linux）：lint 0、typecheck 0、npm test 0（18 檔 188 tests）、test:e2e 0（65 passed）、build 0、security:scan 0；移除成員資格檢查的變異使 WIN-04 測試失敗（5／8、3／23）；複製的應用目錄以 npm start 驗證：匿名 API 401、未受邀 []／404、頭像 401／404／200 與快取標頭、頁面 HTML no-store 且不含標題
+未完成：使用者本機第 8 節驗證；真實 Google 未受邀帳號流程（需第二個帳號）；Tunnel／對外仍待 WIN-03／06 與授權
+```
+
+## 使用者 Windows 11 實機回報：WIN-04（2026-10-29，6f45809）
+
+```text
+來源：使用者在自己的 Windows 11 主機執行並回報；代理未在該主機執行
+通過（使用者回報）：更新到 6f45809、安裝與建置；docs/windows-setup.md 第 8 節的三個匿名 API 皆為 401；無痕視窗的前台頁面不顯示公司內容；後台以團隊帳號登入查看正常
+未實機驗證（無獨立證據，不推定通過）：頭像網址在無痕視窗直接存取、頭像回應的快取標頭（cache-control／vary）、第二個未受邀 Google 帳號的「尚未受邀」流程；這三項僅有代理在 Linux 容器與 CI 的自動化證據
+狀態：WIN-04 維持進行中，待上述三項實機證據
+```
+
+## WIN-03 紀錄（2026-10-29）
+
+```text
+任務：WIN-03 Windows 常駐網站服務
+狀態：進行中（實作與 CI 驗證完成；重開機未登入桌面恢復待使用者主機）
+服務身分：虛擬服務帳號 NT SERVICE\Chainseabase（無密碼、專屬 SID、非 Administrators）；評估與權限表見 docs/windows-setup.md 第 9 節
+權限（依 SID）：設定檔讀取（資料夾僅列出、其他檔案無權限）；頭像根目錄、日誌、release 的 .next\cache 修改；release 與 WinSW 讀取／執行
+交付：scripts/windows/ Install-／Update-／Set-ChainseabaseServiceState／Uninstall-／Test-ChainseabaseService.ps1、ChainseabaseService.psm1；scripts/service/start-website.mjs（等待資料庫、只監聽 127.0.0.1、wrapper 消失即結束）、wait-for-database.mjs；/health 在資料庫不可用時 503
+包裝：WinSW 2.12.0 x64，下載後核對大小與 SHA-256（Authenticode：NotSigned，以固定檢查碼代替）；延遲自動啟動、相依 PostgreSQL 服務；失敗 10／30／60 秒重啟、3600 秒重設、非 0 結束也套用；日誌依大小輪替
+本機檢查（Linux 容器）：lint／typecheck 0；npm test 0（20 檔 197 tests，含 wait-for-database 3、service-entry 5、health 503 1）；看門狗關閉的變異使 wrapper 消失測試失敗
+CI win-native（GitHub Actions windows-2025、PostgreSQL 17 服務；push 跑 bd35a9c、pull_request 跑合併提交；兩者 success）：
+  https://github.com/amber-ou/Chainseabase/actions/runs/40840399096（push）、https://github.com/amber-ou/Chainseabase/actions/runs/40840406841（pull_request）
+  安裝與重跑、Test-ChainseabaseService 全部 PASS（以執行中的服務為證據：程序擁有者、loopback、health、依 SID 的權限）、Test-ChainseabaseConfig -AllowedReader
+  強制結束 node → 自動重啟；強制結束 WinSW → node 自行結束（events.log 記錄 service.wrapper_exited）且服務重啟，無殘留程序佔用埠
+  資料庫延遲：指向未開放的埠，服務記錄 db.wait（ECONNREFUSED）、health 非 200；開放後 db.ready（第 2 次以上嘗試）並恢復
+  日誌輪替：8 KB／保留 3 → 3 個舊檔＋1 個現行檔；日誌不含連線字串
+  版本切換、故障版本（移除 .next\server）exit 1 並自動回退到健康版本、再切回；解除安裝兩次：設定檔雜湊、頭像數量不變，日誌保留，設定檔無服務 SID，3000 埠釋放
+修正（CI 發現）：wrapper 被終止時 node 成為孤兒佔用 3000 埠（加 --exit-with-parent 看門狗與「恰一個服務 node」檢查）；故障版本被自動重啟時 Stop-Service 失敗導致回退中斷（停止改為重試至停妥且埠釋放）
+未完成：使用者主機第 9 節（安裝、權限、頭像上傳、故障恢復、Restart-Computer 後未登入 -BootReport）；開機時資料庫較晚就緒的等待只在 CI 以延遲連線模擬；WIN-05 排程、備份
+```
+
+## 使用者 Windows 11 實機回報：WIN-03（2026-10-30，繁體中文顯示語言）
+
+```text
+來源：使用者在自己的 Windows 11 主機執行並回報；代理未在該主機執行
+通過（使用者回報）：Install-ChainseabaseService.ps1 exit 0；Test-ChainseabaseService.ps1 除 recovery 一項外全部 PASS
+recovery 項目：FAIL，但 sc.exe qfailure Chainseabase 顯示 RESET_PERIOD 3600 秒、RESTART 10000／30000／60000 毫秒，與安裝設定相同
+判定：設定正確、驗證工具誤判。原檢查以 RESET_PERIOD[^:]*:\s*3600 解析 sc.exe 文字；繁中輸出為「RESET_PERIOD (單位: 秒) : 3600」，標籤內的冒號使比對失敗
+修正：recovery 改讀服務登錄機碼的結構化數值（FailureActions 二進位：重設秒數、各動作類型與延遲；FailureActionsOnNonCrashFailures），不讀任何顯示文字，且改為逐項比對安裝設定（恰 3 個 restart、10／30／60 秒、3600 秒、錯誤結束也套用）；缺值或無法辨識的格式判 FAIL。Administrators 成員的備援檢查同樣由 net.exe 文字改為 ADSI 讀 SID
+測試：tests/windows/ServiceRecovery.Tests.ps1（正確設定、重設 60 秒、延遲不同、2 個或 0 個動作、無動作／重新開機、錯誤結束不套用、旗標缺少、缺值、截斷、筆數不符；繁中輸出使舊樣式誤判的回歸案例；ADSI 與 Get-LocalGroupMember 一致）於 CI PowerShell 7 與 5.1；CI 服務測試另在已安裝服務上改成錯誤設定，確認只有 recovery 一項 FAIL，還原後全檢通過
+未測（不推定通過）：使用者主機上的故障恢復（第 9.3 節）、頭像上傳、未登入桌面的重開機恢復（第 9.4 節）；修正後的 Test-ChainseabaseService 尚待主機重跑
+```
+
+## 使用者 Windows 11 實機回報：WIN-03 開機（2026-10-30 下午）
+
+```text
+來源：使用者在自己的 Windows 11 主機執行並回報；代理未在該主機執行
+通過（使用者回報）：服務身分、ACL、loopback、設定讀取、頭像、故障恢復
+BootReport：FAIL。Boot 14:02:19；wrapper 14:05:45；第一次 website.ready 14:06:47；工具判定第一次互動登入 14:02:30（開機後 11 秒），使用者表示停在登入畫面等待
+原因（程式）：舊判定只看 Win32_LogonSession 的 LogonType 2／10／11 與時間，未檢查帳號；Windows 每次開機都會以 LogonType 2 建立 DWM-n（S-1-5-90-…）與 UMFD-n（S-1-5-96-…）工作階段。14:02:30 那筆的帳號類型尚待使用者以 docs/windows-setup.md 9.4 的唯讀指令確認（也可能是 ARSO 代為登入）；未改判為通過
+修正：登入以 SID 分類（person／windows／unknown，unknown 視同登入），來源為現存工作階段與安全性記錄檔 4624（含已結束者），列出帳號、SID、LogonType、LogonId、Windows 工作階段編號；讀不到安全性記錄檔判 FAIL；顯示 AutoAdminLogon 與 ARSO 設定（唯讀、不讀密碼）。BootReport 另列開機時間軸（PostgreSQL 服務程序、wrapper、website.starting、資料庫等待、db.ready、website.ready 與開機後經過時間）
+另修正：Test-ChainseabaseService 與 Set-ChainseabaseServiceState 讀取程序擁有者時，程序在列舉後結束（HRESULT 0x80041002）改為有限次（3 次）重新取樣；其他錯誤（拒絕存取、GetOwner 回傳錯誤）仍回報 FAIL
+測試：tests/windows/BootReport.Tests.ps1（SID 分類、依實機時間序列挑出第一個使用者登入、舊篩選的回歸案例、無法辨識的帳號視同登入、已結束程序的 0x80041002、其他 GetOwner 錯誤仍拋出、CI 主機的實際 DWM／UMFD 工作階段分類）於 CI PowerShell 7 與 5.1；CI 服務測試另以 -BootReport 跑完整流程（CI 主機開機早於服務安裝，其登入判定不作為開機證據）
+耗時分析（開機到就緒 4 分 28 秒）：開機→wrapper 3 分 26 秒，主要為 delayed-auto（一般自動啟動服務完成後再延後約 2 分鐘）與相依 PostgreSQL 服務；wrapper→website.ready 62 秒，含 Node／Next.js 冷啟動，是否有資料庫等待需新版時間軸確認
+未測：登入前開機恢復（待修正後的 BootReport 與唯讀診斷）
+```

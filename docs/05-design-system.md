@@ -20,7 +20,7 @@ node <skill>/scripts/draw.mjs --app --kind workspace \
   --style achromatic-ledger --out <planning-directory>
 ```
 
-本次完成方向與元件規格，**未製作可互動頁面、未執行瀏覽器 inspector，也沒有視覺通過分數**。Featurebase 用作資訊配置參考，最終互動以本文件及已確認需求為準。
+規劃階段只完成方向與元件規格；實作後的 lint／inspector 結果記錄在 [驗收追蹤報告](acceptance-report.md) V04。Featurebase 用作資訊配置參考，最終互動以本文件及已確認需求為準。
 
 ### 產品需求優先的調整
 
@@ -178,7 +178,7 @@ Schedule
 ## 前台網站
 
 - 使用相同字體與元件，但採簡潔頂部產品名稱、Feedback／Roadmap 導覽與登入控制，不保留後台 sidebar。
-- 匿名訪客可瀏覽與搜尋公開內容；按投票、留言或新增時，提示登入；登入後若未受邀，顯示缺少該產品互動資格，不假裝加入成功。
+- 匿名訪客進入內容頁導向登入，不預載公司內容；登入後若未受邀，顯示缺少產品存取資格，不提供列表／搜尋／互動資料。受邀者仍只見前台允許欄位，不能以 UI 隱藏代替 API 授權。
 - 前台 Feedback 仍以 Modal 開啟；沒有 Schedule、私人 Tag、內部欄位或內部 API 呼叫。
 - 只有選擇公開的狀態 Roadmap 可見；卡片不提供拖曳。
 

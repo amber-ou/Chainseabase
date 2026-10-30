@@ -2,14 +2,14 @@
 
 ## 架構原則
 
-採模組化單體：同一份 Next.js／TypeScript 程式、兩個網站入口、共用伺服器服務層與 Supabase PostgreSQL。約 30 人規模不需要微服務或自建常駐 WebSocket 叢集。
+採模組化單體：同一份 Next.js／TypeScript 程式、兩個網站入口、共用伺服器服務層與 Windows PostgreSQL。約 30 人規模不需要微服務或自建常駐 WebSocket 叢集。
 
-GitHub 保存程式碼並觸發 Vercel 部署；GitHub Pages 不執行本系統動態後端。Supabase 提供資料庫與頭像 Storage，不讓瀏覽器直接持有管理金鑰。
+GitHub 保存程式與 CI；Windows 服務執行應用及 PostgreSQL，正式 filesystem 儲存頭像。Tunnel 提供受控外部 HTTPS 入口，資料庫不對外開放；不讓瀏覽器持有管理金鑰。
 
 ```mermaid
 flowchart TD
-    Visitor[未登入訪客] --> Portal[前台網站]
-    Tester[受邀測試成員] --> Portal
+    Visitor[未登入訪客] --> Login[登入入口]
+    Tester[受邀登入成員] --> Portal[前台網站]
     Team[團隊成員] --> Portal
     Team --> Admin[後台網站]
     Admin --> Dashboard[Product 與 Calendar]
@@ -25,15 +25,15 @@ flowchart TD
     Manage --> Gateway
     Gateway --> Auth[Session、角色、產品與資料可見性檢查]
     Auth --> Services[領域服務與公開資料投影]
-    Services --> DB[(Supabase PostgreSQL)]
-    Services --> Storage[頭像 Storage]
+    Services --> DB[(Windows PostgreSQL)]
+    Services --> Storage[正式本機頭像儲存]
     Services --> Calendar[Google Calendar API]
     DB --> Outbox[持久化待處理事件]
     Outbox --> Worker[受保護的定時工作／事件工作]
     Worker --> Notifications[站內通知]
     Worker --> Resend[Resend 邀請信]
-    GitHub[GitHub 私有儲存庫] --> Vercel[Vercel CI／部署]
-    Vercel --> Gateway
+    GitHub[GitHub 私有儲存庫] --> Windows[Windows 原生服務]
+    Windows --> Gateway
 ```
 
 ## 模組邊界
@@ -70,12 +70,12 @@ tests/                 # 單元、DB 整合、API 權限與 E2E
 
 ## 網站與身分隔離
 
-- `admin.<domain>` 與 `feedback.<domain>` 指向同一 Vercel 應用；Host 依明確 allowlist 決定網站與路由，不接受任意 Host 建立 OAuth 回跳網址。
+- `admin.<domain>` 與 `feedback.<domain>` 指向同一 Windows Next.js 應用；Host 依明確 allowlist 決定網站與路由，不接受任意 Host 建立 OAuth 回跳網址。
 - 兩站以 host-only、Secure、HttpOnly、SameSite cookie 保存 session；不使用涵蓋所有子網域的廣域 cookie。
 - 同一 Google 帳號可分別在兩站建立 session；不承諾跨站無跳轉登入。Google 自有登入狀態可縮短再次授權，但不能假設永遠存在。
 - Google 登入與 Calendar 授權使用不同流程及 callback；Calendar 只從後台發起。
 - cookie 驗證寫入需防 CSRF，OAuth 使用 state、nonce／PKCE 等成熟 library 支援；後端驗證 issuer、audience、subject 與 Email verified。
-- 登入頁／callback 可以匿名存取；後台其餘資料查詢均需團隊資格。
+- 登入頁／callback 可匿名進入必要流程；後台資料查詢需團隊資格，前台資料查詢需團隊或受邀產品資格。
 - 每個私人查詢都把 owner_id 從 session 取得，不能信任請求傳入的 owner。
 
 ## 核心關係圖
@@ -166,9 +166,9 @@ erDiagram
 
 | 資料表 | 重要欄位 | 限制 |
 | --- | --- | --- |
-| roadmaps | id、product_id、name、description、dimension、tag_group_id nullable、sort_mode、is_default、portal_published、revision | dimension=status/category/tag_group；tag_group 必須 single；建立後 dimension 固定；sort=create_time/freedom。 |
+| roadmaps | id、product_id、name、description、dimension、tag_group_id nullable、sort_mode、is_default、portal_published、revision | dimension=status/category/tag_group；tag_group 必須 single；建立後 dimension 固定；sort=create_time/freedom；revision 只版本化結構與設定，卡片移動不遞增（首次切 freedom 除外）。 |
 | roadmap_columns | id、roadmap_id、label、order、status_id nullable、category_id nullable、tag_id nullable、is_unclassified | 選項對應型別符合 dimension；同選項唯一；每 Tag 看板恰一未歸類欄。 |
-| roadmap_ranks | roadmap_id、column_id、feedback_id、rank | 每 roadmap＋feedback 最多一筆有效排序；實際欄位仍由 Feedback 資料推導，不以 rank 決定欄位。 |
+| roadmap_ranks | roadmap_id、column_id、feedback_id、rank、placement_revision | 每 roadmap＋feedback 最多一筆有效排序；實際欄位仍由 Feedback 資料推導，不以 rank 決定欄位；placement_revision 是單卡排序版本，供移動做樂觀檢查（重編號不遞增）。 |
 | personal_views | id、owner_id、product_id、subject_user_id、sort_mode、revision | owner＋product＋subject 唯一；subject 只能是有效團隊成員。 |
 | personal_columns | id、view_id、name、order、is_default | 每 view 一個固定預設欄，至少一欄。 |
 | personal_placements | view_id、feedback_id、column_id、rank | view＋feedback 唯一；欄位須屬同 view；卡片須仍屬 subject 責任清單。 |
