@@ -1,6 +1,6 @@
 # 驗收報告
 
-更新日期：2026-10-29。現行驗收規格見 [驗收案例](07-delivery-and-acceptance.md) 與 [WIN 任務](windows-native-deployment.md#開發任務與驗收)。原雲端／匿名前台驗收及 147 單元整合等當時紀錄完整保留在 [歷史報告](history/acceptance-report.md)；不當作本次重跑結果。
+更新日期：2026-11-02。現行驗收規格見 [驗收案例](07-delivery-and-acceptance.md) 與 [WIN 任務](windows-native-deployment.md#開發任務與驗收)。原雲端／匿名前台驗收及 147 單元整合等當時紀錄完整保留在 [歷史報告](history/acceptance-report.md)；不當作本次重跑結果。
 
 ## Windows 實機：使用者回報
 
@@ -141,12 +141,41 @@ CI 為 GitHub Actions `windows-2025`（Windows Server、PostgreSQL 17 服務）�
 
 使用者實機回報（2026-10-30 下午）：服務身分、ACL、loopback、設定讀取、頭像、故障恢復**通過**。`-BootReport` **FAIL**：Boot 14:02:19、wrapper 14:05:45、website.ready 14:06:47，工具判定 14:02:30 已有互動登入，使用者表示停在登入畫面。舊判定未依帳號篩選，會把 Windows 每次開機建立的 DWM／UMFD 工作階段（LogonType 2）算成登入；已改為依 SID 分類並讀取安全性記錄檔，該筆紀錄的實際帳號待使用者以唯讀指令確認。**登入前開機恢復仍未確認**，不以修正工具推定通過。
 
+## 使用者 Windows 11 實機回報：WIN-03 開機（2026-11-02，台灣時間）
+
+使用者在自己的 Windows 11 主機執行並回報；代理未在該主機執行，與 CI 證據分開。檢查工具版本 `51fb7dc`。
+
+| 項目 | 使用者回報 |
+| --- | --- |
+| 開機 | 14:25:20 |
+| PostgreSQL 啟動 | 14:25:37 |
+| 服務包裝程式啟動 | 14:27:49 |
+| `website.starting`／`db.ready`／`website.ready` | 14:27:53／14:27:55／14:28:00（開機後約 2 分 40 秒就緒） |
+| Database waits | 0 |
+| 首次 person 登入 | 14:25:53 |
+| 自動登入設定 | AutoAdminLogon off；該使用者 ARSO OptOut=1 |
+| `-BootReport` | FAIL，退出碼 1 |
+| 使用者確認 | 開機後曾先輸入 PIN 才等待，**不符合「登入前網站就緒」的測試條件** |
+
+判定：不是服務啟動故障，也不是驗收通過。「未登入桌面即可完成啟動」**仍未驗證**，使用者決定暫緩重測，不再要求反覆重開機，也不修改 Windows 登入設定。既有實機通過項目保留：服務身分、ACL、loopback、設定讀取、頭像持久化、故障自動恢復。
+
+## WIN-05 備份與還原：暫緩（2026-11-02）
+
+等待團隊評估是否採用後，再決定本機、外接裝置或 Supabase 方案；目前不建立主機備份排程或雲端備份資源。
+
+| 項目 | 現況 |
+| --- | --- |
+| `npm run db:restore-drill`（`scripts/restore-drill.ts`） | **已實作**：pg_dump 到暫存檔、還原到名稱須含 drill 的隔離資料庫，比對行數與私人資料摘要；結束時刪除暫存備份。曾在 Linux 開發環境執行一致（[歷史報告](history/acceptance-report.md)）；**Windows 主機與 Supabase 未執行** |
+| `npm run jobs:run`（`scripts/run-jobs.ts`） | **已實作**：手動執行一批 outbox 工作；通知與邀請信平常在請求內立即處理，此命令只補做失敗重試；**無排程** |
+| 定期備份與保存、防重疊、離線與容量告警、頭像與金鑰備份、Windows 工作排程器 | **未實作** |
+| Windows 主機隔離還原、耗時與資料損失範圍 | **未驗證** |
+
 ## 尚未驗證
 
 - Windows 原生完整 lint／typecheck／單元／整合／E2E、PostgreSQL 18 完整回歸與 30 人負載。
 - WIN-02 正式 filesystem、WIN-04 受邀資料讀取（包括新版 A02、F09）；舊匿名測試不適用。
-- 使用者主機上的設定檔建立、NTFS ACL 與 `config:check`（工具已交付，見 [Windows 設定與安裝](windows-setup.md)）；使用者主機上的 Windows 服務安裝（第 9 節）、無桌面登入重開機恢復、排程與磁碟告警。
-- 備份／還原、外部 Tunnel、正式 HTTPS callbacks、Google Calendar 真實讀寫、寄信與長期授權。
+- 使用者主機上的設定檔建立、NTFS ACL 與 `config:check`（工具已交付，見 [Windows 設定與安裝](windows-setup.md)）；未登入桌面即可完成啟動（使用者暫緩重測）；排程與磁碟告警（WIN-05 暫緩）。
+- 備份／還原（WIN-05 暫緩）、外部 Tunnel、正式 HTTPS callbacks、Google Calendar 真實讀寫、寄信與長期授權。團隊試用前的項目與優先順序見 [tasks.md](../tasks.md#團隊試用前仍需完成的項目)。
 - 舊報告中尚未完成的螢幕閱讀器／瀏覽器相容性／人工驗收，仍維持未完成。
 
 ## 舊資源

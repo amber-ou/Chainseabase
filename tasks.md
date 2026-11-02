@@ -1,6 +1,6 @@
 # 開發計畫與進度
 
-更新日期：2026-10-29。以既有實作 `82b7641` 為基礎；不重做 M1–M7。舊任務與測試證據見 [歷史任務紀錄](docs/history/tasks.md)，本輪依 [Windows 原生規格](docs/windows-native-deployment.md) 改造。
+更新日期：2026-11-02。以既有實作 `82b7641` 為基礎；不重做 M1–M7。舊任務與測試證據見 [歷史任務紀錄](docs/history/tasks.md)，本輪依 [Windows 原生規格](docs/windows-native-deployment.md) 改造。
 
 ## 目前狀態
 
@@ -11,11 +11,34 @@
 | DOC-WIN | 現行需求、權限、架構、維運、驗收與 Claude 指令一致化 | 使用者確認原生部署 | 完成（文件）；不代表功能實作完成 |
 | WIN-01 | PowerShell 設定持久化／安全載入、版本與安裝文件、Windows 建置和隔離測試 | 現有實作 | 完成（依規格完成條件；證據為使用者 Windows 11 實機回報 2026-10-28／29＋CI Windows Server）；主機未執行 npm test 與 E2E，服務帳號／排程讀取設定檔留待 WIN-03／05 |
 | WIN-02 | 正式 filesystem 頭像、provider 設定及路徑防護 | WIN-01 設定契約 | 完成（依規格完成條件；使用者 Windows 11 實機回報 2026-10-29：初始化、ACL、重啟持久化）；服務帳號 Modify 權限（WIN-03）、頭像備份還原（WIN-05）、舊檔清理未做 |
-| WIN-03 | Windows 網站／資料庫服務、重開機恢復、權限與日誌 | WIN-01、WIN-02 | 進行中：實作完成；CI `windows-2025`（非使用者主機）完整服務生命週期通過（`bd35a9c`）；使用者實機回報（2026-10-30，繁中 Windows 11）：安裝 exit 0、Test-ChainseabaseService 僅 recovery 一項 FAIL，經 `sc.exe qfailure` 確認設定正確、屬驗證工具誤判（依英文輸出），已改為讀取結構化設定；使用者實機回報（2026-10-30 下午）：服務身分、ACL、loopback、設定讀取、頭像、故障恢復通過；`-BootReport` FAIL（判定開機後 11 秒有互動登入，使用者表示停在登入畫面），篩選未排除 Windows 系統工作階段，已修正待重測；登入前開機恢復未確認 |
+| WIN-03 | Windows 網站／資料庫服務、重開機恢復、權限與日誌 | WIN-01、WIN-02 | 進行中：實作完成，CI `windows-2025` 完整服務生命週期通過；使用者實機回報通過服務身分、ACL、loopback、設定讀取、頭像持久化、故障自動恢復；**「未登入桌面即可完成啟動」未驗證**（2026-11-02 該次開機曾先輸入 PIN，不符合測試條件），使用者決定暫緩重測 |
 | WIN-04 | 全面受邀資料讀取與角色／產品界線 | 既有身分實作 | 進行中：實作與自動化測試完成；使用者實機回報（2026-10-29）通過更新／建置、匿名 API 401、無痕頁面無內容、後台登入；頭像匿名直接存取、快取標頭、第二個未受邀 Google 帳號未實機驗證 |
-| WIN-05 | 排程、獨立備份、隔離還原與告警 | WIN-02、WIN-03、備份裝置 | 待開始 |
+| WIN-05 | 排程、獨立備份、隔離還原與告警 | WIN-02、WIN-03、備份方案 | **暫緩**：待團隊評估是否採用後，再決定本機、外接裝置或 Supabase 方案；已有 `db:restore-drill` 與 `jobs:run`（見下方 WIN-05 現況），排程、備份保存、告警與 Windows 還原未實作或未驗證；目前不建立主機備份排程或雲端備份資源 |
 | WIN-06 | Tunnel、正式 host、Google／寄信／sandbox 日曆 | WIN-02～05、網域與公司政策 | 待開始 |
 | WIN-07 | 30 人負載、斷網／重開機／回退與發布 | WIN-01～06 | 待開始 |
+
+## 團隊試用前仍需完成的項目
+
+定位：內部試用環境，不存放唯一一份重要資料。暫不合併 PR、不開 Tunnel、不對外部署。依優先順序：
+
+**A. 讓同仁能進入並使用（阻擋試用，需決策或外部條件）**
+
+1. **存取路徑**：網站只監聽 `127.0.0.1`，規格中唯一的對外路徑是 WIN-06（Cloudflare Tunnel、固定 HTTPS 網域、後台與前台兩個 host），且不得以開放開發埠或轉發替代。目前不開 Tunnel，其他同仁無法連線。需決定試用的存取方式；非 Tunnel 的方式（例如區網）屬規格變更，需另行確認後才實作。
+2. **執行模式**：主機目前為 `APP_ENV=development`，Calendar 與寄信是開發替身（fake）。開放給他人前，規格要求 staging／production 嚴格模式：HTTPS 的 `ADMIN_ORIGIN`／`PORTAL_ORIGIN`、真實 Google 與寄信設定；fake 不得對外開放。
+3. **邀請入站**：接受邀請需要邀請信中的連結，因此沒有真實寄信（Resend 已驗證寄件網域，EXT-03）時，除 bootstrap 的第一位團隊成員外，其他人無法取得資格。
+4. **Google 登入與日曆**：正式 HTTPS callback 與同意畫面（測試使用者或發布狀態，EXT-02）。Google Calendar 真實讀寫只以 fake 驗證（EXT-04 sandbox 未執行）；試用時 Calendar 功能應標示未驗證，或先不納入試用範圍。
+
+**B. 核心功能與使用流程（在試用環境以真實帳號走一遍）**
+
+5. 自動化測試已在 Linux 與 CI Windows Server 通過，但尚未在試用環境以真實帳號人工走查。依序確認：邀請、接受與登入（team、tester）；Feedback 建立、編輯、留言與 Tag；Schedule 指令與 clear；Roadmap 拖曳與版本欄位；Personal 負責人切換與自動儲存；站內通知；前台只見受邀產品。對應驗收 A／F／S／R／P／N（[驗收案例](docs/07-delivery-and-acceptance.md)）。
+6. WIN-04 尚未實機驗證的三項：頭像網址在無痕視窗直接存取、頭像快取標頭、第二個未受邀 Google 帳號（第一次讓他人登入前確認）。
+
+**C. 試用期間的營運注意（不阻擋試用）**
+
+7. 備份暫緩（WIN-05）：升級若含 migration，`-Migrate` 需先自行備份（`-BackupConfirmed`）；`db:restore-drill` 只做演練，不保留備份檔，也不含頭像與金鑰。
+8. 背景工作沒有排程：通知與邀請信在請求內立即處理；失敗後的重試需手動執行 `npm run jobs:run`（或在後台重寄邀請）。
+9. 「未登入桌面即可完成啟動」未驗證：主機重開機後若無人登入，網站是否自行就緒尚無證據；重開機後先確認網站狀態。
+10. 主機上的 `npm test` 與 Windows E2E 未執行（CI Windows Server 已跑 `npm test`）；螢幕閱讀器、Safari／Firefox 與人工視覺審查（V02–V04）仍為部分完成。
 
 ## 外部條件
 
@@ -139,4 +162,30 @@ BootReport：FAIL。Boot 14:02:19；wrapper 14:05:45；第一次 website.ready 1
 測試：tests/windows/BootReport.Tests.ps1（SID 分類、依實機時間序列挑出第一個使用者登入、舊篩選的回歸案例、無法辨識的帳號視同登入、已結束程序的 0x80041002、其他 GetOwner 錯誤仍拋出、CI 主機的實際 DWM／UMFD 工作階段分類）於 CI PowerShell 7 與 5.1；CI 服務測試另以 -BootReport 跑完整流程（CI 主機開機早於服務安裝，其登入判定不作為開機證據）
 耗時分析（開機到就緒 4 分 28 秒）：開機→wrapper 3 分 26 秒，主要為 delayed-auto（一般自動啟動服務完成後再延後約 2 分鐘）與相依 PostgreSQL 服務；wrapper→website.ready 62 秒，含 Node／Next.js 冷啟動，是否有資料庫等待需新版時間軸確認
 未測：登入前開機恢復（待修正後的 BootReport 與唯讀診斷）
+```
+
+## 使用者 Windows 11 實機回報：WIN-03 開機（2026-11-02，台灣時間）
+
+```text
+來源：使用者在自己的 Windows 11 主機執行並回報；代理未在該主機執行；與 CI 證據分開
+檢查工具版本：51fb7dc（Test-ChainseabaseService.ps1 -BootReport）
+時間軸：開機 14:25:20；PostgreSQL 啟動 14:25:37（+17 秒）；服務包裝程式啟動 14:27:49（+2 分 29 秒）；website.starting 14:27:53；db.ready 14:27:55；website.ready 14:28:00（+2 分 40 秒）；Database waits 0
+首次 person 登入：14:25:53（開機後 33 秒）；AutoAdminLogon off；該使用者 ARSO OptOut=1
+BootReport：FAIL，退出碼 1
+使用者確認：這次開機後曾先輸入 PIN 才等待，因此不符合「登入前網站就緒」的測試條件
+判定：不是服務啟動故障，也不是驗收通過。本次網站在開機約 2 分 40 秒後就緒；資料庫未等待，耗時主要在延遲自動啟動（PostgreSQL 啟動後約 2 分 12 秒才啟動服務包裝程式），網站本身啟動約 11 秒
+結論：「未登入桌面即可完成啟動」仍未驗證；使用者決定暫緩重測，不再要求反覆重開機，也不修改 Windows 登入設定
+既有實機通過項目保留：服務身分、ACL、loopback、設定讀取、頭像持久化、故障自動恢復
+```
+
+## WIN-05 現況（2026-11-02）
+
+```text
+狀態：暫緩。等待團隊評估是否採用後，再決定本機、外接裝置或 Supabase 方案；目前不建立主機備份排程或雲端備份資源
+已有程式（保留，如實記錄）：
+  scripts/restore-drill.ts（npm run db:restore-drill）：pg_dump 來源資料庫、pg_restore 到名稱須含 drill 的隔離資料庫，比對每張表行數與私人資料摘要；暫存的備份檔在結束時刪除。歷史紀錄：曾在 Linux 開發環境執行一致（41 張表）；Windows 主機與 Supabase 未執行；以 SOURCE_DATABASE_URL／TARGET_DATABASE_URL 指定，未經設定檔載入器
+  scripts/run-jobs.ts（npm run jobs:run）：執行一批 outbox 工作（通知展開、邀請信），經設定檔載入器；手動執行，無排程
+  /api/v1/jobs/run：以 JOB_RUNNER_SECRET 保護的工作端點（舊 Vercel Cron 用）
+未實作：定期備份與保存、防重疊、裝置離線與容量告警、頭像與金鑰備份、Windows 工作排程器設定
+未驗證：Windows 主機上的隔離還原、還原耗時與資料損失範圍（WIN-05 完成條件）
 ```
