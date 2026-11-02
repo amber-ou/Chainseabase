@@ -127,3 +127,23 @@ npm run test:e2e
 先取得 `origin/codex/ui-phase1-handoff`。工作目錄乾淨且目前分支仍以 `6076fbb` 為基準時，可執行 `git merge --ff-only origin/codex/ui-phase1-handoff` 取得完整成果；若無法 fast-forward，先檢查差異，不 reset 或覆寫本地工作。
 
 第一階段先驗證已有整合、修正本階段問題，不重複 init 或覆蓋元件。確認 Tailwind 無全域 Preflight、tokens 保留原語意，跑本文件列出的檢查。後續階段的側邊欄重排、Product 清單、Calendar 拆頁、產品刪除、Logo／Login 改版都只留在交付文件，不在此階段執行。
+
+## CC 第一階段驗證（2026-11-02，Linux 雲端容器）
+
+以 `git merge --ff-only origin/codex/ui-phase1-handoff` 取得 `1960af5`（fast-forward，未 reset 或覆寫）。驗證後只新增一個鍵盤測試；元件、CSS、依賴與 Dashboard 程式未改。
+
+| 檢查 | 結果 |
+| --- | --- |
+| 新增依賴來源 | 皆為官方維護者與儲存庫：`cn`（shadcn，`shadcn-ui/cn`，shadcn CLI 本身也依賴它）、`radix-ui`、`lucide-react`、`class-variance-authority`、`tw-animate-css`、`tailwindcss`、`@tailwindcss/postcss`、`shadcn`。lockfile 未新增含安裝腳本的套件（仍為 esbuild、fsevents、unrs-resolver）。`cn` 執行期程式碼未使用網路、子程序、環境變數或 eval。注意：`cn` 0.5.1 與 `lucide-react` 1.66.0 在驗證時發布僅 2–3 天，屬很新的版本 |
+| 官方 Agent Skill | `.claude/skills/shadcn` 與 `.agents/skills/shadcn` 內容相同；22 個檔案中 21 個與 `shadcn-ui/ui` main 的 `skills/shadcn/` 逐位元相同，`LICENSE.md` 與上游根目錄 `LICENSE.md` 相同 |
+| 元件原始碼 | 13 個檔案與官方 `4aaea19` 的 `new-york-v4/ui` 比對：9 個相同；Dialog、Dropdown Menu、Select、Tooltip 只有文件記載的調整（堆疊 tokens、「關閉」、Dialog 最大高度可捲動） |
+| CSS 相容性 | production build 的 CSS 無 Preflight（無 `html` 的 `-webkit-text-size-adjust`）；layer 依首次出現為 properties → theme → base → legacy → components → utilities，utilities 高於舊 CSS；舊 CSS 的全域元素規則只有 font／color 繼承、box-sizing 與標題字級，不會干擾新元件；未分層的 CSS 只有字型 `@font-face` |
+| Dashboard 遷移 | API、payload、`expectedRevision`、409 文案、建立後導向皆不變；舊 Modal 本來就沒有 Enter 送出或未儲存確認，Escape 關閉與初始焦點行為相同 |
+| `npm ci`／lint／typecheck／build／security:scan | 全部 exit 0（scan 740 個檔案） |
+| `npm test` | 20 檔 197 passed（本容器直接執行，不需子程序回收工具） |
+| `npm run test:ui` | 3 passed（1440／768／390） |
+| `npm run test:e2e` | 加入鍵盤測試前 71 passed；加入後 74 passed，0 failed |
+| 新增測試 | `shadcn.spec.ts`：只用鍵盤完成新增產品（Enter 開啟、輸入、Tab 到確認、Enter）、產品切換（Enter 開啟、Escape 不切換且焦點回到觸發器、Home／方向鍵、Enter 切換）。前兩版因測試以 `data-highlighted`（下一次 render 才更新）判斷而間歇失敗，改為追蹤焦點後連續 5 次 9／9 通過；元件本身無問題 |
+| 截圖 | 檢視 390 寬度的 Dashboard 與錯誤對話框：控制項換行無溢出，錯誤狀態與草稿保留正常 |
+
+未執行：Taste inspector、Windows 主機上的 test:ui／E2E（Windows 需先安裝 Playwright Chromium）、真實 Google／Resend。

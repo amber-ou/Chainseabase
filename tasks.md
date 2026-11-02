@@ -196,4 +196,6 @@ BootReport：FAIL，退出碼 1
 
 驗證：npm ci、lint、typecheck、production build／啟動及 security scan 通過；197 個單元／整合測試在具子程序回收的測試環境通過。既有 E2E 初次 64／65 通過，1 個鍵盤焦點案例經未修改版本對照與整合版本連續 3 次重跑通過。新增 Product E2E 6／6、元件隔離測試 3／3 通過。真實 Google／Resend 與 Windows 實機未重驗。
 
-來源版本、手動安裝原因、測試限制與後續元件規範見 [shadcn/ui 整合紀錄](docs/ui/shadcn-integration.md)。官方 registry 目前在此環境不可達；成果由 `codex/ui-phase1-handoff` 分支交接，未部署。
+來源版本、手動安裝原因、測試限制與後續元件規範見 [shadcn/ui 整合紀錄](docs/ui/shadcn-integration.md)。
+
+CC 驗證（2026-11-02，Linux 容器）：fast-forward 取得 `1960af5`；依賴來源、官方 skill、元件原始碼與 CSS layer／Preflight 已逐項核對；lint、typecheck、build、security:scan 皆 0；`npm test` 197 passed；`test:ui` 3 passed；`test:e2e` 74 passed（新增只用鍵盤操作產品對話框與切換器的案例）。Taste inspector、Windows 主機與真實 Google／Resend 未執行。官方 registry 目前在此環境不可達；成果由 `codex/ui-phase1-handoff` 分支交接，未部署。

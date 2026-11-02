@@ -58,3 +58,55 @@ test('Product dialog keeps failed input, cancels safely and restores focus', asy
   await dialog.getByRole('button', { name: '取消', exact: true }).click();
   await expect(dialog).toBeHidden();
 });
+
+test('Product controls work with the keyboard alone (dialog and product switcher)', async ({ page }) => {
+  await login(page, 'admin', 'lead@e2e.test');
+  const original = await openFirstProduct(page);
+  const originalName = await page.getByRole('heading', { level: 1 }).innerText();
+  // create a second product without the mouse: Enter opens, typing fills, Tab reaches the confirm button
+  await page.getByRole('button', { name: '新增產品', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  const create = page.getByRole('dialog', { name: '新增產品' });
+  await expect(create.getByLabel('產品名稱')).toBeFocused();
+  const name = unique('鍵盤切換');
+  await page.keyboard.type(name);
+  await page.keyboard.press('Tab');
+  await expect(create.getByRole('button', { name: '取消', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(create.getByRole('button', { name: '建立產品', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(create).toBeHidden();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+  const created = page.url();
+
+  // the switcher: Enter opens it, Escape closes it without switching and keeps focus
+  const trigger = page.getByRole('combobox', { name: '切換產品', exact: true }).last();
+  await trigger.focus();
+  await page.keyboard.press('Enter');
+  const listbox = page.getByRole('listbox');
+  // keys go to the list once focus has moved onto the selected option (as a user sees it highlighted)
+  const selected = listbox.getByRole('option', { selected: true });
+  await expect(selected).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(listbox).toBeHidden();
+  await expect(trigger).toBeFocused();
+  expect(page.url()).toBe(created);
+
+  // arrow keys move to the original product, Enter switches to it
+  await page.keyboard.press('Enter');
+  await expect(selected).toBeFocused();
+  // follow focus (moved synchronously on each key), not data-highlighted (set in a later render)
+  const options = listbox.getByRole('option');
+  const index = (await options.allInnerTexts()).findIndex((t) => t.trim() === originalName);
+  expect(index).toBeGreaterThanOrEqual(0);
+  await page.keyboard.press('Home');
+  await expect(options.nth(0)).toBeFocused();
+  for (let i = 1; i <= index; i++) {
+    await page.keyboard.press('ArrowDown');
+    await expect(options.nth(i)).toBeFocused();
+  }
+  await expect(listbox.getByRole('option', { name: originalName, exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(original + '/dashboard');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(originalName);
+});
