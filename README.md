@@ -88,3 +88,7 @@ tests/              # unit、integration（真實 PostgreSQL）、e2e（Playwrig
 從 [START-DEVELOPMENT.md](START-DEVELOPMENT.md) 與 [文件索引](docs/README.md) 開始。產品與規格：[PRD.md](PRD.md)、[specs/](specs/README.md)、[data-permissions.md](data-permissions.md)、[ui-ux.md](ui-ux.md)、[architecture.md](architecture.md)；工作規則：[CLAUDE.md](CLAUDE.md)；任務與證據：[tasks.md](tasks.md)；部署與維運：[operations.md](operations.md)；驗收結果：[docs/acceptance-report.md](docs/acceptance-report.md)。
 
 介面為繁體中文，顯示時區 `Asia/Taipei`，資料庫時間戳為 UTC。
+
+## UI 元件開發
+
+新 UI 使用 shadcn/ui，沿用 Taste 設計與共用 tokens；安裝、匯入、Agent Skill 與漸進遷移方式見 [UI 元件規範](docs/ui/shadcn-integration.md)。`npm run test:ui` 可在不啟動資料庫的情況下驗證基礎元件（需 Chromium）。

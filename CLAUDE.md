@@ -76,3 +76,7 @@ npm run test:e2e         # 需要空的 chainseabase_e2e（或 E2E_DATABASE_URL�
 使用者最新已確認決策優先於較舊的對話草案；本版決策紀錄已明確標示被取代規則。對一般工程選擇依文件預設執行，不重問已回答事項。若發現真正改變公開範圍、資料結果或已確認需求的矛盾，指出具體兩條規則與影響，在等待回答時繼續不依賴該決策的工作。
 
 文件本身不代表已授權發布正式站點、寄送真實邀請或修改公司日曆。依當次使用者授權範圍執行；本地與 sandbox 的可逆工作不需要重複確認。秘密透過環境設定提供，勿要求在聊天貼上。
+
+## UI 元件庫（2026-11-02）
+
+新 UI 優先使用 `src/components/ui/` 的 shadcn/ui 元件，缺少時查官方 registry；客製化先用 variants 與 `src/app/globals.css` tokens，不重複造 Button／Dialog。Taste 繼續負責設計，遵守同一套 tokens。新 icon 使用 Lucide。詳細整合方式、CSS 遷移限制、官方 skill 及測試指令見 [shadcn/ui 規範](docs/ui/shadcn-integration.md)。本輪僅遷移 Product Dashboard 基礎元件，其他頁保留原行為；不得為套用 UI 庫修改 API、資料結構或商業邏輯。

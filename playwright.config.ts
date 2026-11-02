@@ -27,8 +27,8 @@ export default defineConfig({
   },
   projects: [
     { name: 'desktop-1440', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }, testIgnore: /keyboard-phone\.spec\.ts/ },
-    { name: 'tablet-768', use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 } }, testMatch: /responsive\.spec\.ts/ },
-    { name: 'mobile-390', use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, hasTouch: true }, testMatch: /(responsive|a11y|keyboard-phone)\.spec\.ts/ },
+    { name: 'tablet-768', use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 } }, testMatch: /(responsive|shadcn)\.spec\.ts/ },
+    { name: 'mobile-390', use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, hasTouch: true }, testMatch: /(responsive|a11y|keyboard-phone|shadcn)\.spec\.ts/ },
   ],
   webServer: {
     command: `npm run build && npx next start -p ${PORT}`,

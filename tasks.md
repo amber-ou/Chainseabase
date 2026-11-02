@@ -189,3 +189,11 @@ BootReport：FAIL，退出碼 1
 未實作：定期備份與保存、防重疊、裝置離線與容量告警、頭像與金鑰備份、Windows 工作排程器設定
 未驗證：Windows 主機上的隔離還原、還原耗時與資料損失範圍（WIN-05 完成條件）
 ```
+
+## UI-01：shadcn/ui 元件庫（2026-11-02）
+
+完成本地整合：10 個指定元件＋Field／Label／Separator、Tailwind 4 與既有 Taste tokens、官方 shadcn skill（Codex／Claude Code），現有 Product Dashboard 首批遷移。路由、API、資料結構與商業邏輯未修改；其餘頁面保留。
+
+驗證：npm ci、lint、typecheck、production build／啟動及 security scan 通過；197 個單元／整合測試在具子程序回收的測試環境通過。既有 E2E 初次 64／65 通過，1 個鍵盤焦點案例經未修改版本對照與整合版本連續 3 次重跑通過。新增 Product E2E 6／6、元件隔離測試 3／3 通過。真實 Google／Resend 與 Windows 實機未重驗。
+
+來源版本、手動安裝原因、測試限制與後續元件規範見 [shadcn/ui 整合紀錄](docs/ui/shadcn-integration.md)。官方 registry 目前在此環境不可達；成果由 `codex/ui-phase1-handoff` 分支交接，未部署。
