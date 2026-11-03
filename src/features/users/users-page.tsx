@@ -18,7 +18,7 @@ export interface ProductUser {
   id: string; displayName: string; email: string; role: 'team' | 'tester'; avatarUrl: string | null; revision: number;
   feedbackCount: number; personTags: { id: string; name: string }[]; testerProducts: { id: string; name: string }[];
 }
-interface Invitation { id: string; email: string; role: 'team' | 'tester'; status: string; products: { id: string; name: string }[]; expiresAt: string; createdAt: string; lastErrorCode: string | null; revision: number }
+interface Invitation { id: string; email: string; role: 'team' | 'tester'; status: string; revokedReason: string | null; products: { id: string; name: string }[]; expiresAt: string; createdAt: string; lastErrorCode: string | null; revision: number }
 
 const INVITE_STATUS: Record<string, [string, string]> = {
   pending: ['寄送中', 'chip-warning'], sent: ['已寄出', ''], send_failed: ['寄送失敗', 'chip-negative'],
@@ -100,12 +100,14 @@ export function UsersPage() {
               <thead><tr><th scope="col">Email</th><th scope="col">角色／產品</th><th scope="col">狀態</th><th scope="col">到期</th><th scope="col"><span className="sr-only">操作</span></th></tr></thead>
               <tbody>
                 {(invites.data ?? []).map((inv) => {
-                  const [label, cls] = INVITE_STATUS[inv.status] ?? [inv.status, ''];
+                  const [base, cls] = INVITE_STATUS[inv.status] ?? [inv.status, ''];
+                  // revoked because every invited product was deleted (the product list is then empty)
+                  const label = inv.status === 'revoked' && inv.revokedReason === 'product_deleted' ? '已撤銷（產品已刪除）' : base;
                   const open = ['pending', 'sent', 'send_failed'].includes(inv.status);
                   return (
                     <tr key={inv.id}>
                       <td>{inv.email}</td>
-                      <td>{inv.role === 'team' ? '團隊成員' : `測試成員：${inv.products.map((p) => p.name).join('、')}`}</td>
+                      <td>{inv.role === 'team' ? '團隊成員' : `測試成員：${inv.products.map((p) => p.name).join('、') || '（無產品）'}`}</td>
                       <td><span className={`chip ${cls}`}>{label}</span>{inv.lastErrorCode ? <div className="small muted">錯誤：{inv.lastErrorCode}</div> : null}</td>
                       <td className="small">{formatDateTime(inv.expiresAt)}</td>
                       <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>

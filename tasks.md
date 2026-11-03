@@ -263,5 +263,50 @@ CC 驗證（2026-11-02，Linux 容器）：fast-forward 取得 `1960af5`；依�
 
 未做／限制：
 - 已送出的 Google 日曆請求若與刪除同時發生，Google 端可能已建立或修改活動，平台寫入關聯時則因產品不存在而失敗，活動留在 Google（屬 Google 資料，本來就不刪除）。
-- 測試成員邀請若只關聯被刪除的產品，邀請仍保留且可能寄出、接受後成為無產品的測試成員。此行為待使用者決定，未擴大刪除範圍。
 - Taste inspector、Windows 主機與真實 Google／Resend 未驗證。
+
+### UI-04 補強：邀請與進行中的 Google 操作（2026-11-03）
+
+依使用者確認的規則（[變更需求](docs/change-requests/sidebar-position.md)「永久刪除產品」）：
+
+- **邀請**：產品刪除交易內，先鎖定產品，再依 id 順序鎖定所有連到它的邀請，移除關聯後重新計算。
+  - 尚未接受、未撤銷（含已過期）且已無任何產品的測試邀請：撤銷，保留紀錄（`revoked_reason = 'product_deleted'`，revision +1），排隊中的 `invitation.send` 工作標為 `cancelled`。
+  - 仍有其他產品的邀請：只移除關聯，狀態與工作不變。
+  - 已接受的邀請、團隊邀請：不變，帳號與其他產品資格保留。
+  - 手動撤銷記為 `manual`，同 Email 新邀請取代記為 `superseded`。邀請列表顯示「已撤銷（產品已刪除）」，產品欄顯示「（無產品）」。
+- **重新檢查**：
+  - 寄送工作在鎖定邀請後，若是沒有產品的測試邀請就不寄。
+  - 重寄時，若是沒有產品的測試邀請則 410。
+  - 接受時：撤銷、過期、已被他人使用、沒有產品，一律 410，訊息以「邀請已失效」開頭，不消耗邀請、不改帳號。
+- **邀請頁**：新增 `POST /invitations/inspect`（需登入、zod strict、不消耗邀請、不透露邀請內容）。連結開啟即檢查，無效時顯示標題「邀請已失效」與原因，不顯示「接受邀請」。若在開啟後才失效，按下接受會得到同樣的畫面，不顯示「已加入」。
+- **鎖順序**：接受邀請先以 FOR SHARE 鎖定受邀產品、再鎖邀請，與刪除的「產品 → 邀請」一致，避免死鎖。
+  - 刪除先：接受等待後得到 410。
+  - 接受先：刪除等待；接受成立，之後刪除照常移除該產品的存取。
+  - 同一邀請的兩個產品同時刪除：後者在鎖後重新計算，邀請必定撤銷。
+- **Google 進行中的操作**：刪除時已送出的 Google 建立／修改可能完成（接受此限制，不刪 Google 活動補償）。完成後寫回平台紀錄或關聯時，若產品已刪除，回應 404「此產品已被刪除；Google 上的變更可能已完成，平台未保存任何關聯或紀錄」，不回報成功。之後以同一冪等鍵重試或任何新操作都在呼叫 Google 前 404。平台沒有日曆背景工作或自動重試。
+- **Migration**：`0004_invitation_revoke_reason.sql`（`invitations.revoked_reason`；`outbox_jobs.state` 增加 `cancelled`）。
+
+修改檔案：
+- 後端：`db/migrations/0004_invitation_revoke_reason.sql`（新增）、`src/modules/identity/invitations.ts`、`src/modules/products/service.ts`、`src/modules/calendar/service.ts`、`src/server/api/routes-identity.ts`。
+- UI：`src/features/invite.tsx`、`src/features/users/users-page.tsx`。
+- 測試：`tests/integration/product-delete.test.ts`、`tests/e2e/product-delete.spec.ts`。
+- 文件：`docs/04-api-contracts.md`、變更需求、本文件。
+
+測試（新增 10 個整合案例，真實 PostgreSQL；寄信與 Google 為 fake）：
+- 單產品邀請撤銷：保留紀錄，工作 `cancelled`，不寄信，不可重寄。
+- 已寄出的信：inspect 顯示失效，接受 410，帳號不變。
+- 多產品邀請：只移除關聯，之後寄出並只獲得剩下的產品。
+- 已接受的邀請：不撤銷，帳號與其他產品資格保留。
+- 團隊邀請不受影響。
+- 寄送與接受的重新檢查：無產品關聯的邀請、被放回佇列的工作。
+- 接受與刪除同時發生：以交易閘門控制兩種先後順序。
+- 同一邀請的兩個產品同時刪除。
+- Google 建立途中產品被刪除：含與不含 Feedback 關聯；回 404、不留平台紀錄、重試與新操作不呼叫 Google。
+
+E2E 新增邀請頁兩案（1440／768／390）：開啟即顯示「邀請已失效」且沒有接受按鈕（含 axe 檢查）；開啟後才失效。邀請頁 E2E 以攔截回應驗證畫面（屬 mock），伺服器規則由整合測試驗證。
+
+驗證結果（Linux 容器，隔離 test／e2e 資料庫）：lint、typecheck、build、security:scan（751 檔）、`git diff --check` 皆 exit 0；`npm test` 21 檔、219 passed；`test:ui` 3 passed；`test:e2e` 122 passed、0 failed。
+
+已知並行限制：
+- 邀請信正在寄送時刪除產品：寄送工作持有邀請鎖，信會寄出，刪除會等到寄送結束（最長為寄信服務逾時）；信中的連結開啟後顯示「邀請已失效」。
+- 接受早於刪除：該測試成員帳號保留但沒有任何產品，與其他產品被刪除後的既有測試成員相同（規則 3）。

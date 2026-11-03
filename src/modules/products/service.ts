@@ -1,6 +1,7 @@
 import type { Db } from '@/server/db';
 import { AppError, assertRevision } from '@/server/errors';
 import { slugify } from '@/modules/shared/text';
+import { detachDeletedProduct } from '@/modules/identity/invitations';
 
 export const DEFAULT_STATUSES = ['新貼文', '進行中', '待討論', '已完成', '延後'] as const;
 export const DEFAULT_ROADMAP_LABELS = ['需求池', '進行中', '待討論', '已完成', '延後'] as const;
@@ -100,9 +101,10 @@ export async function bumpProductRevision(tx: Db, productId: string, expectedRev
  * Permanently delete a product and every platform row that belongs only to it, in one transaction.
  * The product row is locked first: writers that insert rows referencing it wait on that lock and then
  * fail their foreign key check (404), so nothing new can attach to a product being deleted.
- * Kept: users, sessions, personal Google credentials, invitations themselves (only this product's
- * link is removed), other products. Google calendars, events and sharing are never touched; only the
- * platform's binding and links go. A product bootstrap provisions by system_key leaves a tombstone.
+ * Kept: users, sessions, personal Google credentials, accepted invitations and invitations that still
+ * have another product (only this product's link is removed), other products. A pending tester
+ * invitation left with no product is revoked, not deleted. Google calendars, events and sharing are
+ * never touched; only the platform's binding and links go. A product bootstrap provisions by system_key leaves a tombstone.
  */
 export async function deleteProduct(tx: Db, productId: string, confirmName: string, expectedRevision: number): Promise<{ id: string; deleted: true }> {
   const [p] = await tx<{ name: string; slug: string; revision: number; systemKey: string | null }[]>`
@@ -145,7 +147,9 @@ export async function deleteProduct(tx: Db, productId: string, confirmName: stri
   await tx`delete from statuses where product_id = ${productId}`;
   // access: this product's grants and invitation links (accounts and invitations stay)
   await tx`delete from product_access where product_id = ${productId}`;
-  await tx`delete from invitation_products where product_id = ${productId}`;
+  // invitations: this product's links go; a pending tester invitation left with no product is revoked
+  // and its queued e-mails cancelled (team and accepted invitations, and accounts, are not touched)
+  await detachDeletedProduct(tx, productId);
   // stored responses of idempotent requests made in this product (scope: method, route, product id or slug, …)
   await tx`delete from idempotency_records where split_part(scope, ' ', 3) in (${productId}, ${p.slug})`;
   if (p.systemKey) await tx`insert into product_tombstones (system_key) values (${p.systemKey}) on conflict do nothing`;

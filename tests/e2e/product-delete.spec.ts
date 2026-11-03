@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { ADMIN, createProduct, expectNoAxeViolations, expectNoPageOverflow, listProducts, login, openFirstProduct, unique } from './helpers';
+import { ADMIN, PORTAL, createProduct, expectNoAxeViolations, expectNoPageOverflow, listProducts, login, openFirstProduct, unique } from './helpers';
 
 /**
  * Product deletion from the Product list (docs/change-requests/sidebar-position.md, phase 4).
@@ -271,4 +271,33 @@ test('a product someone else already deleted: the dialog says so and the list up
   await expect(dialog(page)).toBeHidden();
   await expect(page.getByRole('status').filter({ hasText: `「${name}」已不存在，可能已被其他人刪除` })).toBeVisible();
   await expect(row(page, name)).toHaveCount(0);
+});
+
+test('invite link whose products were deleted: shown as 邀請已失效 on open, with no way to accept', async ({ page }) => {
+  // the page only (server rules are in tests/integration/product-delete.test.ts): responses are stubbed
+  await login(page, 'portal', 'invitee@e2e.test', '受邀者');
+  await page.route('**/api/v1/invitations/inspect', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ data: { valid: false, alreadyAccepted: false, message: '邀請已失效：受邀的產品已被刪除。請聯絡團隊重新邀請。' } }) }));
+  let accepts = 0;
+  await page.route('**/api/v1/invitations/accept', (route) => { accepts++; return route.abort(); });
+  await page.goto(`${PORTAL}/invite?token=${'x'.repeat(43)}`);
+  await expect(page.getByRole('heading', { name: '邀請已失效' })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('alert')).toHaveText('邀請已失效：受邀的產品已被刪除。請聯絡團隊重新邀請。');
+  await expect(page.getByRole('button', { name: '接受邀請' })).toHaveCount(0);
+  expect(accepts).toBe(0);
+  await expectNoPageOverflow(page);
+  await page.screenshot({ path: test.info().outputPath('invite-expired.png'), fullPage: true });
+  await expectNoAxeViolations(page, 'expired invitation');
+});
+
+test('invite link that becomes invalid between opening and accepting: 邀請已失效, not 已加入', async ({ page }) => {
+  await login(page, 'portal', 'invitee2@e2e.test', '受邀者二');
+  await page.route('**/api/v1/invitations/inspect', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { valid: true, alreadyAccepted: false, message: null } }) }));
+  await page.route('**/api/v1/invitations/accept', (route) => route.fulfill({ status: 410, contentType: 'application/json',
+    body: JSON.stringify({ error: { code: 'INVITATION_INVALID', message: '邀請已失效：受邀的產品已被刪除。請聯絡團隊重新邀請。', fieldErrors: {}, retryable: false, requestId: '' } }) }));
+  await page.goto(`${PORTAL}/invite?token=${'y'.repeat(43)}`);
+  await page.getByRole('button', { name: '接受邀請' }).click();
+  await expect(page.getByRole('heading', { name: '邀請已失效' })).toBeVisible();
+  await expect(page.getByText('已加入')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '接受邀請' })).toHaveCount(0);
 });

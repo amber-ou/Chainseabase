@@ -263,12 +263,18 @@ async function beginMutation(userId: string, productId: string, key: string, ope
   return { mutation: existing, replay: true };
 }
 
+/** The product was deleted while Google was being called: Google may have applied it, the platform kept nothing. */
+const PRODUCT_DELETED_DURING_CALL = '此產品已被刪除；Google 上的變更可能已完成，平台未保存任何關聯或紀錄。';
+
 async function finishMutation(id: string, state: 'succeeded' | 'failed' | 'unknown', patch: { googleEventId?: string; result?: unknown; errorCode?: string } = {}) {
-  await getSql()`
+  const updated = await getSql()`
     update calendar_mutations set state = ${state}, google_event_id = coalesce(${patch.googleEventId ?? null}, google_event_id),
       result = coalesce(${patch.result ? getSql().json(patch.result as never) : null}, result), error_code = ${patch.errorCode ?? null}, updated_at = now()
     where id = ${id}
+    returning id
   `;
+  // the record went with its product (deleted meanwhile): never report the platform side as saved
+  if (!updated.length) throw new AppError('NOT_FOUND', PRODUCT_DELETED_DURING_CALL);
 }
 
 export function deterministicEventId(mutationId: string): string {
@@ -277,11 +283,17 @@ export function deterministicEventId(mutationId: string): string {
 }
 
 async function ensureLink(productId: string, calendarId: string, eventId: string, feedbackId: string, userId: string) {
-  await getSql()`
-    insert into calendar_event_links (product_id, calendar_id, event_id, feedback_id, created_by)
-    values (${productId}, ${calendarId}, ${eventId}, ${feedbackId}, ${userId})
-    on conflict (calendar_id, event_id) do nothing
-  `;
+  try {
+    await getSql()`
+      insert into calendar_event_links (product_id, calendar_id, event_id, feedback_id, created_by)
+      values (${productId}, ${calendarId}, ${eventId}, ${feedbackId}, ${userId})
+      on conflict (calendar_id, event_id) do nothing
+    `;
+  } catch (e) {
+    // the product (and its feedback) was deleted after the Google call: the link is not saved
+    if ((e as { code?: string }).code === '23503') throw new AppError('NOT_FOUND', PRODUCT_DELETED_DURING_CALL);
+    throw e;
+  }
 }
 
 async function assertFeedbackInProduct(productId: string, feedbackId: string) {

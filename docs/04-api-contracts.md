@@ -80,16 +80,17 @@
 | GET `/products` | 團隊所有產品；前台可另外用 public products 查詢公開入口。 |
 | POST `/products` | 團隊，name；初始化選項與預設看板，同交易。 |
 | PATCH `/products/:p` | 團隊，name、expectedRevision。不提供封存。 |
-| DELETE `/products/:p` | 團隊（測試成員 403、未登入 401、前台 host 404）。`If-Match: "{revision}"` 必填（缺少 428、過期 409 `REVISION_CONFLICT`）；body 僅 `{ confirmName }`，須與目前名稱完全相同（不去空白、不折疊大小寫，否則 400 `INVALID_REQUEST`）。單一交易永久刪除產品及其平台內專屬資料，先鎖定產品列；成功 200 `{ id, deleted: true }`，已不存在 404。保留其他產品、帳號、session、個人 Google 授權與邀請本身（只移除此產品關聯）；不呼叫 Google。系統鍵產品（初始「產品1」）留下 `product_tombstones` 紀錄，初始化不重建。見[變更需求](change-requests/sidebar-position.md)「永久刪除產品」。 |
+| DELETE `/products/:p` | 團隊（測試成員 403、未登入 401、前台 host 404）。`If-Match: "{revision}"` 必填（缺少 428、過期 409 `REVISION_CONFLICT`）；body 僅 `{ confirmName }`，須與目前名稱完全相同（不去空白、不折疊大小寫，否則 400 `INVALID_REQUEST`）。單一交易永久刪除產品及其平台內專屬資料，先鎖定產品列；邀請只移除此產品關聯，尚未接受且因此沒有任何產品的測試邀請在同一交易撤銷（`revokedReason: product_deleted`，保留紀錄）並取消排隊中的邀請信工作（`outbox_jobs.state = cancelled`）；已接受、團隊邀請及仍有其他產品的邀請不變；成功 200 `{ id, deleted: true }`，已不存在 404。保留其他產品、帳號、session、個人 Google 授權與邀請本身（只移除此產品關聯）；不呼叫 Google。系統鍵產品（初始「產品1」）留下 `product_tombstones` 紀錄，初始化不重建。見[變更需求](change-requests/sidebar-position.md)「永久刪除產品」。 |
 | GET `/products/:p/users` | 團隊；所有有效團隊及該產品受邀測試成員。 |
 | GET `/products/:p/users/:u` | 團隊；使用者資料與產品內計數。 |
 | GET `/products/:p/users/:u/feedback` | 團隊；該人建立的產品 Feedback。 |
 | GET `/products/:p/users/:u/comments` | 團隊；該人的產品普通／Schedule 留言，不含私人 Tag。 |
 | POST `/invitations` | 團隊，email、role、productIds；排入 Email 工作。 |
 | GET `/invitations` | 團隊，邀請狀態，不回原始 token。 |
-| POST `/invitations/:id/resend` | 團隊，重新寄送並處理舊 token 失效。 |
-| DELETE `/invitations/:id` | 團隊，撤銷。 |
-| POST `/invitations/accept` | 已登入 Google，token；驗證 Email 與產品集合，交易內接受。 |
+| POST `/invitations/:id/resend` | 團隊，重新寄送並處理舊 token 失效；已接受／撤銷，或測試邀請已無任何產品時 410。 |
+| DELETE `/invitations/:id` | 團隊，撤銷（`revokedReason: manual`）。邀請 DTO 含 `revokedReason`：`manual`、`superseded`（同 Email 新邀請取代）、`product_deleted`。 |
+| POST `/invitations/inspect` | 已登入（未登入 401），body 僅 `{ token }`；不消耗邀請，回 `{ valid, alreadyAccepted, message }`，不透露 Email、角色或產品。邀請頁開啟時呼叫，無效時顯示「邀請已失效」。 |
+| POST `/invitations/accept` | 已登入 Google，token；驗證 Email 與產品集合，交易內接受。撤銷、過期、已被他人使用，或測試邀請已無任何存在的產品時 410 `INVITATION_INVALID`（訊息以「邀請已失效」開頭），不建立無產品的測試成員。先以 FOR SHARE 鎖定受邀產品再鎖邀請，與產品刪除使用相同鎖順序。 |
 | PATCH `/users/:u/role` | 團隊，role、testerProductIds、expectedRevision；最後團隊保護。 |
 | DELETE `/users/:u/membership` | 團隊，移除成員資格、撤銷 session，保留歷史作者。 |
 | PUT `/products/:p/users/:u/person-tags` | 團隊，personTagIds、expectedRevision（product revision）；[] 表示未安排。 |

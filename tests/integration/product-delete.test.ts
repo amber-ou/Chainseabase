@@ -9,6 +9,9 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { getSql, withTx } from '@/server/db';
 import { CALENDAR_SCOPES } from '@/server/adapters/google-oauth';
 import { deleteProduct } from '@/modules/products/service';
+import { acceptInvitation, createInvitation, invitationTokenForJob } from '@/modules/identity/invitations';
+import { setCalendarApi } from '@/server/adapters/google-calendar';
+import type { SessionUser } from '@/server/session';
 import { bootstrap } from '../../scripts/bootstrap-lib';
 import { api, createFeedback, expectOk, installFakes, makeUser, resetDb, runJobs, seedWorld, type Fakes, type TestUser, type World } from '../helpers/harness';
 
@@ -334,5 +337,271 @@ describe('product deletion: the last product and bootstrap', () => {
     await resetDb();
     await bootstrap(getSql(), { teamEmail: null });
     expect((await getSql()`select name from products where system_key = 'initial'`)[0].name).toBe('產品1');
+  });
+});
+
+// ---------------- invitations (phase 4 follow-up) ----------------
+async function sessionUser(u: TestUser): Promise<SessionUser> {
+  const [r] = await getSql()<SessionUser[]>`
+    select id, verified_email as email, display_name, role, membership_state, null as avatar_path, null as google_picture_url, google_sub, revision
+    from users where id = ${u.id}`;
+  return r;
+}
+/** Create an invitation the way the API does, but leave its e-mail job queued (not run inline). */
+async function queuedInvitation(email: string, role: 'tester' | 'team', productIds: string[]) {
+  const actor = await sessionUser(w.teamA);
+  return withTx((tx) => createInvitation(tx, actor, { email, role, productIds }));
+}
+async function invitation(id: string) {
+  const [r] = await getSql()<{ revokedAt: Date | null; revokedReason: string | null; acceptedAt: Date | null; revision: number }[]>`
+    select revoked_at, revoked_reason, accepted_at, revision from invitations where id = ${id}`;
+  return r;
+}
+const jobsOf = (id: string) => getSql()<{ id: string; state: string }[]>`select id, state from outbox_jobs where job_type = 'invitation.send' and payload->>'invitationId' = ${id} order by created_at`;
+const linksOf = async (id: string) => (await getSql()<{ productId: string }[]>`select product_id from invitation_products where invitation_id = ${id}`).map((r) => r.productId);
+/** Send the queued e-mail and return the token in it. */
+async function sendAndGetToken(id: string) {
+  await runJobs();
+  const [job] = await jobsOf(id);
+  return invitationTokenForJob(job.id);
+}
+async function invitee(email: string) {
+  const u = await makeUser('none', 'Invitee');
+  await getSql()`update users set verified_email = ${email} where id = ${u.id}`;
+  return { ...u, email };
+}
+const revA = () => revisionOf(w.productA.id);
+
+describe('product deletion: invitations', () => {
+  it('a pending tester invitation to the deleted product only is revoked (record kept) and its queued e-mail cancelled', async () => {
+    const inv = await queuedInvitation('only-a@example.com', 'tester', [w.productA.id]);
+    expect((await jobsOf(inv.id)).map((j) => j.state)).toEqual(['pending']);
+    const before = await invitation(inv.id);
+    expect((await del(w.productA.id, '產品甲', await revA())).status).toBe(200);
+
+    const after = await invitation(inv.id);
+    expect(after.revokedAt).not.toBeNull();
+    expect(after.revokedReason).toBe('product_deleted');
+    expect(after.revision).toBe(before.revision + 1);
+    expect(await linksOf(inv.id)).toEqual([]);
+    expect((await jobsOf(inv.id)).map((j) => j.state)).toEqual(['cancelled']);
+    // nothing is sent afterwards, and the list shows why it was revoked
+    await runJobs();
+    expect(fakes.email.sent.filter((m) => m.to === 'only-a@example.com')).toEqual([]);
+    const listed = (expectOk(await api.get('/invitations', { as: w.teamA })) as any[]).find((i) => i.id === inv.id);
+    expect(listed).toMatchObject({ status: 'revoked', revokedReason: 'product_deleted', products: [] });
+    // it cannot be sent again either
+    expect((await api.post(`/invitations/${inv.id}/resend`, { as: w.teamA, body: { expectedRevision: after.revision } })).status).toBe(410);
+  });
+
+  it('an e-mail already sent: the link shows the invitation as expired and cannot make a tester with no product', async () => {
+    const inv = await queuedInvitation('sent-a@example.com', 'tester', [w.productA.id]);
+    const token = await sendAndGetToken(inv.id);
+    expect(fakes.email.sent.filter((m) => m.to === 'sent-a@example.com')).toHaveLength(1);
+    expect((await del(w.productA.id, '產品甲', await revA())).status).toBe(200);
+    const person = await invitee('sent-a@example.com');
+    const inspect = expectOk(await api.post('/invitations/inspect', { site: 'portal', as: person, body: { token } }));
+    expect(inspect).toEqual({ valid: false, alreadyAccepted: false, message: '邀請已失效：受邀的產品已被刪除。請聯絡團隊重新邀請。' });
+    const accept = await api.post('/invitations/accept', { site: 'portal', as: person, body: { token } });
+    expect(accept.status).toBe(410);
+    expect(accept.body.error.message).toContain('邀請已失效');
+    const [u] = await getSql()`select role from users where id = ${person.id}`;
+    expect(u.role).toBe('none');
+    expect(await getSql()`select 1 from product_access where user_id = ${person.id}`).toEqual([]);
+    expect((await invitation(inv.id)).acceptedAt).toBeNull();
+    // inspecting needs a signed-in account and a well-formed body
+    expect((await api.post('/invitations/inspect', { site: 'portal', body: { token } })).status).toBe(401);
+    expect((await api.post('/invitations/inspect', { site: 'portal', as: person, body: { token, extra: 1 } })).status).toBe(400);
+  });
+
+  it('an invitation that still has another product keeps it: only the deleted link goes; it is sent and accepted for that product', async () => {
+    const inv = await queuedInvitation('both@example.com', 'tester', [w.productA.id, w.productB.id]);
+    const before = await invitation(inv.id);
+    expect((await del(w.productA.id, '產品甲', await revA())).status).toBe(200);
+    const after = await invitation(inv.id);
+    expect(after.revokedAt).toBeNull();
+    expect(after.revision).toBe(before.revision);
+    expect(await linksOf(inv.id)).toEqual([w.productB.id]);
+    expect((await jobsOf(inv.id)).map((j) => j.state)).toEqual(['pending']);
+    const token = await sendAndGetToken(inv.id);
+    expect(fakes.email.sent.filter((m) => m.to === 'both@example.com')).toHaveLength(1);
+    const person = await invitee('both@example.com');
+    expect(expectOk(await api.post('/invitations/inspect', { site: 'portal', as: person, body: { token } })).valid).toBe(true);
+    expectOk(await api.post('/invitations/accept', { site: 'portal', as: person, body: { token } }));
+    expect((await getSql()`select product_id from product_access where user_id = ${person.id}`).map((r) => r.productId)).toEqual([w.productB.id]);
+  });
+
+  it('an accepted invitation is not revoked afterwards; the account and its other product access stay', async () => {
+    const inv = await queuedInvitation('accepted@example.com', 'tester', [w.productA.id]);
+    const token = await sendAndGetToken(inv.id);
+    const person = await invitee('accepted@example.com');
+    expectOk(await api.post('/invitations/accept', { site: 'portal', as: person, body: { token } }));
+    await getSql()`insert into product_access (user_id, product_id) values (${person.id}, ${w.productB.id})`;
+    const before = await invitation(inv.id);
+    expect((await del(w.productA.id, '產品甲', await revA())).status).toBe(200);
+    const after = await invitation(inv.id);
+    expect(after).toEqual({ ...before });
+    expect(after.revokedAt).toBeNull();
+    const [u] = await getSql()`select role, membership_state from users where id = ${person.id}`;
+    expect(u).toEqual({ role: 'tester', membershipState: 'active' });
+    expect((await getSql()`select product_id from product_access where user_id = ${person.id}`).map((r) => r.productId)).toEqual([w.productB.id]);
+    // the link reports it as already used by this account, not as a new acceptance
+    expect(expectOk(await api.post('/invitations/inspect', { site: 'portal', as: person, body: { token } })).alreadyAccepted).toBe(true);
+  });
+
+  it('team invitations are not affected', async () => {
+    const team = await queuedInvitation('new-team@example.com', 'team', []);
+    const before = await invitation(team.id);
+    expect((await del(w.productA.id, '產品甲', await revA())).status).toBe(200);
+    expect(await invitation(team.id)).toEqual(before);
+    expect((await jobsOf(team.id)).map((j) => j.state)).toEqual(['pending']);
+    await runJobs();
+    expect(fakes.email.sent.filter((m) => m.to === 'new-team@example.com')).toHaveLength(1);
+  });
+
+  it('the send job and acceptance re-check the products themselves (a job not cancelled, a tester invitation with no product)', async () => {
+    // an invitation with no product link at all (as if a link had gone without the revocation)
+    const actor = await sessionUser(w.teamA);
+    const inv = await withTx((tx) => createInvitation(tx, actor, { email: 'nolink@example.com', role: 'tester', productIds: [w.productB.id] }));
+    await getSql()`delete from invitation_products where invitation_id = ${inv.id}`;
+    await runJobs();
+    expect(fakes.email.sent.filter((m) => m.to === 'nolink@example.com')).toEqual([]);
+    // with a link to accept from: give it a token directly, then check acceptance refuses it
+    const [job] = await jobsOf(inv.id);
+    const token = invitationTokenForJob(job.id);
+    const { sha256Hex } = await import('@/server/crypto');
+    await getSql()`update invitations set token_hash = ${sha256Hex(token)} where id = ${inv.id}`;
+    const person = await invitee('nolink@example.com');
+    const accept = await api.post('/invitations/accept', { site: 'portal', as: person, body: { token } });
+    expect(accept.status).toBe(410);
+    expect(accept.body.error.message).toContain('邀請已失效');
+    expect((await getSql()`select role from users where id = ${person.id}`)[0].role).toBe('none');
+
+    // a revoked invitation whose job was put back in the queue is still not sent
+    const inv2 = await queuedInvitation('requeued@example.com', 'tester', [w.productA.id]);
+    expect((await del(w.productA.id, '產品甲', await revA())).status).toBe(200);
+    await getSql()`update outbox_jobs set state = 'pending' where job_type = 'invitation.send' and payload->>'invitationId' = ${inv2.id}`;
+    await runJobs();
+    expect(fakes.email.sent.filter((m) => m.to === 'requeued@example.com')).toEqual([]);
+  });
+
+  it('acceptance and deletion at the same time — deletion first: the acceptance waits, then is refused; nobody is left without a product', async () => {
+    const inv = await queuedInvitation('race1@example.com', 'tester', [w.productA.id]);
+    const token = await sendAndGetToken(inv.id);
+    const person = await invitee('race1@example.com');
+    const rev = await revA();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let deleted!: () => void;
+    const didDelete = new Promise<void>((r) => { deleted = r; });
+    // the deletion holds its locks (not committed yet) while the acceptance starts
+    const deletion = withTx(async (tx) => { await deleteProduct(tx, w.productA.id, '產品甲', rev); deleted(); await gate; });
+    await didDelete;
+    let settled = false;
+    const accepting = api.post('/invitations/accept', { site: 'portal', as: person, body: { token } }).finally(() => { settled = true; });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(settled).toBe(false); // blocked behind the deletion
+    release();
+    await deletion;
+    const res = await accepting;
+    expect(res.status).toBe(410);
+    expect(res.body.error.message).toContain('邀請已失效');
+    expect((await invitation(inv.id))).toMatchObject({ revokedReason: 'product_deleted', acceptedAt: null });
+    expect((await getSql()`select role from users where id = ${person.id}`)[0].role).toBe('none');
+  });
+
+  it('acceptance and deletion at the same time — acceptance first: the deletion waits; the acceptance stands, its access to the deleted product goes', async () => {
+    const inv = await queuedInvitation('race2@example.com', 'tester', [w.productA.id]);
+    const token = await sendAndGetToken(inv.id);
+    const person = await invitee('race2@example.com');
+    const user = await sessionUser(person);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let accepted!: () => void;
+    const didAccept = new Promise<void>((r) => { accepted = r; });
+    const acceptance = withTx(async (tx) => { await acceptInvitation(tx, user, token); accepted(); await gate; });
+    await didAccept;
+    let settled = false;
+    const deleting = del(w.productA.id, '產品甲', await revA()).finally(() => { settled = true; });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(settled).toBe(false); // blocked behind the acceptance
+    release();
+    await acceptance;
+    expect((await deleting).status).toBe(200);
+    // accepted before the deletion: not revoked afterwards; the account stays, with no access to a deleted product
+    const after = await invitation(inv.id);
+    expect(after.acceptedAt).not.toBeNull();
+    expect(after.revokedAt).toBeNull();
+    expect((await getSql()`select role from users where id = ${person.id}`)[0].role).toBe('tester');
+    expect(await getSql()`select 1 from product_access where user_id = ${person.id}`).toEqual([]);
+  });
+
+  it('two products of one invitation deleted at the same time: the invitation ends revoked, never left open with no product', async () => {
+    const inv = await queuedInvitation('two@example.com', 'tester', [w.productA.id, w.productB.id]);
+    const revB = await revisionOf(w.productB.id);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let first!: () => void;
+    const didFirst = new Promise<void>((r) => { first = r; });
+    const deletionA = withTx(async (tx) => { await deleteProduct(tx, w.productA.id, '產品甲', await revA()); first(); await gate; });
+    await didFirst;
+    let settled = false;
+    const deletionB = del(w.productB.id, '產品乙', revB).finally(() => { settled = true; });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(settled).toBe(false); // waits for the invitation lock held by the first deletion
+    release();
+    await deletionA;
+    expect((await deletionB).status).toBe(200);
+    expect(await invitation(inv.id)).toMatchObject({ revokedReason: 'product_deleted' });
+    expect(await linksOf(inv.id)).toEqual([]);
+    expect((await jobsOf(inv.id)).map((j) => j.state)).toEqual(['cancelled']);
+  });
+});
+
+// ---------------- Google calls in flight (phase 4 follow-up) ----------------
+describe('product deletion: a Google call in flight', () => {
+  it('the event may exist in Google, but the platform reports no success and saves nothing; retries and new calls are refused', async () => {
+    await connectCalendar(w.teamA);
+    const P = `/products/${w.productA.id}`;
+    expectOk(await api.put(`${P}/calendar/binding`, { as: w.teamA, body: { calendarId: CAL_A, expectedRevision: 0 } }));
+    const f = await createFeedback(w, { title: '關聯' });
+    const rev = await revA();
+    // the product is deleted while Google is creating the event (the fake runs the deletion inside insert)
+    const fake = fakes.calendar;
+    const insert = fake.insertEvent.bind(fake);
+    fake.insertEvent = async (...args: Parameters<typeof insert>) => {
+      const ev = await insert(...args);
+      await withTx((tx) => deleteProduct(tx, w.productA.id, '產品甲', rev));
+      return ev;
+    };
+    setCalendarApi(fake);
+    for (const withLink of [true, false]) {
+      if (!withLink) {
+        // a second product to run the same race without a feedback link
+        await resetDb(); fakes = installFakes(); w = await seedWorld();
+        fakes.calendar.addCalendar(CAL_A, '產品甲日曆', 'Asia/Taipei', { [w.teamA.sub]: 'writer' });
+        await connectCalendar(w.teamA);
+        expectOk(await api.put(`/products/${w.productA.id}/calendar/binding`, { as: w.teamA, body: { calendarId: CAL_A, expectedRevision: 0 } }));
+        const r2 = await revA();
+        const fk = fakes.calendar;
+        const ins = fk.insertEvent.bind(fk);
+        fk.insertEvent = async (...args: Parameters<typeof ins>) => { const ev = await ins(...args); await withTx((tx) => deleteProduct(tx, w.productA.id, '產品甲', r2)); return ev; };
+        setCalendarApi(fk);
+      }
+      const PP = `/products/${w.productA.id}`;
+      const key = `inflight-${withLink}`;
+      const res = await api.post(`${PP}/calendar/events`, { as: w.teamA, key, body: { ...timed, ...(withLink ? { feedbackId: f.id } : {}), bindingRevision: 1 } });
+      expect(res.status, JSON.stringify(res.body)).toBe(404);
+      expect(res.body.error.message).toContain('平台未保存任何關聯或紀錄');
+      // Google kept the event (known limitation, not compensated); the platform has nothing of it
+      expect(fakes.calendar.calendars.get(CAL_A)!.events.size).toBe(1);
+      expect(await getSql()`select 1 from calendar_event_links`).toEqual([]);
+      expect(await getSql()`select 1 from calendar_mutations`).toEqual([]);
+      // the same request retried, and any new call: refused before Google is called
+      const calls = fakes.calendar.calls.length;
+      expect((await api.post(`${PP}/calendar/events`, { as: w.teamA, key, body: { ...timed, ...(withLink ? { feedbackId: f.id } : {}), bindingRevision: 1 } })).status).toBe(404);
+      expect((await api.post(`${PP}/calendar/events`, { as: w.teamA, key: true, body: { ...timed, bindingRevision: 1 } })).status).toBe(404);
+      expect(fakes.calendar.calls.length).toBe(calls);
+    }
   });
 });

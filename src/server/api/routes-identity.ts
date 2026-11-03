@@ -10,7 +10,7 @@ import { getGoogleOAuth, LOGIN_SCOPES, CALENDAR_SCOPES } from '../adapters/googl
 import { getAvatarStorage, StorageError } from '../adapters/storage';
 import { FakeCalendarApi, getCalendarApi } from '../adapters/google-calendar';
 import { clearTransientCookie, newTransient, pkceChallenge, readTransient, safeReturnTo, transientCookie, upsertGoogleUser } from '@/modules/identity/auth';
-import { acceptInvitation, createInvitation, listInvitations, resendInvitation, revokeInvitation } from '@/modules/identity/invitations';
+import { acceptInvitation, inspectInvitation, createInvitation, listInvitations, resendInvitation, revokeInvitation } from '@/modules/identity/invitations';
 import { changeRole, meDto, removeMembership, updateMe } from '@/modules/identity/users';
 import { AVATAR_MAX_BYTES, readAvatarBody, uploadAvatar } from '@/modules/identity/avatar';
 import { saveCalendarGrant } from '@/modules/calendar/credentials';
@@ -211,6 +211,13 @@ export function registerIdentityRoutes(r: Router) {
     const id = uuidParam(ctx, 'id');
     const rev = ctx.ifMatchRevision();
     return mutate(ctx, { body: { rev } }, async (tx) => ({ data: await revokeInvitation(tx, id, rev) }));
+  });
+
+  // whether a link can still be accepted, without consuming it (the invite page checks it on open)
+  r.post('/invitations/inspect', ['admin', 'portal'], async (ctx) => {
+    const user = requireUser(ctx);
+    const body = await ctx.body(z.object({ token: z.string().min(20).max(200) }).strict());
+    return { data: await inspectInvitation(getSql(), user, body.token) };
   });
 
   r.post('/invitations/accept', ['admin', 'portal'], async (ctx) => {
