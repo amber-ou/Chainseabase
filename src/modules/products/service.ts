@@ -95,3 +95,60 @@ export async function bumpProductRevision(tx: Db, productId: string, expectedRev
   const [r] = await tx<{ revision: number }[]>`update products set revision = revision + 1 where id = ${productId} returning revision`;
   return r.revision;
 }
+
+/**
+ * Permanently delete a product and every platform row that belongs only to it, in one transaction.
+ * The product row is locked first: writers that insert rows referencing it wait on that lock and then
+ * fail their foreign key check (404), so nothing new can attach to a product being deleted.
+ * Kept: users, sessions, personal Google credentials, invitations themselves (only this product's
+ * link is removed), other products. Google calendars, events and sharing are never touched; only the
+ * platform's binding and links go. A product bootstrap provisions by system_key leaves a tombstone.
+ */
+export async function deleteProduct(tx: Db, productId: string, confirmName: string, expectedRevision: number): Promise<{ id: string; deleted: true }> {
+  const [p] = await tx<{ name: string; slug: string; revision: number; systemKey: string | null }[]>`
+    select name, slug, revision, system_key from products where id = ${productId} for update
+  `;
+  if (!p) throw new AppError('NOT_FOUND');
+  assertRevision(p.revision, expectedRevision);
+  // exact match only: no trimming, case folding or partial match; the name is a confirmation, not an identifier
+  if (confirmName !== p.name) throw new AppError('INVALID_REQUEST', '輸入的名稱與產品名稱不一致。', { fieldErrors: { confirmName: '名稱不一致' } });
+
+  // events, their jobs and notifications: nothing may be sent or shown for the product afterwards
+  await tx`delete from notifications where product_id = ${productId}`;
+  await tx`delete from outbox_jobs where event_id in (select id from domain_events where product_id = ${productId})`;
+  await tx`delete from domain_events where product_id = ${productId}`;
+  // calendar: platform binding and links only (Google is not called)
+  await tx`delete from calendar_event_links where product_id = ${productId}`;
+  await tx`delete from calendar_mutations where product_id = ${productId}`;
+  await tx`delete from calendar_bindings where product_id = ${productId}`;
+  // Personal (private views, placements, private tags and notes of every owner, for this product)
+  await tx`delete from personal_feedback_tags where product_id = ${productId}`;
+  await tx`delete from personal_feedback_metadata where product_id = ${productId}`;
+  await tx`delete from personal_views where product_id = ${productId}`;
+  await tx`delete from personal_tags where product_id = ${productId}`;
+  // Roadmap boards (columns and ranks cascade)
+  await tx`delete from roadmaps where product_id = ${productId}`;
+  // Schedule, comments, votes, then the feedback itself (feedback tags cascade)
+  await tx`delete from schedule_entries where feedback_id in (select id from feedback where product_id = ${productId})`;
+  await tx`delete from schedule_operations where feedback_id in (select id from feedback where product_id = ${productId})`;
+  await tx`delete from schedule_rows where feedback_id in (select id from feedback where product_id = ${productId})`;
+  await tx`delete from schedules where product_id = ${productId}`;
+  await tx`delete from comment_likes where comment_id in (select id from comments where product_id = ${productId})`;
+  await tx`delete from feedback_votes where feedback_id in (select id from feedback where product_id = ${productId})`;
+  await tx`delete from comments where product_id = ${productId}`;
+  await tx`delete from feedback where product_id = ${productId}`;
+  // taxonomy: person tags (and who holds them here), tags, groups, categories, statuses
+  await tx`delete from person_tags where product_id = ${productId}`;
+  await tx`delete from tags where product_id = ${productId}`;
+  await tx`delete from tag_groups where product_id = ${productId}`;
+  await tx`delete from categories where product_id = ${productId}`;
+  await tx`delete from statuses where product_id = ${productId}`;
+  // access: this product's grants and invitation links (accounts and invitations stay)
+  await tx`delete from product_access where product_id = ${productId}`;
+  await tx`delete from invitation_products where product_id = ${productId}`;
+  // stored responses of idempotent requests made in this product (scope: method, route, product id or slug, …)
+  await tx`delete from idempotency_records where split_part(scope, ' ', 3) in (${productId}, ${p.slug})`;
+  if (p.systemKey) await tx`insert into product_tombstones (system_key) values (${p.systemKey}) on conflict do nothing`;
+  await tx`delete from products where id = ${productId}`;
+  return { id: productId, deleted: true };
+}

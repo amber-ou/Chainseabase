@@ -16,7 +16,8 @@ import {
 export interface ProductItem { id: string; name: string; slug: string; revision: number; createdAt: string }
 
 interface ProductCtx {
-  product: ProductItem;
+  /** The selected product; null on the product list when none is selected (or none exists). */
+  product: ProductItem | null;
   products: ProductItem[];
   reloadProducts: () => Promise<void>;
   /** Register unsaved work so product switches can warn first. */
@@ -24,10 +25,26 @@ interface ProductCtx {
 }
 
 const Ctx = createContext<ProductCtx | null>(null);
-export function useProduct() {
+/** For pages of one product: the shell only renders them once that product exists. */
+export function useProduct(): ProductCtx & { product: ProductItem } {
+  const c = useContext(Ctx);
+  if (!c?.product) throw new Error('ProductContext missing');
+  return c as ProductCtx & { product: ProductItem };
+}
+/** For the product list, which also works with no product selected. */
+export function useProductList() {
   const c = useContext(Ctx);
   if (!c) throw new Error('ProductContext missing');
   return c;
+}
+
+// the product last opened; '' means "none selected" (after deleting the selected product)
+export const LAST_PRODUCT_KEY = 'csb:lastProduct';
+export function readLastProduct(): string | null {
+  try { return localStorage.getItem(LAST_PRODUCT_KEY); } catch { return null; }
+}
+export function writeLastProduct(id: string) {
+  try { localStorage.setItem(LAST_PRODUCT_KEY, id); } catch { /* storage unavailable */ }
 }
 
 /** Mark a form as having unsaved input while `dirty` is true. */
@@ -59,7 +76,8 @@ const SECTIONS_BOTTOM = [
 ] as const;
 
 export function AdminShell({ children }: { children: ReactNode }) {
-  const { productId } = useParams<{ productId: string }>();
+  // no product id on /products: the product list with no product selected
+  const { productId } = useParams<{ productId?: string }>();
   const { site, me, meLoaded } = useSite();
   const pathname = usePathname();
   const router = useRouter();
@@ -102,9 +120,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [menuOpen]);
+  // remembered only once the product is known to exist (a deleted product is never stored)
+  const found = Boolean(productId && products.data?.some((p) => p.id === productId));
   useEffect(() => {
-    try { if (productId) localStorage.setItem('csb:lastProduct', productId); } catch { /* storage unavailable */ }
-  }, [productId]);
+    if (found && productId) writeLastProduct(productId);
+  }, [found, productId]);
 
   if (!meLoaded) return <main id="main" tabIndex={-1} className="main"><LoadingState /></main>;
   if (!me) {
@@ -124,11 +144,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
   if (products.loading) return <main id="main" tabIndex={-1} className="main"><LoadingState /></main>;
   if (products.error) return <main id="main" tabIndex={-1} className="main"><ErrorState message={products.error.message} onRetry={products.reload} /></main>;
   const list = products.data ?? [];
-  const product = list.find((p) => p.id === productId);
-  if (!product) {
-    return <main id="main" tabIndex={-1} className="main"><ErrorState title="找不到產品" message="此產品不存在。" />{list[0] ? <p style={{ marginTop: 12 }}><Link className="btn" href={`/products/${list[0].id}/dashboard`}>前往 {list[0].name}</Link></p> : null}</main>;
+  const product = productId ? list.find((p) => p.id === productId) ?? null : null;
+  if (productId && !product) {
+    // an old link or another tab of a deleted product: nothing of it is requested or shown
+    return <main id="main" tabIndex={-1} className="main"><ErrorState title="找不到產品" message="此產品不存在，可能已被刪除。" /><p style={{ marginTop: 12 }}><Link className="btn" href="/products">返回 Product</Link></p></main>;
   }
-  const section = pathname.split('/')[3] ?? 'dashboard';
+  const section = product ? pathname.split('/')[3] ?? 'dashboard' : 'dashboard';
   const go = (href: string) => {
     if (dirty.current.size > 0) setPendingNav(href);
     else router.push(href);
@@ -136,7 +157,26 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const switchProduct = (id: string) => go(`/products/${id}/${['dashboard', 'calendar', 'feedback', 'roadmaps', 'personal', 'users', 'settings'].includes(section) ? section : 'dashboard'}`);
   const current = [...SECTIONS, ...SECTIONS_BOTTOM, { key: 'settings', label: 'Setting' }].find((s) => s.key === section)?.label ?? 'Product';
 
-  const nav = (
+  const foot = (
+    <div className="sidebar-foot">
+      <div className="user-row">
+        <Avatar name={me.displayName} url={me.avatarUrl} id={me.id} size={28} />
+        <div style={{ minWidth: 0 }}>
+          <div className="name">{me.displayName}</div>
+          <div className="name small muted">{me.email}</div>
+        </div>
+      </div>
+      {/* full navigation after logout drops all client state of the old session */}
+      {/* eslint-disable-next-line @next/next/no-location-assign-relative-destination */}
+      <Button size="sm" variant="ghost" onClick={async () => { await api.post('/auth/logout'); window.location.assign('/login'); }}>登出</Button>
+    </div>
+  );
+  // with no product selected, the product sections are shown but cannot open (no request is made for them)
+  const needProduct = list.length ? '請先從 Product 選取產品' : '請先在 Product 新增產品';
+  const off = (label: string, icon: ReactNode) => (
+    <span key={label} className="nav-item" aria-disabled="true" title={needProduct} aria-describedby="nav-need-product">{icon}{label}</span>
+  );
+  const nav = product ? (
     <>
       <Link className="brand" href={`/products/${product.id}/dashboard`}><Logo /><span>Chainseabase</span></Link>
       <div className="product-switch">
@@ -160,18 +200,32 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <NavLink href={`/products/${product.id}/settings`} active={section === 'settings'} onNavigate={go} icon={<IconSettings />}>Setting</NavLink>
         </div>
       </nav>
-      <div className="sidebar-foot">
-        <div className="user-row">
-          <Avatar name={me.displayName} url={me.avatarUrl} id={me.id} size={28} />
-          <div style={{ minWidth: 0 }}>
-            <div className="name">{me.displayName}</div>
-            <div className="name small muted">{me.email}</div>
-          </div>
-        </div>
-        {/* full navigation after logout drops all client state of the old session */}
-        {/* eslint-disable-next-line @next/next/no-location-assign-relative-destination */}
-        <Button size="sm" variant="ghost" onClick={async () => { await api.post('/auth/logout'); window.location.assign('/login'); }}>登出</Button>
+      {foot}
+    </>
+  ) : (
+    <>
+      <Link className="brand" href="/products"><Logo /><span>Chainseabase</span></Link>
+      <div className="product-switch">
+        <label className="sr-only" htmlFor="product-switch">切換產品</label>
+        <select id="product-switch" className="select" value="" disabled={!list.length} onChange={(e) => { if (e.target.value) go(`/products/${e.target.value}/dashboard`); }}>
+          <option value="" disabled>{list.length ? '尚未選取產品' : '尚無產品'}</option>
+          {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
       </div>
+      <nav className="nav" aria-label="後台導覽">
+        <p id="nav-need-product" className="small muted" style={{ margin: '0 10px 6px' }}>{needProduct}</p>
+        <div className="nav-group">
+          <NavLink href="/products" active onNavigate={go} icon={<IconProduct />}>Product</NavLink>
+          {SECTIONS.filter((s) => s.key !== 'dashboard').map((s) => off(s.label, <s.icon />))}
+          {off('Live Portal', <IconPortal />)}
+        </div>
+        <div className="nav-group nav-group-bottom">
+          {SECTIONS_BOTTOM.map((s) => off(s.label, <s.icon />))}
+          {off('Notification', <IconBell />)}
+          {off('Setting', <IconSettings />)}
+        </div>
+      </nav>
+      {foot}
     </>
   );
 
@@ -181,13 +235,13 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <aside className="sidebar">{nav}</aside>
         <header className="topbar">
           <Button ref={menuBtnRef} variant="ghost" icon aria-label="開啟選單" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><IconMenu /></Button>
-          <span className="screen-name">{current} · {product.name}</span>
+          <span className="screen-name">{product ? `${current} · ${product.name}` : 'Product'}</span>
         </header>
         <div ref={sheetRef} className="mobile-sheet" data-open={menuOpen} role="dialog" aria-modal="true" aria-label="選單" hidden={!menuOpen}>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}><Button variant="ghost" icon aria-label="關閉選單" onClick={() => setMenuOpen(false)}><IconX /></Button></div>
           {menuOpen ? nav : null}
         </div>
-        <main id="main" tabIndex={-1} className="main" key={product.id}>{children}</main>
+        <main id="main" tabIndex={-1} className="main" key={product?.id ?? 'none'}>{children}</main>
       </div>
       {pendingNav ? (
         <ConfirmModal title="有尚未儲存的內容" confirmLabel="放棄並離開" danger onCancel={() => setPendingNav(null)}

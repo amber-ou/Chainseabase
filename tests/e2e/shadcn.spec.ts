@@ -4,7 +4,7 @@ import { ADMIN, login, openFirstProduct, unique, expectNoPageOverflow } from './
 /**
  * Product page as a product list (docs/change-requests/sidebar-position.md, phase 3): fixed title,
  * 新增產品 kept, rename moved into each row's menu, list selection synced with the sidebar switcher.
- * Product deletion is a later phase: no delete control may appear yet.
+ * Deletion from the row menu is covered by product-delete.spec.ts (phase 4).
  */
 const list = (page: Page) => page.getByRole('list', { name: '產品' });
 const row = (page: Page, name: string) => list(page).getByRole('link', { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) });
@@ -17,7 +17,7 @@ async function slugOf(page: Page, id: string) {
   return ((await r.json()).data as { id: string; slug: string }[]).find((p) => p.id === id)!.slug;
 }
 
-test('Product lists the products with a fixed title; header switcher, rename button, calendar and delete are gone', async ({ page }) => {
+test('Product lists the products with a fixed title; header switcher, rename button and calendar are gone', async ({ page }) => {
   await login(page, 'admin', 'lead@e2e.test', '專案負責人');
   await openFirstProduct(page);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Product');
@@ -32,10 +32,10 @@ test('Product lists the products with a fixed title; header switcher, rename but
   // the existing default product is one of the rows, selected, and marked as current
   await expect(row(page, '產品1')).toHaveAttribute('aria-current', 'true');
   await expect(list(page).getByRole('listitem').filter({ hasText: '產品1' }).getByText('目前產品')).toBeVisible();
-  // its menu offers rename only (deletion comes in a later phase)
+  // its menu: rename, then (separated) the destructive delete (product-delete.spec.ts)
   await actions(page, '產品1').click();
-  await expect(page.getByRole('menuitem')).toHaveText(['重新命名']);
-  await expect(page.getByText(/刪除/)).toHaveCount(0);
+  await expect(page.getByRole('menuitem')).toHaveText(['重新命名', '刪除產品']);
+  await expect(page.getByRole('menu').getByRole('separator')).toHaveCount(1);
   await page.keyboard.press('Escape');
   await expect(actions(page, '產品1')).toBeFocused();
   await expectNoPageOverflow(page);

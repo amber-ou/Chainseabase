@@ -1,25 +1,33 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useResource } from '@/client/hooks';
-import { loginHref, useSite } from '@/client/site';
-import { DeniedState, ErrorState, LoadingState } from '@/components/ui';
+import { LoadingState } from '@/components/ui';
+import { AdminShell, readLastProduct, useProductList } from '@/features/admin/shell';
+import { ProductListPage } from '@/features/dashboard/dashboard';
 
+/**
+ * /products: opens the product last used (or the first one on a first visit). After the selected
+ * product was deleted, or when there is no product at all, it shows the product list with nothing
+ * selected (docs/change-requests/sidebar-position.md, phase 4). Login and access states come from the shell.
+ */
 export default function ProductsIndex() {
-  const { me, meLoaded, site } = useSite();
+  return <AdminShell><ProductsLanding /></AdminShell>;
+}
+
+function ProductsLanding() {
+  const { products } = useProductList();
   const router = useRouter();
-  const res = useResource<{ id: string }[]>(me?.role === 'team' ? '/products' : null);
+  // decided once, from the list as loaded: never selected → the first product; a remembered product
+  // that still exists → that one; cleared ('') or a product that no longer exists → no selection
+  const [target] = useState(() => {
+    const last = readLastProduct();
+    if (last) return products.find((p) => p.id === last)?.id ?? null;
+    return last === null ? products[0]?.id ?? null : null;
+  });
   useEffect(() => {
-    if (!res.data?.length) return;
-    let last: string | null = null;
-    try { last = localStorage.getItem('csb:lastProduct'); } catch { last = null; }
-    const target = res.data.find((p) => p.id === last) ?? res.data[0];
-    router.replace(`/products/${target.id}/dashboard`);
-  }, [res.data, router]);
-  if (!meLoaded) return <main id="main" tabIndex={-1} className="login-wrap"><LoadingState /></main>;
-  if (!me) return <main id="main" tabIndex={-1} className="login-wrap"><DeniedState title="請先登入" message="後台需要團隊成員以 Google 登入。" action={<a className="btn btn-primary" href={loginHref('/products')}>前往登入</a>} /></main>;
-  if (me.role !== 'team') return <main id="main" tabIndex={-1} className="login-wrap"><DeniedState title="沒有後台權限" message={`目前登入的 ${me.email} 不是團隊成員。`} action={<a className="btn" href={site.portalOrigin}>前往前台網站</a>} /></main>;
-  if (res.error) return <main id="main" tabIndex={-1} className="login-wrap"><ErrorState message={res.error.message} onRetry={res.reload} /></main>;
-  return <main id="main" tabIndex={-1} className="login-wrap"><LoadingState label="正在開啟產品…" /></main>;
+    if (target) router.replace(`/products/${target}/dashboard`);
+  }, [target, router]);
+  if (target) return <LoadingState label="正在開啟產品…" />;
+  return <ProductListPage />;
 }

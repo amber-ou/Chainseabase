@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import type { Ctx, Router } from '../http';
 import { uuidParam } from '../http';
-import { getSql } from '../db';
+import { getSql, withTx } from '../db';
 import { requireProduct, requireTeam } from '../authz';
-import { createProduct, listProducts, renameProduct } from '@/modules/products/service';
+import { createProduct, deleteProduct, listProducts, renameProduct } from '@/modules/products/service';
 import {
   createOption, createPersonTag, createTag, createTagGroup, deleteOption, deletePersonTag, deleteTag, deleteTagGroup,
   getTaxonomy, optionUsage, personTagUsage, setUserPersonTags, tagUsage, updateOption, updatePersonTag, updateTag, updateTagGroup,
@@ -46,6 +46,15 @@ export function registerProductRoutes(r: Router) {
     const productId = await teamProduct(ctx);
     const body = await ctx.body(z.object({ name: text(1, 100, '產品名稱'), expectedRevision: zRevision }).strict());
     return mutate(ctx, { body }, async (tx) => ({ data: await renameProduct(tx, productId, body.name, body.expectedRevision) }));
+  });
+
+  // permanent deletion: team members only; the exact current name and revision confirm it (both checked
+  // again under the row lock). A repeated or late request finds no product and answers 404.
+  r.delete('/products/:p', ['admin'], async (ctx) => {
+    const productId = await teamProduct(ctx);
+    const expectedRevision = ctx.ifMatchRevision();
+    const body = await ctx.body(z.object({ confirmName: z.string().max(200) }).strict());
+    return { data: await withTx((tx) => deleteProduct(tx, productId, body.confirmName, expectedRevision)) };
   });
 
   // ---- Users in product ----

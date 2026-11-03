@@ -79,7 +79,8 @@
 | POST `/me/avatar-upload` | 簽發本人頭像上傳用途；限制 MIME、大小與 bucket path。 |
 | GET `/products` | 團隊所有產品；前台可另外用 public products 查詢公開入口。 |
 | POST `/products` | 團隊，name；初始化選項與預設看板，同交易。 |
-| PATCH `/products/:p` | 團隊，name、expectedRevision。無封存／刪除端點。 |
+| PATCH `/products/:p` | 團隊，name、expectedRevision。不提供封存。 |
+| DELETE `/products/:p` | 團隊（測試成員 403、未登入 401、前台 host 404）。`If-Match: "{revision}"` 必填（缺少 428、過期 409 `REVISION_CONFLICT`）；body 僅 `{ confirmName }`，須與目前名稱完全相同（不去空白、不折疊大小寫，否則 400 `INVALID_REQUEST`）。單一交易永久刪除產品及其平台內專屬資料，先鎖定產品列；成功 200 `{ id, deleted: true }`，已不存在 404。保留其他產品、帳號、session、個人 Google 授權與邀請本身（只移除此產品關聯）；不呼叫 Google。系統鍵產品（初始「產品1」）留下 `product_tombstones` 紀錄，初始化不重建。見[變更需求](change-requests/sidebar-position.md)「永久刪除產品」。 |
 | GET `/products/:p/users` | 團隊；所有有效團隊及該產品受邀測試成員。 |
 | GET `/products/:p/users/:u` | 團隊；使用者資料與產品內計數。 |
 | GET `/products/:p/users/:u/feedback` | 團隊；該人建立的產品 Feedback。 |

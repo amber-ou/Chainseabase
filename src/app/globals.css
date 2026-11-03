@@ -216,6 +216,8 @@ main[tabindex="-1"]:focus { outline: none; }
 .nav-item:hover { background: var(--raised); color: var(--text); }
 .nav-item[aria-current="page"], .nav-item[aria-expanded="true"] { background: #e9e9e9; color: var(--text); font-weight: 500; }
 .nav-item svg { flex-shrink: 0; }
+/* a product section while no product is selected: shown in place, not openable (phase 4) */
+.nav-item[aria-disabled="true"], .nav-item[aria-disabled="true"]:hover { color: var(--muted); background: none; cursor: not-allowed; }
 .nav-badge { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--primary); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
 .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--border); }
 .user-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; min-width: 0; }

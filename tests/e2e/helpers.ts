@@ -51,3 +51,26 @@ export async function tabTo(page: Page, name: RegExp, max = 60) {
   }
   throw new Error(`Tab never reached ${name}`);
 }
+
+/** axe-core WCAG 2.1 A/AA rules on the current page (same rule set as a11y.spec.ts). */
+export async function expectNoAxeViolations(page: Page, label: string) {
+  const { createRequire } = await import('node:module');
+  await page.addScriptTag({ path: createRequire(import.meta.url).resolve('axe-core/axe.min.js') });
+  const result = await page.evaluate(async () => {
+    const r = await (window as any).axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }, resultTypes: ['violations'] });
+    return r.violations.map((v: any) => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.slice(0, 5).map((n: any) => n.target.join(' ')) }));
+  });
+  expect(result, `${label}: ${JSON.stringify(result, null, 2)}`).toEqual([]);
+}
+
+/** Create a product through the API (as the logged-in page) and return it. */
+export async function createProduct(page: Page, name: string) {
+  const r = await page.request.post(`${ADMIN}/api/v1/products`, { headers: { origin: ADMIN }, data: { name } });
+  expect(r.status()).toBe(201);
+  return (await r.json()).data as { id: string; name: string; slug: string; revision: number };
+}
+
+export async function listProducts(page: Page) {
+  const r = await page.request.get(`${ADMIN}/api/v1/products`);
+  return (await r.json()).data as { id: string; name: string; slug: string; revision: number }[];
+}

@@ -35,7 +35,7 @@ const TABLES = [
   'schedule_entries', 'schedule_operations', 'schedule_rows', 'schedules',
   'comment_likes', 'feedback_votes', 'comments', 'feedback_person_tags', 'feedback_tags', 'feedback',
   'tags', 'tag_groups', 'user_person_tags', 'person_tags', 'categories', 'statuses',
-  'product_access', 'invitation_products', 'invitations', 'products', 'bootstrap_team_grants', 'sessions', 'users',
+  'product_access', 'invitation_products', 'invitations', 'products', 'product_tombstones', 'bootstrap_team_grants', 'sessions', 'users',
 ];
 
 export async function resetDb() {

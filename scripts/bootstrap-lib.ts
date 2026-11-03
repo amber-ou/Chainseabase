@@ -10,8 +10,10 @@ export async function bootstrap(sql: Sql, opts: { teamEmail: string | null }) {
     // serialize concurrent bootstrap runs
     await tx`select pg_advisory_xact_lock(7340002)`;
     const [existing] = await tx<{ id: string }[]>`select id from products where system_key = 'initial'`;
+    // a team that deleted the initial product keeps it deleted (first run vs. emptied on purpose)
+    const [deleted] = await tx<{ systemKey: string }[]>`select system_key from product_tombstones where system_key = 'initial'`;
     let productCreated = false;
-    if (!existing) {
+    if (!existing && !deleted) {
       await createProduct(tx as never, { name: '產品1', systemKey: 'initial' });
       productCreated = true;
     }

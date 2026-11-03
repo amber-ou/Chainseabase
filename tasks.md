@@ -226,3 +226,42 @@ CC 驗證（2026-11-02，Linux 容器）：fast-forward 取得 `1960af5`；依�
 驗證（Linux 容器，第三方為 fake）：lint、typecheck、build、security:scan 皆 0；`npm test` 197 passed；`test:ui` 3 passed；`test:e2e` 100 passed（1440／768／390：清單內容與移除項目、建立／列內重新命名／連續兩次重新命名、清單與側邊欄選擇器雙向同步、slug 不變、409 保留輸入、純鍵盤建立／選取／選單／重新命名、Escape 焦點返回、長名稱與 44px 觸控、Calendar 開啟與產品切換不混用綁定、舊網址；日曆授權與活動操作沿用 C05／C16 與鍵盤日曆案例，axe 與無溢出涵蓋 Calendar 頁）。過程中測試抓到一個本階段缺陷：列選單關閉時一律阻止焦點返回，Escape 後焦點遺失；已改為只在開啟重新命名時阻止。
 
 未做：產品刪除（第四階段）、Logo／Login；沒有產品時的空清單（目前無法刪除產品，第四階段處理）；Taste inspector；Windows 主機與真實 Google 未重驗。
+
+## UI-04：產品永久刪除、防呆 Modal 與無產品狀態（2026-11-03）
+
+範圍：[變更需求](docs/change-requests/sidebar-position.md)「永久刪除產品」「防呆 Modal」「一致性與刪除後導覽」；不含 Logo／Login。只新增刪除所需的 API、資料層與 UI，未改其他業務邏輯或依賴版本。
+
+- API：`DELETE /products/:p`（[契約](docs/04-api-contracts.md)）。團隊可刪；測試成員／無角色 403、未登入 401、前台 host 404、跨來源 403。`If-Match` revision 必填（缺 428、過期 409），`confirmName` 必須與目前名稱完全相同（400）。zod strict，多餘欄位 400。
+- 資料：`deleteProduct`（`src/modules/products/service.ts`）單一交易，先 `for update` 鎖產品列；並行寫入因外鍵等待後失敗為 404，不留孤兒列。刪除：通知；該產品事件與其 outbox 工作；日曆綁定、活動關聯與日曆操作紀錄；所有成員在此產品的 Personal 檢視／欄／卡位、私人標籤與私人備註；Roadmap 看板、欄與排序；Schedule 列／內容／操作；留言、按讚、投票、Feedback 與其 Tag／職掌；職掌與成員職掌、Tag、群組、類別、狀態；產品存取；邀請與此產品的關聯；此產品的冪等紀錄；最後刪除產品列。保留：其他產品、帳號、session、個人 Google 授權、邀請本身（只移除此產品關聯）、bootstrap 團隊資格。不呼叫 Google：日曆、活動與 ACL 不變。
+- 初始化：新增 migration `0003_product_tombstones.sql`。刪除有系統鍵的產品（初始「產品1」）時記下該鍵，`bootstrap` 見到 tombstone 不再建立；首次空資料庫仍建立「產品1」。
+- UI：列「⋯」選單在重新命名下方加分隔與危險色「刪除產品」。AlertDialog（官方 shadcn 元件）：標題「永久刪除產品『名稱』？」、影響範圍、Google 不受影響、「輸入產品名稱以確認」（初始空白、顯示完整名稱），完全一致才啟用「永久刪除」。初始焦點在輸入框，Enter 不送出。「刪除中…」期間不可重送或關閉。409 時確認失效且不可重試，並刷新清單；400／403 顯示原因且未刪除。網路錯誤或 5xx 先查產品清單：已不在清單才回報刪除，仍在則說明未刪除，查不到則顯示「重新檢查」。404 回報「已不存在」。
+- 刪除後：刪其他產品時保留目前選取，焦點移到相鄰列；刪目前產品時清除選取（`csb:lastProduct` 設為空），返回 `/products`，焦點在標題。`/products` 依記錄決定：從未選過則開第一個產品；記錄的產品仍存在則開它；已清除或產品已不存在則顯示未選取清單；零產品顯示「尚無產品」與「新增產品」（官方 Empty 元件）。
+- 側邊欄無產品模式：只有 Product 可開；其他項目為 `aria-disabled`，並以「請先從 Product 選取產品／請先在 Product 新增產品」提示，不發出產品請求（Notification 不輪詢）。舊網址顯示「找不到產品，可能已被刪除」與「返回 Product」，不請求該產品資料。只記住確實存在的產品。新增產品對話框說明改為可重新命名或永久刪除。
+
+修改檔案：
+- 後端：`db/migrations/0003_product_tombstones.sql`（新增）、`scripts/bootstrap-lib.ts`、`src/modules/products/service.ts`、`src/server/api/routes-products.ts`。
+- UI：`src/components/ui/alert-dialog.tsx`、`src/components/ui/empty.tsx`（新增，見 [shadcn 規範](docs/ui/shadcn-integration.md)）、`src/features/dashboard/dashboard.tsx`、`src/features/admin/shell.tsx`、`src/app/products/page.tsx`、`src/app/globals.css`。
+- 測試：新增 `tests/integration/product-delete.test.ts`、`tests/e2e/product-delete.spec.ts`、`tests/e2e/product-empty.spec.ts`；修改 `tests/helpers/harness.ts`、`tests/e2e/helpers.ts`、`tests/e2e/shadcn.spec.ts`、`playwright.config.ts`（平板／手機納入 product-delete；新增專案 `empty-last` 依賴其他三個專案，最後執行）。
+- 文件：`docs/04-api-contracts.md`、`docs/01-product-requirements.md`、`docs/02-architecture-and-data.md`、`docs/07-delivery-and-acceptance.md`（A09）、`docs/08-decisions.md`（D03 已取代）、變更需求狀態。
+
+驗證（Linux 容器，隔離 test／e2e 資料庫；Google、Email 為 fake，屬 mock）：
+- lint、typecheck、build、security:scan（745 檔）、`git diff --check` 皆 0。
+- `npm test`：21 檔 209 passed。新增 12 個整合案例：
+  - 依資料庫目錄自動盤點所有直接或經外鍵屬於產品的表，刪除前每張表都有資料，刪除後全為 0；另一產品逐表筆數不變；帳號、session、Google 授權、邀請不變。
+  - fake Google 無任何呼叫，日曆與活動不變；舊網址、前台與 API 皆 404。
+  - 名稱不符（前綴、前後空白、大小寫）、過期／缺少 revision、權限、重複請求、交易中途失敗完整回滾、與寫入並行、兩人同時刪除、已排隊工作不再執行、刪光後重跑初始化不復活、首次初始化仍建立。
+- `test:ui` 3 passed。
+- `test:e2e` 116 passed、0 failed：
+  - 1440／768／390 各 5 個刪除案例：
+    - 刪除其他產品：長名稱、矮視窗、axe、焦點。
+    - 刪除目前產品：導回、側邊欄停用、舊網址、刪除後無產品請求、axe。
+    - 純鍵盤操作：Enter 不送出、Tab 順序、Escape／取消焦點返回、重開清空。
+    - 送出狀態：刪除中僅送一次且不可關閉；5xx、網路失敗、400、409 不顯示成功；回應遺失時核對後才回報。
+    - 他人已先刪除。
+  - `empty-last` 在其他專案後刪光全部產品（含產品1），三種尺寸的空清單皆通過 axe、無溢出，並可從空狀態新增產品。
+  - 第一輪完整執行有 3 個失敗：矮視窗量測在視窗縮小後立即讀取位置。改為等版面完成後量測（實測 1440 為 y≈8、高 465／480），重跑全數通過；元件未修改。
+
+未做／限制：
+- 已送出的 Google 日曆請求若與刪除同時發生，Google 端可能已建立或修改活動，平台寫入關聯時則因產品不存在而失敗，活動留在 Google（屬 Google 資料，本來就不刪除）。
+- 測試成員邀請若只關聯被刪除的產品，邀請仍保留且可能寄出、接受後成為無產品的測試成員。此行為待使用者決定，未擴大刪除範圍。
+- Taste inspector、Windows 主機與真實 Google／Resend 未驗證。

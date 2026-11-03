@@ -112,6 +112,10 @@ npm run test:e2e
 
 本機驗證使用 Docker PostgreSQL 17、Node 24、系統 Chromium，測試建立獨立的 test／e2e DB，沒有接觸正式資料。
 
+## 第四階段新增元件（2026-11-03）
+
+產品刪除與空清單新增 `alert-dialog.tsx`、`empty.tsx`，同樣取自官方 `4aaea19` 的 `apps/v4/registry/new-york-v4/ui/`。`empty.tsx` 與官方相同；`alert-dialog.tsx` 只有與 Dialog 相同的已記錄調整：Button 匯入路徑、`z-(--z-ui-overlay)` 堆疊 token、內容最大高度 `calc(100dvh-2rem)` 並可捲動（矮視窗不裁切按鈕）。未新增依賴（`radix-ui` 已含 AlertDialog）。
+
 ## 修改檔案索引
 
 - 相依／設定：`package.json`、`package-lock.json`、`components.json`、`postcss.config.mjs`、`tsconfig.json`。
