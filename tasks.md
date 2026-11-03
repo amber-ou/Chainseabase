@@ -199,3 +199,15 @@ BootReport：FAIL，退出碼 1
 來源版本、手動安裝原因、測試限制與後續元件規範見 [shadcn/ui 整合紀錄](docs/ui/shadcn-integration.md)。
 
 CC 驗證（2026-11-02，Linux 容器）：fast-forward 取得 `1960af5`；依賴來源、官方 skill、元件原始碼與 CSS layer／Preflight 已逐項核對；lint、typecheck、build、security:scan 皆 0；`npm test` 197 passed；`test:ui` 3 passed；`test:e2e` 74 passed（新增只用鍵盤操作產品對話框與切換器的案例）。Taste inspector、Windows 主機與真實 Google／Resend 未執行。官方 registry 目前在此環境不可達；成果由 `codex/ui-phase1-handoff` 分支交接，未部署。
+
+## UI-02：側邊欄順序與上下分組（2026-11-03）
+
+範圍：只調整側邊欄位置與分組（[變更需求](docs/change-requests/sidebar-position.md)「側邊欄配置」，不含 Calendar）。上方 Product → Feedback → Roadmap → User → Live Portal；下方 Personal → Notification → Setting，位於帳號區上方，與上方同樣間距；兩組之間為彈性留白（矮視窗最少 12px）。同一個 `後台導覽` nav、既有樣式、圖示、點擊行為、權限、路由、產品選擇器與帳號／登出區不變，手機選單使用同一份導覽。
+
+連帶修正：Notification 浮層原本固定向下開啟並放在可捲動的側邊欄內；移到下方後會蓋住 Setting 與帳號區並超出視窗。改為依按鈕位置以視窗定位，往空間較大的一側開啟並限制高度。舊版也已在右緣被側邊欄裁切（「全部標為已讀」被截斷，已用舊程式重現），此修正一併解決。前台頁首的 Notification 仍向下開啟。
+
+修改檔案：`src/features/admin/shell.tsx`、`src/app/globals.css`（`.nav` 加分組規則）、`tests/e2e/admin.spec.ts`（順序斷言）、新增 `tests/e2e/sidebar.spec.ts`、`playwright.config.ts`（平板／手機專案納入 sidebar 測試）。
+
+驗證（Linux 容器）：lint、typecheck、build、security:scan 皆 0；`npm test` 197 passed；`test:ui` 3 passed；`test:e2e` 83 passed（新增 9 個：1440、768、390 各含一般與矮視窗 1440×560／768×500／390×560，檢查順序與各一次、視覺順序與 DOM 一致、圖示與文字左緣對齊、下方三項等距、帳號區位置、登出可達且不被遮擋、Tab 順序與視覺一致；以及各寬度 Notification 浮層完整在視窗內且未被遮擋）。
+
+未做：Calendar 入口（第三階段）、Product 清單、產品刪除、Logo／Login 改版；Taste inspector 未執行；Windows 主機未重驗。

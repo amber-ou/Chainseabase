@@ -1,6 +1,6 @@
 # UI／UX 調整：側邊欄、Product、Calendar、Logo 與 Login（交付 CC）
 
-建立：2026-10-28；更新：2026-10-30。狀態：需求已確認；本文件為開發交付規格，尚未實作或通過功能／視覺驗收。
+建立：2026-10-28；更新：2026-10-30。狀態：需求已確認；本文件為開發交付規格。實作進度：第二階段（2026-11-03）已完成側邊欄上下分組與順序（上方 Product → Feedback → Roadmap → User → Live Portal；下方 Personal → Notification → Setting），**尚未加入 Calendar**（第三階段搬移日曆時補成完整九項）；Product 清單、Calendar 拆頁、產品刪除、Logo 與 Login 改版尚未實作，見 [tasks.md](../../tasks.md) UI-02。
 
 ## 範圍與優先順序
 

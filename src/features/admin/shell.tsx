@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api } from '@/client/api';
 import { useResource, useVisiblePolling } from '@/client/hooks';
 import { loginHref, useSite } from '@/client/site';
@@ -45,14 +45,16 @@ export function useUnsaved(key: string, dirty: boolean) {
   }, [dirty]);
 }
 
+// sidebar groups (docs/change-requests/sidebar-position.md): the top group, then Live Portal;
+// the bottom group (Personal, Notification, Setting) sits just above the account area
 const SECTIONS = [
   { key: 'dashboard', label: 'Product', icon: IconProduct },
   { key: 'feedback', label: 'Feedback', icon: IconFeedback },
   { key: 'roadmaps', label: 'Roadmap', icon: IconRoadmap },
-  { key: 'personal', label: 'Personal', icon: IconPersonal },
-] as const;
-const SECTIONS_AFTER = [
   { key: 'users', label: 'User', icon: IconUsers },
+] as const;
+const SECTIONS_BOTTOM = [
+  { key: 'personal', label: 'Personal', icon: IconPersonal },
 ] as const;
 
 export function AdminShell({ children }: { children: ReactNode }) {
@@ -131,7 +133,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     else router.push(href);
   };
   const switchProduct = (id: string) => go(`/products/${id}/${['dashboard', 'feedback', 'roadmaps', 'personal', 'users', 'settings'].includes(section) ? section : 'dashboard'}`);
-  const current = [...SECTIONS, ...SECTIONS_AFTER, { key: 'settings', label: 'Setting' }].find((s) => s.key === section)?.label ?? 'Product';
+  const current = [...SECTIONS, ...SECTIONS_BOTTOM, { key: 'settings', label: 'Setting' }].find((s) => s.key === section)?.label ?? 'Product';
 
   const nav = (
     <>
@@ -143,15 +145,19 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </select>
       </div>
       <nav className="nav" aria-label="後台導覽">
-        {SECTIONS.map((s) => (
-          <NavLink key={s.key} href={`/products/${product.id}/${s.key}`} active={section === s.key} onNavigate={go} icon={<s.icon />}>{s.label}</NavLink>
-        ))}
-        <a className="nav-item" href={`${site.portalOrigin}/p/${product.slug}/feedback`}><IconPortal />Live Portal</a>
-        {SECTIONS_AFTER.map((s) => (
-          <NavLink key={s.key} href={`/products/${product.id}/${s.key}`} active={section === s.key} onNavigate={go} icon={<s.icon />}>{s.label}</NavLink>
-        ))}
-        <NotificationsButton productId={product.id} onOpenFeedback={(id) => go(`/products/${product.id}/feedback?item=${id}`)} />
-        <NavLink href={`/products/${product.id}/settings`} active={section === 'settings'} onNavigate={go} icon={<IconSettings />}>Setting</NavLink>
+        <div className="nav-group">
+          {SECTIONS.map((s) => (
+            <NavLink key={s.key} href={`/products/${product.id}/${s.key}`} active={section === s.key} onNavigate={go} icon={<s.icon />}>{s.label}</NavLink>
+          ))}
+          <a className="nav-item" href={`${site.portalOrigin}/p/${product.slug}/feedback`}><IconPortal />Live Portal</a>
+        </div>
+        <div className="nav-group nav-group-bottom">
+          {SECTIONS_BOTTOM.map((s) => (
+            <NavLink key={s.key} href={`/products/${product.id}/${s.key}`} active={section === s.key} onNavigate={go} icon={<s.icon />}>{s.label}</NavLink>
+          ))}
+          <NotificationsButton productId={product.id} onOpenFeedback={(id) => go(`/products/${product.id}/feedback?item=${id}`)} />
+          <NavLink href={`/products/${product.id}/settings`} active={section === 'settings'} onNavigate={go} icon={<IconSettings />}>Setting</NavLink>
+        </div>
       </nav>
       <div className="sidebar-foot">
         <div className="user-row">
@@ -214,6 +220,26 @@ export function NotificationsButton({ productId, onOpenFeedback, basePath = `/pr
   useDismiss(open, () => setOpen(false), ref, triggerRef);
   // keyboard: focus moves into the panel when it opens (even when it has nothing actionable)
   useEffect(() => { if (open) panelRef.current?.focus(); }, [open]);
+  // the panel is placed against the viewport next to its button, opening up or down wherever there is
+  // more room: from the bottom of the sidebar it opens upward, and the scrolling sidebar cannot clip it
+  const [place, setPlace] = useState<CSSProperties>({});
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const r = triggerRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const width = Math.min(340, window.innerWidth - 16);
+      const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
+      const above = r.top - 12, below = window.innerHeight - r.bottom - 12;
+      setPlace(above > below
+        ? { position: 'fixed', left, width, bottom: window.innerHeight - r.top + 4, maxHeight: Math.min(440, above) }
+        : { position: 'fixed', left, width, top: r.bottom + 4, maxHeight: Math.min(440, below) });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true); };
+  }, [open]);
   const res = useResource<NotificationItem[]>(`${basePath}/notifications?limit=30`);
   // foreground polling every 30s; paused in background tabs
   useVisiblePolling(() => { void res.reload(); }, 30_000);
@@ -233,7 +259,7 @@ export function NotificationsButton({ productId, onOpenFeedback, basePath = `/pr
         <IconBell />Notification{unread > 0 ? <span className="nav-badge num" aria-label={`${unread} 則未讀`}>{unread}</span> : null}
       </button>
       {open ? (
-        <div ref={panelRef} tabIndex={-1} className="popover" role="dialog" aria-label="通知" style={{ left: 0, top: 'calc(100% + 4px)', width: 340, maxHeight: 440, overflowY: 'auto' }}>
+        <div ref={panelRef} tabIndex={-1} className="popover" role="dialog" aria-label="通知" style={{ ...place, overflowY: 'auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 6px 8px' }}>
             <strong>通知</strong>
             <Button size="sm" variant="ghost" disabled={unread === 0} onClick={async () => { await api.put(`${basePath}/notifications/read`, { body: { before: new Date().toISOString() } }); void res.reload(); }}>全部標為已讀</Button>

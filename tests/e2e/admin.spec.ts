@@ -8,7 +8,7 @@ test('A: bootstrap email becomes team; sidebar keeps the fixed order', async ({ 
   await openFirstProduct(page);
   const nav = page.getByRole('navigation', { name: '後台導覽' }).first();
   const labels = await nav.locator('.nav-item').allInnerTexts();
-  expect(labels.map((l) => l.replace(/\d+/g, '').trim())).toEqual(['Product', 'Feedback', 'Roadmap', 'Personal', 'Live Portal', 'User', 'Notification', 'Setting']);
+  expect(labels.map((l) => l.replace(/\d+/g, '').trim())).toEqual(['Product', 'Feedback', 'Roadmap', 'User', 'Live Portal', 'Personal', 'Notification', 'Setting']);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('產品1');
 });
 
