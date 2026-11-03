@@ -5,9 +5,9 @@ import { login, openFirstProduct, unique } from './helpers';
  * Calendar UI against the server's in-memory FAKE Google Calendar (CALENDAR_PROVIDER=fake).
  * This verifies UI flows only; it is not a real Google integration test.
  */
-test('C05 (fake provider): connect, bind, create and edit an event from the dashboard', async ({ page }) => {
+test('C05 (fake provider): connect, bind, create and edit an event on the Calendar page', async ({ page }) => {
   await login(page, 'admin', 'lead@e2e.test', '專案負責人');
-  await openFirstProduct(page);
+  await openFirstProduct(page, 'calendar');
   await expect(page.getByText('開發模擬日曆')).toBeVisible();
   await page.getByRole('button', { name: /連結模擬日曆/ }).click();
   await page.getByLabel('日曆', { exact: true }).selectOption({ label: 'Chainseabase 模擬日曆（可編輯）' });
@@ -38,7 +38,7 @@ test('C16 (fake provider): 60 s foreground polling, paused in the background, re
   const polls: string[] = [];
   page.on('request', (r) => { if (r.method() === 'GET' && /\/calendar\/events\?/.test(r.url())) polls.push(r.url()); });
   await page.clock.install();
-  await openFirstProduct(page);
+  await openFirstProduct(page, 'calendar');
   if (await page.getByRole('button', { name: /連結模擬日曆/ }).isVisible().catch(() => false)) {
     await page.getByRole('button', { name: /連結模擬日曆/ }).click();
   }

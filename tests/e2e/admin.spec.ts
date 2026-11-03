@@ -8,8 +8,9 @@ test('A: bootstrap email becomes team; sidebar keeps the fixed order', async ({ 
   await openFirstProduct(page);
   const nav = page.getByRole('navigation', { name: '後台導覽' }).first();
   const labels = await nav.locator('.nav-item').allInnerTexts();
-  expect(labels.map((l) => l.replace(/\d+/g, '').trim())).toEqual(['Product', 'Feedback', 'Roadmap', 'User', 'Live Portal', 'Personal', 'Notification', 'Setting']);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('產品1');
+  expect(labels.map((l) => l.replace(/\d+/g, '').trim())).toEqual(['Product', 'Calendar', 'Feedback', 'Roadmap', 'User', 'Live Portal', 'Personal', 'Notification', 'Setting']);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Product');
+  await expect(page.getByRole('list', { name: '產品' }).getByRole('link', { name: /^產品1/ })).toHaveAttribute('aria-current', 'true');
 });
 
 test('F01/F02/S11/S12/S17: create with schedule draft, continuous creation keeps classification', async ({ page }) => {

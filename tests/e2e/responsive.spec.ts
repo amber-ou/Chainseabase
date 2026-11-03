@@ -6,7 +6,7 @@ import { PORTAL, expectNoPageOverflow, login, openFirstProduct } from './helpers
  * horizontal overflow; boards and the schedule scroll inside their containers.
  * Screenshots are attached for manual review.
  */
-for (const section of ['dashboard', 'feedback', 'roadmaps', 'personal', 'users', 'settings']) {
+for (const section of ['dashboard', 'calendar', 'feedback', 'roadmaps', 'personal', 'users', 'settings']) {
   test(`admin ${section} fits the viewport`, async ({ page }, info) => {
     await login(page, 'admin', 'lead@e2e.test', '專案負責人');
     await openFirstProduct(page, section);

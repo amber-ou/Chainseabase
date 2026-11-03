@@ -19,7 +19,7 @@ async function axe(page: Page, label: string) {
   expect(result, `${label}: ${JSON.stringify(result, null, 2)}`).toEqual([]);
 }
 
-for (const section of ['dashboard', 'feedback', 'roadmaps', 'personal', 'users', 'settings']) {
+for (const section of ['dashboard', 'calendar', 'feedback', 'roadmaps', 'personal', 'users', 'settings']) {
   test(`axe: admin ${section}`, async ({ page }) => {
     await login(page, 'admin', 'lead@e2e.test', '專案負責人');
     await openFirstProduct(page, section);

@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
-import { DashboardPage } from '@/features/dashboard/dashboard';
+import { ProductListPage } from '@/features/dashboard/dashboard';
 
 export default function Page() {
-  return <Suspense><DashboardPage /></Suspense>;
+  return <Suspense><ProductListPage /></Suspense>;
 }

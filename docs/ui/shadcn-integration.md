@@ -10,7 +10,7 @@
 
 `src/components/ui/` 已提供 Button、Input、Card、Dialog、Dropdown Menu、Tabs、Table、Badge、Select、Tooltip，以及組合表單需要的 Field、Label、Separator。它們是可維護的專案原始碼，而不是只引用外部黑盒元件。
 
-代表頁面是現有 `src/features/dashboard/dashboard.tsx`：產品切換改用 Select，新增／命名改用 Button、Dialog、Input、Field。保持原有路由、API payload、revision、錯誤訊息、日曆與其他功能。關閉對話框會返回觸發按鈕，失敗保留輸入。
+代表頁面是現有 `src/features/dashboard/dashboard.tsx`：產品切換改用 Select，新增／命名改用 Button、Dialog、Input、Field。（2026-11-03 第三階段：Product 改為產品清單，頁首 Select 與重新命名按鈕移除，改用 Dropdown Menu、Badge 與 Dialog 在列內重新命名，見 [tasks.md](../../tasks.md) UI-03。）保持原有路由、API payload、revision、錯誤訊息、日曆與其他功能。關閉對話框會返回觸發按鈕，失敗保留輸入。
 
 之前的 [UI／UX 調整交付文件](../change-requests/sidebar-position.md) 保持獨立且未變更。本次沒有實作其中的 Calendar 拆頁、永久刪除、Logo 或 Login 改版。
 

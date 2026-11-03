@@ -211,3 +211,18 @@ CC 驗證（2026-11-02，Linux 容器）：fast-forward 取得 `1960af5`；依�
 驗證（Linux 容器）：lint、typecheck、build、security:scan 皆 0；`npm test` 197 passed；`test:ui` 3 passed；`test:e2e` 83 passed（新增 9 個：1440、768、390 各含一般與矮視窗 1440×560／768×500／390×560，檢查順序與各一次、視覺順序與 DOM 一致、圖示與文字左緣對齊、下方三項等距、帳號區位置、登出可達且不被遮擋、Tab 順序與視覺一致；以及各寬度 Notification 浮層完整在視窗內且未被遮擋）。
 
 未做：Calendar 入口（第三階段）、Product 清單、產品刪除、Logo／Login 改版；Taste inspector 未執行；Windows 主機未重驗。
+
+## UI-03：Calendar 入口與頁面、Product 產品清單（2026-11-03）
+
+範圍：[變更需求](docs/change-requests/sidebar-position.md)「側邊欄配置」「Product：產品清單」「Calendar：承接既有 Google 日曆」；不含產品刪除（第四階段，未放置任何刪除控制）、Logo／Login 改版。API、資料結構、商業邏輯與權限未改。
+
+- 側邊欄九項：上方 Product → Calendar → Feedback → Roadmap → User → Live Portal，下方 Personal → Notification → Setting；Calendar 用既有圖示集的 `IconCalendar`；保留第二階段 Notification 浮層定位。
+- Calendar：新路由 `/products/[id]/calendar`，h1 Calendar 並顯示目前產品名稱；沿用同一個 `CalendarPanel`（授權、綁定、月／週／清單、活動新增／編輯、錯誤處理，未新增第二套邏輯）。授權返回位址取自目前頁面，所以從 Calendar 連結會回到 Calendar；側邊欄切換產品時保留 Calendar 並換成該產品自己的綁定。
+- Product：`/products/[id]/dashboard` 仍是 Product（不導向 Calendar），h1 固定 Product；移除副標、頁首產品下拉與重新命名按鈕；保留「新增產品」。平整清單列出實際產品（含「產品1」），目前產品以「目前產品」標示；點選列切換目前產品並與側邊欄選擇器同步（焦點留在該列）。每列「{名稱} 的操作」選單只有「重新命名」：Dialog 顯示目前名稱、取消／儲存，使用清單最新 revision；失敗保留輸入；關閉後焦點回到該列選單按鈕；slug 不變。手機觸控區至少 44px，長名稱截斷不遮擋操作。
+- 舊網址：`/products/[id]` 仍導向 Product；舊的日曆授權返回 `/products/[id]/dashboard?calendar=…` 轉到 `/calendar` 並保留參數。
+
+修改檔案：`src/features/admin/shell.tsx`、`src/features/dashboard/dashboard.tsx`（改為 `ProductListPage`）、`src/app/products/[productId]/dashboard/page.tsx`、新增 `src/app/products/[productId]/calendar/page.tsx` 與 `src/features/calendar/calendar-page.tsx`；測試 `tests/e2e/shadcn.spec.ts`（改寫為產品清單）、新增 `tests/e2e/calendar-page.spec.ts`、`sidebar.spec.ts`／`admin.spec.ts`（九項順序與標題）、`calendar.spec.ts`／`keyboard.spec.ts`（日曆改在 Calendar 頁）、`a11y.spec.ts`／`responsive.spec.ts`（加入 calendar）、`playwright.config.ts`（平板／手機納入 calendar-page）。
+
+驗證（Linux 容器，第三方為 fake）：lint、typecheck、build、security:scan 皆 0；`npm test` 197 passed；`test:ui` 3 passed；`test:e2e` 100 passed（1440／768／390：清單內容與移除項目、建立／列內重新命名／連續兩次重新命名、清單與側邊欄選擇器雙向同步、slug 不變、409 保留輸入、純鍵盤建立／選取／選單／重新命名、Escape 焦點返回、長名稱與 44px 觸控、Calendar 開啟與產品切換不混用綁定、舊網址；日曆授權與活動操作沿用 C05／C16 與鍵盤日曆案例，axe 與無溢出涵蓋 Calendar 頁）。過程中測試抓到一個本階段缺陷：列選單關閉時一律阻止焦點返回，Escape 後焦點遺失；已改為只在開啟重新命名時阻止。
+
+未做：產品刪除（第四階段）、Logo／Login；沒有產品時的空清單（目前無法刪除產品，第四階段處理）；Taste inspector；Windows 主機與真實 Google 未重驗。

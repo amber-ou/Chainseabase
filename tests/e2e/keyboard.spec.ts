@@ -42,7 +42,7 @@ test.describe('desktop keyboard walkthrough', () => {
   test('skip link moves focus into main; every admin screen has a visible focus indicator', async ({ page }) => {
     await login(page, 'admin', 'lead@e2e.test', '專案負責人');
     const base = await openFirstProduct(page);
-    for (const section of ['dashboard', 'feedback', 'roadmaps', 'personal', 'users', 'settings']) {
+    for (const section of ['dashboard', 'calendar', 'feedback', 'roadmaps', 'personal', 'users', 'settings']) {
       await page.goto(`${base}/${section}`);
       await page.waitForLoadState('networkidle');
       await page.keyboard.press('Tab');
@@ -159,7 +159,7 @@ test.describe('desktop keyboard walkthrough', () => {
     const extra = await page.request.post(`${ADMIN}/api/v1/test-support/calendar/connect`, { headers, data: { calendarId: `kb-${Date.now()}@fake.local` } });
     expect(extra.status()).toBe(200);
     expect((await page.request.delete(`${ADMIN}/api/v1/integrations/google/calendar/connection`, { headers })).status()).toBe(200);
-    await page.goto(`${ADMIN}/products/${productId}/dashboard`);
+    await page.goto(`${ADMIN}/products/${productId}/calendar`);
     await page.waitForLoadState('networkidle');
     await tabTo(page, /連結模擬日曆/);
     await page.keyboard.press('Enter');

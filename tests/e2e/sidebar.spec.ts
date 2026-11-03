@@ -6,7 +6,7 @@ import { login, openFirstProduct } from './helpers';
  * a flexible gap, then the bottom group just above the account area. Runs at 1440 (sidebar) and at
  * 768 / 390 (phone menu sheet), each at the project height and in a short window.
  */
-const TOP = ['Product', 'Feedback', 'Roadmap', 'User', 'Live Portal'];
+const TOP = ['Product', 'Calendar', 'Feedback', 'Roadmap', 'User', 'Live Portal'];
 const BOTTOM = ['Personal', 'Notification', 'Setting'];
 const SHORT = { 'desktop-1440': { width: 1440, height: 560 }, 'tablet-768': { width: 768, height: 500 }, 'mobile-390': { width: 390, height: 560 } } as Record<string, { width: number; height: number }>;
 
@@ -39,8 +39,8 @@ for (const short of [false, true]) {
     type Box = { x: number; y: number; width: number; height: number };
     const boxes: { item: Box; icon: Box }[] = [];
     for (let i = 0; i < TOP.length + BOTTOM.length; i++) {
+      // measured without scrolling in between, so every position shares one scroll offset
       const item = items.nth(i);
-      await item.scrollIntoViewIfNeeded();
       boxes.push({ item: await box(item), icon: await box(item.locator('svg').first()) });
     }
     for (let i = 1; i < boxes.length; i++) expect(boxes[i].item.y).toBeGreaterThan(boxes[i - 1].item.y);

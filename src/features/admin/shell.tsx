@@ -10,7 +10,7 @@ import { relativeTime } from '@/client/format';
 import { Avatar, Button, DeniedState, ErrorState, LoadingState, useDismiss } from '@/components/ui';
 import { ConfirmModal, FOCUSABLE } from '@/components/modal';
 import {
-  IconBell, IconFeedback, IconMenu, IconPersonal, IconPortal, IconProduct, IconRoadmap, IconSettings, IconUsers, IconX, Logo,
+  IconBell, IconCalendar, IconFeedback, IconMenu, IconPersonal, IconPortal, IconProduct, IconRoadmap, IconSettings, IconUsers, IconX, Logo,
 } from '@/components/icons';
 
 export interface ProductItem { id: string; name: string; slug: string; revision: number; createdAt: string }
@@ -49,6 +49,7 @@ export function useUnsaved(key: string, dirty: boolean) {
 // the bottom group (Personal, Notification, Setting) sits just above the account area
 const SECTIONS = [
   { key: 'dashboard', label: 'Product', icon: IconProduct },
+  { key: 'calendar', label: 'Calendar', icon: IconCalendar },
   { key: 'feedback', label: 'Feedback', icon: IconFeedback },
   { key: 'roadmaps', label: 'Roadmap', icon: IconRoadmap },
   { key: 'users', label: 'User', icon: IconUsers },
@@ -132,7 +133,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     if (dirty.current.size > 0) setPendingNav(href);
     else router.push(href);
   };
-  const switchProduct = (id: string) => go(`/products/${id}/${['dashboard', 'feedback', 'roadmaps', 'personal', 'users', 'settings'].includes(section) ? section : 'dashboard'}`);
+  const switchProduct = (id: string) => go(`/products/${id}/${['dashboard', 'calendar', 'feedback', 'roadmaps', 'personal', 'users', 'settings'].includes(section) ? section : 'dashboard'}`);
   const current = [...SECTIONS, ...SECTIONS_BOTTOM, { key: 'settings', label: 'Setting' }].find((s) => s.key === section)?.label ?? 'Product';
 
   const nav = (
