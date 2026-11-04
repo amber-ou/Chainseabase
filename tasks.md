@@ -311,18 +311,22 @@ E2E 新增邀請頁兩案（1440／768／390）：開啟即顯示「邀請已失
 - 邀請信正在寄送時刪除產品：寄送工作持有邀請鎖，信會寄出，刪除會等到寄送結束（最長為寄信服務逾時）；信中的連結開啟後顯示「邀請已失效」。
 - 接受早於刪除：該測試成員帳號保留但沒有任何產品，與其他產品被刪除後的既有測試成員相同（規則 3）。
 
-## UI-05：品牌 Logo 與 Login 版面（2026-11-04，進行中）
+## UI-05：品牌 Logo 與 Login 版面（2026-11-04）
 
 範圍：[變更需求](docs/change-requests/sidebar-position.md)「Logo 更新」「Login 版面調整」。產品、資料庫、API、商業邏輯與依賴未改。
 
-- **Logo（待素材）**：`C:\Users\Amber.Ou\Desktop\chainsea LOGO.png` 在本雲端環境無法讀取：不在儲存庫或容器內，此 session 也沒有可用的電腦資料夾。已向使用者索取原始檔，未重畫、未使用替代圖片。已把所有品牌圖示集中到 `src/components/brand.tsx` 的 `BrandMark`，用於 Login、邀請頁、後台側邊欄與前台頁首，目前仍顯示既有圖示；收到 PNG 後只需在此替換並放入 `public/brand/`。
+- **Logo**：Windows 原始檔在雲端環境讀不到，未重畫或替代；使用者改由 `origin/codex/ui-phase1-handoff` 的 `1f4f4de` 交付，以 fast-forward 取得。`public/brand/chainsea-logo.png` 為 1800×1800 RGBA，SHA-256 與 `public/brand/README.md` 一致，四角完全透明，可見範圍 352–1452 × 345–1453。
+  - `BrandMark`（`src/components/brand.tsx`）直接引用 `/brand/chainsea-logo.png`，原檔不裁切、不縮放、不重新編碼，也沒有走 Next 圖片最佳化。
+  - 透明留白約占四成，因此 `size` 指的是**可見標誌**的大小：容器為 size×size，圖片放大並以可見範圍置中，只有透明像素超出容器，不佔版面、不可點擊。
+  - 尺寸：Login 28px，側邊欄、前台頁首、邀請頁 22px（與舊圖示相同），Chainseabase 文字保留。
+  - 舊的雙環 SVG 已不在任何品牌位置使用；`Logo` 圖示仍留在 `src/components/icons.tsx`，未刪除。
 - **Login 版面**：
   - 桌面（大於 1024px）全視窗左右各半：左側白底，上方置中品牌，登入內容寬 400px 並在左欄中段，無卡片外框；右側為中性純色 `--raised` 空白區，沒有任何內容，兩欄直接相接。
   - 1024px 以下單欄並隱藏右側，左右邊距 24px；矮視窗可捲動，不裁切按鈕與錯誤訊息。
 - **元件與文案**：「使用 Google 登入」改用 shadcn Button（`asChild` 包住原連結，滿版）。標題、說明、按鈕文案，以及前後台各自的標題與預設目的地（後台 `/products`、前台 `/`）不變。
 - **登入流程與狀態**：OAuth start、callback、session、returnTo 與權限程式未改。新增送出中的「正在前往 Google…」，防止重複點擊；按瀏覽器返回後會恢復可按。取消、過期、失敗的訊息後面加上重試指引。Google 未設定時仍顯示原提示。
 
-修改檔案：`src/features/login.tsx`、新增 `src/components/brand.tsx`；Logo 改為使用 `BrandMark` 的有 `src/features/admin/shell.tsx`、`src/features/invite.tsx`、`src/features/portal/portal-shell.tsx`、`src/features/portal/portal-home.tsx`；另有 `src/app/globals.css`（`login-*` 規則）。測試：新增 `tests/ui/login.spec.ts`、`tests/ui/login.tsx`、`tests/ui/login.html`、`tests/ui/next-navigation-stub.ts`、`tests/e2e/login.spec.ts`；修改 `tests/ui/vite.config.ts`、`playwright.config.ts`（平板／手機納入 login）。文件：變更需求狀態、本文件。
+修改檔案：`src/features/login.tsx`、新增 `src/components/brand.tsx`（Logo 替換在 `1f4f4de` 之後的 commit，另含 `tests/e2e/helpers.ts` 的 `expectBrandMark` 與 `tests/e2e/sidebar.spec.ts` 等待修正）；Logo 改為使用 `BrandMark` 的有 `src/features/admin/shell.tsx`、`src/features/invite.tsx`、`src/features/portal/portal-shell.tsx`、`src/features/portal/portal-home.tsx`；另有 `src/app/globals.css`（`login-*` 規則）。測試：新增 `tests/ui/login.spec.ts`、`tests/ui/login.tsx`、`tests/ui/login.html`、`tests/ui/next-navigation-stub.ts`、`tests/e2e/login.spec.ts`；修改 `tests/ui/vite.config.ts`、`playwright.config.ts`（平板／手機納入 login）。文件：變更需求狀態、本文件。
 
 驗證（Linux 容器）：
 - `tests/ui/login.spec.ts`（mock：以真實 LoginScreen 搭配已設定 Google 的 site 資料，攔截 OAuth start，不連 Google），1440／768／390 各 6 案：
@@ -333,5 +337,9 @@ E2E 新增邀請頁兩案（1440／768／390）：開啟即顯示「邀請已失
   - 取消、過期、未驗證、失敗訊息與重試指引；未設定 Google 時沒有按鈕。
   - 鍵盤 Tab 到按鈕且有焦點環，Enter 送出。
 - `tests/e2e/login.spec.ts`（實際網站，1440／768／390）：前後台版面、axe、無溢出；測試登入後導向 returnTo；取消訊息。
-- 全部檢查：lint、typecheck、build、security:scan（754 檔）、`git diff --check` 皆 exit 0；`npm test` 219 passed；`test:ui` 21 passed（含原 3 個元件測試）；`test:e2e` 128 passed、0 failed。
+- Logo（實際網站 1440／768／390）：Login 前後台、後台側邊欄（手機與平板在選單內）、前台頁首、邀請頁的品牌都是這張 PNG，已載入（`naturalWidth` 1800），容器即為設定的可見尺寸，可見範圍置中誤差 0.5px 內，未被容器裁切，且品牌位置沒有殘留的 SVG。隔離 Login 也確認 PNG 經 `publicDir` 載入。
+- 版面階段（`43dfd91`）全部檢查：lint、typecheck、build、security:scan（754 檔）、`git diff --check` 皆 exit 0；`npm test` 219 passed；`test:ui` 21 passed（含原 3 個元件測試）；`test:e2e` 128 passed、0 failed。
+- Logo 替換後全部檢查：lint、typecheck、build、security:scan（761 檔）、`git diff --check` 皆 exit 0；`npm test` 219 passed；`test:ui` 21 passed；`test:e2e` 第一輪 126 passed、1 failed、1 did not run。
+  - 失敗的是 `sidebar.spec` 矮視窗（1440）：測試在後台殼層仍顯示載入中時，就用不會等待的 `allInnerTexts()` 讀取導覽項目，讀到 0 項；失敗截圖中側邊欄已完整顯示。未執行的那 1 項是依賴其他專案的 `empty-last`。
+  - 已改為先以 `toHaveCount` 等待 9 項。sidebar 三種尺寸各重複 3 次共 27 passed；完整 `test:e2e` 重跑 128 passed、0 failed。
 - 真實 Google 登入未在本環境執行（沒有 Google client）；Google OAuth 的伺服器流程仍由既有整合測試以 fake client 驗證。

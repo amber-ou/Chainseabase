@@ -7,6 +7,8 @@ export default defineConfig({
     // the login fixture renders the real LoginScreen outside Next.js
     'next/navigation': path.resolve(import.meta.dirname, 'next-navigation-stub.ts'),
   } },
+  // the app's static files (the brand logo) at the same paths as in Next.js
+  publicDir: path.resolve(import.meta.dirname, '../../public'),
   esbuild: { jsx: 'automatic' },
   css: { postcss: path.resolve(import.meta.dirname, '../..') },
   server: { host: '127.0.0.1', port: 3201, strictPort: true },

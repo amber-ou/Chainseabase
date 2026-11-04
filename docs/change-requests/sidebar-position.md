@@ -1,6 +1,6 @@
 # UI／UX 調整：側邊欄、Product、Calendar、Logo 與 Login（交付 CC）
 
-建立：2026-10-28；更新：2026-10-30。狀態：需求已確認；本文件為開發交付規格。實作進度：第二階段（2026-11-03）完成側邊欄上下分組；第三階段（2026-11-03）完成 Calendar 入口與頁面、Product 產品清單（含列內重新命名），側邊欄九項已齊（上方 Product → Calendar → Feedback → Roadmap → User → Live Portal；下方 Personal → Notification → Setting），第四階段（2026-11-03）完成永久刪除產品、防呆 Modal、無產品／未選取時的 Product 與側邊欄；第五階段（2026-11-04）完成 Login 左右分欄版面與共用品牌元件；見 [tasks.md](../../tasks.md) UI-02～UI-05。**尚未完成**：新 Logo 素材替換（原始 PNG 尚未提供，暫用既有圖示，不重畫、不替代）。
+建立：2026-10-28；更新：2026-10-30。狀態：需求已確認；本文件為開發交付規格。實作進度：第二階段（2026-11-03）完成側邊欄上下分組；第三階段（2026-11-03）完成 Calendar 入口與頁面、Product 產品清單（含列內重新命名），側邊欄九項已齊（上方 Product → Calendar → Feedback → Roadmap → User → Live Portal；下方 Personal → Notification → Setting），第四階段（2026-11-03）完成永久刪除產品、防呆 Modal、無產品／未選取時的 Product 與側邊欄；第五階段（2026-11-04）完成 Login 左右分欄版面，並以使用者提供的原始 PNG（`public/brand/chainsea-logo.png`）替換 Login、邀請頁、後台側邊欄及前台頁首的品牌圖示；見 [tasks.md](../../tasks.md) UI-02～UI-05。本文件列出的各階段皆已實作（自動化驗證；真實 Google 登入未在雲端環境驗證）。
 
 ## 範圍與優先順序
 

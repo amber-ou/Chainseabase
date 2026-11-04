@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ADMIN, PORTAL, expectNoAxeViolations, expectNoPageOverflow, login } from './helpers';
+import { ADMIN, PORTAL, expectBrandMark, expectNoAxeViolations, expectNoPageOverflow, login } from './helpers';
 
 /**
  * Login page in the running app (docs/change-requests/sidebar-position.md, Login 版面調整, phase 5).
@@ -12,7 +12,7 @@ test('login: split layout on desktop, one column below 1024px, no card, per-site
     await page.goto(`${origin}/login`);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
     await expect(page.locator('.login-brand')).toHaveText('Chainseabase');
-    await expect(page.locator('.login-brand svg')).toBeVisible();
+    await expectBrandMark(page.locator('.login-brand'), 28);
     const aside = page.locator('.login-aside');
     if (width > 1024) {
       const a = (await aside.boundingBox())!;
@@ -29,8 +29,18 @@ test('login: split layout on desktop, one column below 1024px, no card, per-site
   // sign-in (test login) still returns to the requested page
   await login(page, 'admin', 'lead@e2e.test', '專案負責人', '/products');
   await expect(page).toHaveURL(/\/products\/[0-9a-f-]{36}\/dashboard$/);
-  // the sidebar brand uses the same mark
-  if (width > 1024) await expect(page.locator('aside.sidebar .brand svg')).toBeVisible();
+  // the sidebar brand uses the same mark (on phones and tablets, in the menu sheet)
+  if (width > 1024) await expectBrandMark(page.locator('aside.sidebar .brand'), 22);
+  else {
+    await page.getByRole('button', { name: '開啟選單' }).click();
+    await expectBrandMark(page.getByRole('dialog', { name: '選單' }).locator('.brand'), 22);
+  }
+  await page.screenshot({ path: info.outputPath(`after-login-${width}.png`) });
+  // the portal header, and the invitation page
+  await login(page, 'portal', 'tester@e2e.test', '測試者');
+  await expectBrandMark(page.locator('.brand').first(), 22);
+  await page.goto(`${PORTAL}/invite?token=${'z'.repeat(43)}`);
+  await expectBrandMark(page.locator('.login-card .brand'), 22);
 });
 
 test('login: a cancelled Google sign-in shows the reason and how to retry', async ({ page }) => {

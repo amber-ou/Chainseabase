@@ -23,7 +23,12 @@ test('layout: split on wide screens, one column on tablet and phone; the blank h
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('登入團隊後台');
   await expect(page.getByText('使用 Google 帳號登入。登入本身不代表已加入團隊或受邀產品；互動權限由邀請決定。')).toBeVisible();
   await expect(page.locator('.login-brand')).toHaveText('Chainseabase');
-  await expect(page.locator('.login-brand svg')).toBeVisible();
+  // the original logo PNG, loaded, its visible mark 28px (the transparent margin spills outside)
+  await expect(page.locator('.login-brand svg')).toHaveCount(0);
+  const logo = page.locator('.login-brand img');
+  await expect(logo).toHaveAttribute('src', '/brand/chainsea-logo.png');
+  await expect.poll(() => logo.evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth)).toBe(1800);
+  expect(Math.round((await page.locator('.login-brand .brand-mark').boundingBox())!.width)).toBe(28);
   // no card: no border, radius or shadow around the sign-in content
   for (const el of [pane, page.locator('.login-content')]) {
     const css = await el.evaluate((e) => { const s = getComputedStyle(e); return [s.borderTopWidth, s.borderRadius, s.boxShadow]; });

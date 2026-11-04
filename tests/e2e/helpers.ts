@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 export const PORT = Number(process.env.E2E_PORT ?? 3100);
 export const ADMIN = `http://127.0.0.1:${PORT}`;
@@ -73,4 +73,34 @@ export async function createProduct(page: Page, name: string) {
 export async function listProducts(page: Page) {
   const r = await page.request.get(`${ADMIN}/api/v1/products`);
   return (await r.json()).data as { id: string; name: string; slug: string; revision: number }[];
+}
+
+/**
+ * The brand mark is the original PNG, loaded, with its visible logo filling a `size` box: the image is
+ * drawn larger so only its transparent margin extends past the box. No old SVG icon is left.
+ */
+export async function expectBrandMark(scope: Locator, size: number) {
+  const mark = scope.locator('.brand-mark');
+  await expect(mark).toHaveCount(1);
+  await expect(scope.locator('svg')).toHaveCount(0);
+  const img = mark.locator('img');
+  await expect(img).toHaveAttribute('src', '/brand/chainsea-logo.png');
+  await expect.poll(() => img.evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth)).toBe(1800);
+  const box = (await mark.boundingBox())!;
+  expect(Math.round(box.width)).toBe(size);
+  expect(Math.round(box.height)).toBe(size);
+  // the visible logo (alpha box 352–1452 × 345–1453 of 1800) maps onto the mark box, centred
+  const imgBox = (await img.boundingBox())!;
+  const k = imgBox.width / 1800;
+  const visible = { x: imgBox.x + 352 * k, y: imgBox.y + 345 * k, w: 1100 * k, h: 1108 * k };
+  expect(Math.abs(visible.x + visible.w / 2 - (box.x + box.width / 2))).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(visible.y + visible.h / 2 - (box.y + box.height / 2))).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(Math.max(visible.w, visible.h) - size)).toBeLessThanOrEqual(0.5);
+  // nothing visible is clipped by a container: the box's centre and corners show the image itself
+  const hit = await mark.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return [[r.left + r.width / 2, r.top + r.height / 2], [r.left + 1, r.top + r.height / 2], [r.right - 1, r.top + r.height / 2]]
+      .map(([x, y]) => document.elementsFromPoint(x, y).some((n) => n === el.querySelector('img') || n === el));
+  });
+  expect(hit).toEqual([true, true, true]);
 }

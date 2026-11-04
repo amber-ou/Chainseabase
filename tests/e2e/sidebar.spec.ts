@@ -34,7 +34,9 @@ for (const short of [false, true]) {
     const { container, nav, phone } = await openNav(page);
     const items = nav.locator('.nav-item');
 
-    // every item once, in order; the DOM order is the order on screen
+    // every item once, in order; the DOM order is the order on screen (waits for the shell to finish
+    // loading the products first: allInnerTexts() alone reads whatever is there, even nothing)
+    await expect(items).toHaveCount(TOP.length + BOTTOM.length);
     expect((await items.allInnerTexts()).map(label)).toEqual([...TOP, ...BOTTOM]);
     type Box = { x: number; y: number; width: number; height: number };
     const boxes: { item: Box; icon: Box }[] = [];
