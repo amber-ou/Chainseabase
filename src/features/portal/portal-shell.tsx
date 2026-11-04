@@ -7,8 +7,8 @@ import { api, type ApiError } from '@/client/api';
 import { useResource } from '@/client/hooks';
 import { loginHref, useSite } from '@/client/site';
 import { Avatar, Button, DeniedState, ErrorState, LoadingState } from '@/components/ui';
-import { Logo } from '@/components/icons';
 import { NotificationsButton } from '@/features/admin/shell';
+import { BrandMark } from '@/components/brand';
 
 export interface PublicProduct { id: string; name: string; slug: string; viewer: { loggedIn: boolean; canInteract: boolean; isTeam: boolean } }
 const Ctx = createContext<{ product: PublicProduct; reload: () => Promise<void> } | null>(null);
@@ -71,7 +71,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
     return (
       <>
         <header className="portal-top">
-          <Link className="brand" style={{ padding: 0 }} href="/"><Logo /><span>Chainseabase 回饋</span></Link>
+          <Link className="brand" style={{ padding: 0 }} href="/"><BrandMark /><span>Chainseabase 回饋</span></Link>
           <span style={{ marginLeft: 'auto' }}><PortalUserBox /></span>
         </header>
         <main id="main" tabIndex={-1} className="portal-main"><PortalAccessState error={res.error} /></main>
@@ -83,7 +83,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{ product: p, reload: res.reload }}>
       <header className="portal-top">
-        <Link className="brand" style={{ padding: 0 }} href="/"><Logo /><span>{p.name}</span></Link>
+        <Link className="brand" style={{ padding: 0 }} href="/"><BrandMark /><span>{p.name}</span></Link>
         <nav aria-label="前台導覽">
           <a className="nav-item" style={{ width: 'auto' }} href={`/p/${p.slug}/feedback`} aria-current={section === 'feedback' ? 'page' : undefined}>Feedback</a>
           <a className="nav-item" style={{ width: 'auto' }} href={`/p/${p.slug}/roadmap`} aria-current={section === 'roadmap' ? 'page' : undefined}>Roadmap</a>

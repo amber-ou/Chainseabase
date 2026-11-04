@@ -386,10 +386,23 @@ main[tabindex="-1"]:focus { outline: none; }
 
 .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
 .login-card { width: 100%; max-width: 420px; padding: 28px; display: flex; flex-direction: column; gap: 16px; }
+/* login (phase 5): full window; the sign-in half and a neutral blank half side by side on wide screens */
+.login-split { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); }
+.login-pane { display: flex; flex-direction: column; align-items: center; gap: 32px; padding: 40px 24px; background: var(--surface); }
+.login-brand { padding: 0; font-size: 18px; gap: 10px; }
+.login-content { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px; width: 100%; max-width: 400px; padding-bottom: 64px; }
+.login-content h1 { text-align: center; margin: 0; }
+.login-content p { margin: 0; }
+.login-aside { background: var(--raised); }
 
 .toast-region { position: fixed; bottom: 16px; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 200; max-width: min(420px, calc(100vw - 32px)); }
 
 /* ---------- responsive ---------- */
+@media (max-width: 1024px) {
+  .login-split { grid-template-columns: 1fr; }
+  .login-aside { display: none; }
+  .login-content { justify-content: flex-start; padding-bottom: 0; }
+}
 @media (max-width: 1024px) {
   /* short pages must not stretch the top bar's row: content starts right under it */
   .shell { grid-template-columns: minmax(0, 1fr); align-content: start; }

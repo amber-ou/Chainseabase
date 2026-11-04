@@ -2,9 +2,9 @@
 
 import { useResource } from '@/client/hooks';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui';
-import { Logo } from '@/components/icons';
 import { useSite } from '@/client/site';
 import { PortalAccessState, PortalNotInvited, PortalUserBox } from './portal-shell';
+import { BrandMark } from '@/components/brand';
 
 export function PortalHome() {
   const res = useResource<{ id: string; name: string; slug: string }[]>('/public/products');
@@ -12,7 +12,7 @@ export function PortalHome() {
   return (
     <>
       <header className="portal-top">
-        <span className="brand" style={{ padding: 0 }}><Logo /><span>Chainseabase 回饋</span></span>
+        <span className="brand" style={{ padding: 0 }}><BrandMark /><span>Chainseabase 回饋</span></span>
         <span style={{ marginLeft: 'auto' }}><PortalUserBox /></span>
       </header>
       <main id="main" tabIndex={-1} className="portal-main">

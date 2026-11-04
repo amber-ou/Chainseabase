@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { api, ApiError, errorMessage } from '@/client/api';
 import { loginHref, useSite } from '@/client/site';
 import { Button, LoadingState } from '@/components/ui';
-import { Logo } from '@/components/icons';
+import { BrandMark } from '@/components/brand';
 
 export function InviteScreen() {
   const params = useSearchParams();
@@ -43,7 +43,7 @@ export function InviteScreen() {
   return (
     <main id="main" tabIndex={-1} className="login-wrap">
       <div className="card login-card">
-        <div className="brand" style={{ padding: 0 }}><Logo /><span>Chainseabase</span></div>
+        <div className="brand" style={{ padding: 0 }}><BrandMark /><span>Chainseabase</span></div>
         <h1>接受邀請</h1>
         {!token ? <div className="banner banner-error">邀請連結缺少識別碼。</div> : null}
         {!meLoaded ? <LoadingState /> : !me ? (

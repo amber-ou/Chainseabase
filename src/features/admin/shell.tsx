@@ -10,8 +10,9 @@ import { relativeTime } from '@/client/format';
 import { Avatar, Button, DeniedState, ErrorState, LoadingState, useDismiss } from '@/components/ui';
 import { ConfirmModal, FOCUSABLE } from '@/components/modal';
 import {
-  IconBell, IconCalendar, IconFeedback, IconMenu, IconPersonal, IconPortal, IconProduct, IconRoadmap, IconSettings, IconUsers, IconX, Logo,
+  IconBell, IconCalendar, IconFeedback, IconMenu, IconPersonal, IconPortal, IconProduct, IconRoadmap, IconSettings, IconUsers, IconX,
 } from '@/components/icons';
+import { BrandMark } from '@/components/brand';
 
 export interface ProductItem { id: string; name: string; slug: string; revision: number; createdAt: string }
 
@@ -178,7 +179,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   );
   const nav = product ? (
     <>
-      <Link className="brand" href={`/products/${product.id}/dashboard`}><Logo /><span>Chainseabase</span></Link>
+      <Link className="brand" href={`/products/${product.id}/dashboard`}><BrandMark /><span>Chainseabase</span></Link>
       <div className="product-switch">
         <label className="sr-only" htmlFor="product-switch">切換產品</label>
         <select id="product-switch" className="select" value={product.id} onChange={(e) => switchProduct(e.target.value)}>
@@ -204,7 +205,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     </>
   ) : (
     <>
-      <Link className="brand" href="/products"><Logo /><span>Chainseabase</span></Link>
+      <Link className="brand" href="/products"><BrandMark /><span>Chainseabase</span></Link>
       <div className="product-switch">
         <label className="sr-only" htmlFor="product-switch">切換產品</label>
         <select id="product-switch" className="select" value="" disabled={!list.length} onChange={(e) => { if (e.target.value) go(`/products/${e.target.value}/dashboard`); }}>

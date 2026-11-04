@@ -310,3 +310,28 @@ E2E 新增邀請頁兩案（1440／768／390）：開啟即顯示「邀請已失
 已知並行限制：
 - 邀請信正在寄送時刪除產品：寄送工作持有邀請鎖，信會寄出，刪除會等到寄送結束（最長為寄信服務逾時）；信中的連結開啟後顯示「邀請已失效」。
 - 接受早於刪除：該測試成員帳號保留但沒有任何產品，與其他產品被刪除後的既有測試成員相同（規則 3）。
+
+## UI-05：品牌 Logo 與 Login 版面（2026-11-04，進行中）
+
+範圍：[變更需求](docs/change-requests/sidebar-position.md)「Logo 更新」「Login 版面調整」。產品、資料庫、API、商業邏輯與依賴未改。
+
+- **Logo（待素材）**：`C:\Users\Amber.Ou\Desktop\chainsea LOGO.png` 在本雲端環境無法讀取：不在儲存庫或容器內，此 session 也沒有可用的電腦資料夾。已向使用者索取原始檔，未重畫、未使用替代圖片。已把所有品牌圖示集中到 `src/components/brand.tsx` 的 `BrandMark`，用於 Login、邀請頁、後台側邊欄與前台頁首，目前仍顯示既有圖示；收到 PNG 後只需在此替換並放入 `public/brand/`。
+- **Login 版面**：
+  - 桌面（大於 1024px）全視窗左右各半：左側白底，上方置中品牌，登入內容寬 400px 並在左欄中段，無卡片外框；右側為中性純色 `--raised` 空白區，沒有任何內容，兩欄直接相接。
+  - 1024px 以下單欄並隱藏右側，左右邊距 24px；矮視窗可捲動，不裁切按鈕與錯誤訊息。
+- **元件與文案**：「使用 Google 登入」改用 shadcn Button（`asChild` 包住原連結，滿版）。標題、說明、按鈕文案，以及前後台各自的標題與預設目的地（後台 `/products`、前台 `/`）不變。
+- **登入流程與狀態**：OAuth start、callback、session、returnTo 與權限程式未改。新增送出中的「正在前往 Google…」，防止重複點擊；按瀏覽器返回後會恢復可按。取消、過期、失敗的訊息後面加上重試指引。Google 未設定時仍顯示原提示。
+
+修改檔案：`src/features/login.tsx`、新增 `src/components/brand.tsx`；Logo 改為使用 `BrandMark` 的有 `src/features/admin/shell.tsx`、`src/features/invite.tsx`、`src/features/portal/portal-shell.tsx`、`src/features/portal/portal-home.tsx`；另有 `src/app/globals.css`（`login-*` 規則）。測試：新增 `tests/ui/login.spec.ts`、`tests/ui/login.tsx`、`tests/ui/login.html`、`tests/ui/next-navigation-stub.ts`、`tests/e2e/login.spec.ts`；修改 `tests/ui/vite.config.ts`、`playwright.config.ts`（平板／手機納入 login）。文件：變更需求狀態、本文件。
+
+驗證（Linux 容器）：
+- `tests/ui/login.spec.ts`（mock：以真實 LoginScreen 搭配已設定 Google 的 site 資料，攔截 OAuth start，不連 Google），1440／768／390 各 6 案：
+  - 分欄比例、右側空白無內容且為單一中性色、無卡片樣式、內容寬度與置中、手機邊距、無水平溢出、axe。
+  - 矮視窗 420px 可捲動到錯誤訊息與按鈕。
+  - returnTo 保留於 OAuth start 連結；只送出一次；送出中狀態。
+  - 前後台各自的標題與預設目的地。
+  - 取消、過期、未驗證、失敗訊息與重試指引；未設定 Google 時沒有按鈕。
+  - 鍵盤 Tab 到按鈕且有焦點環，Enter 送出。
+- `tests/e2e/login.spec.ts`（實際網站，1440／768／390）：前後台版面、axe、無溢出；測試登入後導向 returnTo；取消訊息。
+- 全部檢查：lint、typecheck、build、security:scan（754 檔）、`git diff --check` 皆 exit 0；`npm test` 219 passed；`test:ui` 21 passed（含原 3 個元件測試）；`test:e2e` 128 passed、0 failed。
+- 真實 Google 登入未在本環境執行（沒有 Google client）；Google OAuth 的伺服器流程仍由既有整合測試以 fake client 驗證。
