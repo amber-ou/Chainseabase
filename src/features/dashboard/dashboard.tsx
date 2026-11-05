@@ -3,15 +3,17 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { EllipsisIcon, LoaderCircleIcon, PackageIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { EllipsisIcon, LoaderCircleIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { api, ApiError, errorMessage } from '@/client/api';
+import { ymd } from '@/client/format';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Card } from '@/components/ui/card';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { useToast } from '@/components/toast';
 import { useProductList, writeLastProduct, type ProductItem } from '@/features/admin/shell';
@@ -91,7 +93,7 @@ export function ProductListPage() {
 
   const create = (
     <NameDialog title="新增產品" description="會自動建立預設狀態、類別、版本群組與預設看板。產品可從清單的「⋯」選單重新命名或永久刪除。" initial="" confirm="建立產品"
-      trigger={<Button ref={createRef} variant={products.length ? 'outline' : 'default'}><PlusIcon data-icon="inline-start" />新增產品</Button>}
+      trigger={<Button ref={createRef}><PlusIcon data-icon="inline-start" />新增產品</Button>}
       onSubmit={async (name) => {
         const r = await api.post('/products', { body: { name } });
         await reloadProducts();
@@ -100,53 +102,67 @@ export function ProductListPage() {
   );
 
   return (
-    <>
-      <div className="page-head">
-        <h1 ref={headingRef} tabIndex={-1} className="outline-none">Product</h1>
+    // one column for the title row and the list: a short list does not stretch across the canvas
+    <div className="flex max-w-3xl flex-col gap-6">
+      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 ref={headingRef} tabIndex={-1} className="text-2xl leading-8 font-semibold outline-none max-sm:text-xl max-sm:leading-7">Product</h1>
+          {products.length ? (
+            <p className="text-sm text-muted-foreground">
+              {products.length} 個產品
+            </p>
+          ) : null}
+        </div>
         {products.length ? create : null}
-      </div>
+      </header>
       {!products.length ? (
-        <Empty className="border border-border bg-card">
+        <Empty className="border border-dashed border-border bg-card">
           <EmptyHeader>
-            <EmptyMedia variant="icon"><PackageIcon /></EmptyMedia>
             <EmptyTitle role="heading" aria-level={2}>尚無產品</EmptyTitle>
             <EmptyDescription>新增產品後，才能使用 Calendar、Feedback、Roadmap 與其他依產品的功能。</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>{create}</EmptyContent>
         </Empty>
-      ) : !product ? (
-        <p role="status" className="muted" style={{ margin: '0 0 12px' }}>尚未選取產品。請從清單選取產品，或新增產品。</p>
-      ) : null}
-      {products.length ? <ul aria-label="產品" className="m-0 flex list-none flex-col divide-y divide-border rounded-lg border border-border bg-card p-0">
-        {products.map((p) => {
-          const current = p.id === productId;
-          return (
-            <li key={p.id} className={`flex items-center gap-2 pr-2 first:rounded-t-lg last:rounded-b-lg ${current ? 'bg-muted' : ''}`}>
-              <Link ref={(el) => { if (el) rowRefs.current.set(p.id, el); else rowRefs.current.delete(p.id); }}
-                href={`/products/${p.id}/dashboard`} aria-current={current ? 'true' : undefined}
-                onClick={() => { if (!current) focusRowAfterSwitch = p.id; }}
-                className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-md px-4 py-2 text-foreground no-underline outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50">
-                <span className={`min-w-0 truncate ${current ? 'font-medium' : ''}`}>{p.name}</span>
-                {current ? <Badge variant="secondary" className="shrink-0">目前產品</Badge> : null}
-              </Link>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button ref={(el) => { if (el) actionRefs.current.set(p.id, el); else actionRefs.current.delete(p.id); }}
-                    variant="ghost" size="icon" className="shrink-0 max-sm:size-11" aria-label={`${p.name} 的操作`}>
-                    <EllipsisIcon />
-                  </Button>
-                </DropdownMenuTrigger>
-                {/* closing the menu returns focus to its button, unless the rename dialog is taking it */}
-                <DropdownMenuContent align="end" onCloseAutoFocus={(e) => { if (toDialog.current) { toDialog.current = false; e.preventDefault(); } }}>
-                  <DropdownMenuItem onSelect={() => { toDialog.current = true; setRename({ id: p.id, open: true }); }}><PencilIcon />重新命名</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive" onSelect={() => { toDialog.current = true; setRemove((r) => ({ target: p, open: true, n: (r?.n ?? 0) + 1 })); }}><Trash2Icon />刪除產品</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </li>
-          );
-        })}
-      </ul> : null}
+      ) : (
+        <Card className="gap-0 overflow-hidden rounded-lg py-0">
+          {!product ? (
+            <p role="status" className="border-b border-border px-4 py-3 text-sm text-muted-foreground">尚未選取產品。請從清單選取產品，或新增產品。</p>
+          ) : null}
+          <ul aria-label="產品" className="m-0 flex list-none flex-col divide-y divide-border p-0">
+            {products.map((p) => {
+              const current = p.id === productId;
+              return (
+                <li key={p.id} className={`group flex items-center gap-2 pr-3 ${current ? 'bg-muted' : ''}`}>
+                  <Link ref={(el) => { if (el) rowRefs.current.set(p.id, el); else rowRefs.current.delete(p.id); }}
+                    href={`/products/${p.id}/dashboard`} aria-current={current ? 'true' : undefined}
+                    onClick={() => { if (!current) focusRowAfterSwitch = p.id; }}
+                    className="flex min-h-14 min-w-0 flex-1 flex-col justify-center gap-0.5 rounded-md px-4 py-2.5 text-foreground no-underline outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="min-w-0 truncate font-medium group-hover:underline">{p.name}</span>
+                      {current ? <Badge variant="outline" className="shrink-0 bg-background">目前產品</Badge> : null}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">前台 /p/{p.slug} · 建立於 {ymd(p.createdAt)}</span>
+                  </Link>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button ref={(el) => { if (el) actionRefs.current.set(p.id, el); else actionRefs.current.delete(p.id); }}
+                        variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground hover:text-foreground max-sm:size-11" aria-label={`${p.name} 的操作`}>
+                        <EllipsisIcon />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    {/* closing the menu returns focus to its button, unless a dialog is taking it */}
+                    <DropdownMenuContent align="end" className="min-w-40" onCloseAutoFocus={(e) => { if (toDialog.current) { toDialog.current = false; e.preventDefault(); } }}>
+                      <DropdownMenuItem onSelect={() => { toDialog.current = true; setRename({ id: p.id, open: true }); }}><PencilIcon />重新命名</DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onSelect={() => { toDialog.current = true; setRemove((r) => ({ target: p, open: true, n: (r?.n ?? 0) + 1 })); }}><Trash2Icon />刪除產品</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
       {rename && target ? (
         <NameDialog key={target.id} open={rename.open} onOpenChange={(o) => setRename({ id: target.id, open: o })}
           returnFocus={() => actionRefs.current.get(target.id)?.focus()}
@@ -165,7 +181,7 @@ export function ProductListPage() {
           returnFocus={() => { if (!focusAfterDelete.current) actionRefs.current.get(remove.target.id)?.focus(); }}
           onDeleted={(gone) => deleted(remove.target, gone)} onStale={() => { void reloadProducts(); }} />
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -232,7 +248,7 @@ function DeleteProductDialog({ target, open, onOpenChange, returnFocus, onDelete
 
   return (
     <AlertDialog open={open} onOpenChange={(o) => { if (!busy) onOpenChange(o); }}>
-      <AlertDialogContent aria-busy={busy || undefined}
+      <AlertDialogContent aria-busy={busy || undefined} className="gap-5"
         onOpenAutoFocus={(e) => { e.preventDefault(); inputRef.current?.focus(); }}
         onEscapeKeyDown={(e) => { if (busy) e.preventDefault(); }}
         onCloseAutoFocus={(e) => { e.preventDefault(); returnFocus(); }}>
@@ -242,14 +258,17 @@ function DeleteProductDialog({ target, open, onOpenChange, returnFocus, onDelete
             此產品及其平台內所屬資料會永久刪除，無法在平台內復原。Google 上的日曆與活動不受影響。
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {/* what goes, grouped in one quiet well; what stays, right under it */}
         <div className="flex flex-col gap-2 text-sm">
-          <p className="m-0 font-medium">會一併刪除此產品在平台內的資料：</p>
-          <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-muted-foreground">
-            <li>Feedback、留言、按讚、投票、Schedule 與 Roadmap 看板</li>
-            <li>狀態、類別、標籤、人員標籤，以及每位成員在此產品的 Personal 檢視與私人標籤</li>
-            <li>此產品的通知、測試成員的產品資格，以及邀請中的此產品</li>
-            <li>平台內的 Google 日曆綁定與活動關聯</li>
-          </ul>
+          <div className="flex flex-col gap-2 rounded-md bg-muted px-4 py-3">
+            <p className="m-0 font-medium">會一併刪除此產品在平台內的資料：</p>
+            <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-muted-foreground">
+              <li>Feedback、留言、按讚、投票、Schedule 與 Roadmap 看板</li>
+              <li>狀態、類別、標籤、人員標籤，以及每位成員在此產品的 Personal 檢視與私人標籤</li>
+              <li>此產品的通知、測試成員的產品資格，以及邀請中的此產品</li>
+              <li>平台內的 Google 日曆綁定與活動關聯</li>
+            </ul>
+          </div>
           <p className="m-0 text-muted-foreground">不會變更：其他產品、成員帳號、個人 Google 授權，以及 Google 上的日曆、活動與分享權限。</p>
         </div>
         <FieldGroup>
@@ -300,7 +319,7 @@ function NameDialog({ title, description, initial, confirm, trigger, open: contr
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
       {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
-      <DialogContent onCloseAutoFocus={returnFocus ? (e) => { e.preventDefault(); returnFocus(); } : undefined}>
+      <DialogContent className="gap-6 sm:max-w-md" onCloseAutoFocus={returnFocus ? (e) => { e.preventDefault(); returnFocus(); } : undefined}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

@@ -343,3 +343,40 @@ E2E 新增邀請頁兩案（1440／768／390）：開啟即顯示「邀請已失
   - 失敗的是 `sidebar.spec` 矮視窗（1440）：測試在後台殼層仍顯示載入中時，就用不會等待的 `allInnerTexts()` 讀取導覽項目，讀到 0 項；失敗截圖中側邊欄已完整顯示。未執行的那 1 項是依賴其他專案的 `empty-last`。
   - 已改為先以 `toHaveCount` 等待 9 項。sidebar 三種尺寸各重複 3 次共 27 passed；完整 `test:e2e` 重跑 128 passed、0 failed。
 - 真實 Google 登入未在本環境執行（沒有 Google client）；Google OAuth 的伺服器流程仍由既有整合測試以 fake client 驗證。
+
+## UI-06：登入入口與 Product 視覺（2026-11-05，待使用者確認 Product 視覺）
+
+範圍：[變更需求](docs/change-requests/sidebar-position.md)「第六階段」。不是最後驗收；只調整後台登入入口與 Product 相關介面，API、資料庫、權限與商業邏輯未改。
+
+- **基準**：`a474435`（工作目錄乾淨）。使用者 Windows 主機目前跑的版本未經代理確認：最後一次回報顯示主機程式碼尚未包含 `a474435`、資料庫只到 migration `0002`。
+- **登入入口（後台）**：
+  - `src/proxy.ts`：後台 host 的 `/` 與 `/products…` 若沒有 session cookie，直接 307 到 `/login?returnTo=<原路徑與查詢>`（首頁為 `/products`），不再顯示「請先登入／前往登入」提示頁。
+  - session 過期或被撤銷（cookie 還在但 `/me` 為 null）時，後台殼層改以 `location.replace` 前往 Login，不留下歷史紀錄。
+  - `/me` 讀取失敗（網路或伺服器錯誤）時，顯示「無法確認登入狀態」與「重試」，不導向 Login（`SiteProvider` 新增 `meError`）。
+  - `/login` 本身不會被導向，不會形成迴圈；Google OAuth、callback、`safeReturnTo` 與權限檢查不變。
+  - 前台的「請先登入」提示屬 WIN-04 決策，未變更，待使用者確認。
+- **shadcn／CSS 檢查**：legacy 的元素規則（`h1`、`button`、`a`）位於 `legacy` layer，低於 Tailwind utilities；全域重設只有 `base` layer 的 `[data-slot]`（border、margin）；shadcn shadow token 已設為無陰影（taste：邊框或陰影擇一）。沒有既有 CSS 蓋過 Product 用到的元件，並以 E2E 的計算樣式斷言確認。
+- **Product 視覺**（taste app-screens §4／§7／§8／§9／§11／§12；只用已安裝的 shadcn/ui 與共用 tokens，沒有新增元件或依賴）：
+  - 標題列與清單同欄、最大 768px；h1 24px／600（手機 20px），下方灰字顯示產品數。
+  - 「新增產品」改為頁面唯一的實心主要按鈕（`Button` default，近黑）。
+  - 清單放進 `Card`；每列兩行：名稱，以及灰字「前台 /p/代稱 · 建立於 YYYY-MM-DD」（真實資料）。列高至少 56px。
+  - 目前產品：`--raised` 底色，加白底 outline `Badge`「目前產品」。原本計畫用 `--active` 底色，但 axe 量到灰字對比 4.42:1、不及 4.5:1，因此改用 `--raised`（4.59:1）。
+  - 列操作：`Button` ghost `icon-sm`（手機 44px）＋ `DropdownMenu`，「刪除產品」在分隔線下方並為危險色。
+  - 對話框：`Dialog` 最大寬 448px、間距 24px；`AlertDialog` 把刪除範圍收進 `--raised` 淺色區塊。
+  - `Empty` 改為虛線框、移除圖示。未選取產品時，提示放在清單卡片頂端。
+  - 產品切換、新增、重新命名、刪除防呆、權限與 API 行為不變。
+
+修改檔案：`src/proxy.ts`、`src/client/site.tsx`、`src/features/admin/shell.tsx`、`src/features/dashboard/dashboard.tsx`。測試：新增 `tests/e2e/product-visual.spec.ts`；修改 `tests/e2e/login.spec.ts`、`playwright.config.ts`（平板／手機納入 product-visual）。文件：變更需求「第六階段」、本文件。
+
+驗證（Linux 容器，隔離 e2e 資料庫；Google、寄信為 fake）：
+- lint、typecheck、build、security:scan（761 檔）、`git diff --check` 皆 exit 0；`npm test` 219 passed；`test:ui` 21 passed；`test:e2e` 137 passed、0 failed。
+- 新增登入入口 E2E（1440／768／390）：
+  - 未登入開後台首頁回 307 到 `/login?returnTo=%2Fproducts`，畫面是 Login，沒有「請先登入」或「前往登入」。
+  - 深層連結保留路徑與查詢，以測試登入後回到原頁。
+  - 已登入時，首頁與 `/products` 照常導向；`/login` 不會被導向。
+  - 過期 session 前往 Login 並保留 returnTo；`/me` 回 503 時顯示重試、不導向，重試後才進入 Login。
+- 真實 Google 登入流程未在本環境執行；伺服器的 returnTo 驗證沿用既有整合測試（fake OAuth）。
+- Product 視覺 E2E（1440／768／390）：7 種狀態截圖（清單、列選單、新增、重新命名、刪除確認、未選取、空狀態）。空狀態以攔截 `GET /products` 回空陣列取得（mock），其餘為實際網站。
+  - 同時斷言：清單在 `Card` 內、新增按鈕為 shadcn Button（`bg-primary`）、目前產品為 `Badge`、列操作為 `DropdownMenu`；h1 字級與字重、按鈕高 36px 且為近黑、卡片無可見陰影、寬度不超過 768px、列高至少 56px。
+  - 原有的 Product、刪除、鍵盤、axe 與手機版測試全數通過。
+- 調整前後對照圖由同一支 spec 在 `a474435` 與本次程式碼各跑一次產生。

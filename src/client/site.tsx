@@ -17,24 +17,28 @@ export interface SiteInfo {
   providers: { calendar: 'real' | 'fake'; email: 'real' | 'fake'; storage: 'real' | 'fake' };
 }
 
-interface Ctx { site: SiteInfo; me: Me | null; meLoaded: boolean; reloadMe: () => Promise<void> }
+/** meError: /me itself failed (network or server), so "not signed in" is not known: never redirect to login on it */
+interface Ctx { site: SiteInfo; me: Me | null; meLoaded: boolean; meError: boolean; reloadMe: () => Promise<void> }
 const SiteCtx = createContext<Ctx | null>(null);
 
 export function SiteProvider({ initial, children }: { initial: SiteInfo; children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
   const [meLoaded, setLoaded] = useState(false);
+  const [meError, setMeError] = useState(false);
   const reloadMe = useCallback(async () => {
     try {
       const r = await api.get<Me | null>('/me');
       setMe(r.data);
+      setMeError(false);
     } catch {
       setMe(null);
+      setMeError(true);
     } finally {
       setLoaded(true);
     }
   }, []);
   useEffect(() => { void reloadMe(); }, [reloadMe]);
-  return <SiteCtx.Provider value={{ site: initial, me, meLoaded, reloadMe }}>{children}</SiteCtx.Provider>;
+  return <SiteCtx.Provider value={{ site: initial, me, meLoaded, meError, reloadMe }}>{children}</SiteCtx.Provider>;
 }
 
 export function useSite() {

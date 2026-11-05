@@ -48,3 +48,48 @@ test('login: a cancelled Google sign-in shows the reason and how to retry', asyn
   await expect(page.getByRole('main').getByRole('alert')).toHaveText('你取消了 Google 登入。可以再按一次「使用 Google 登入」重試。');
   await expectNoPageOverflow(page);
 });
+
+test('signed out: the admin home and any admin page open the Login page directly (no 請先登入 page), returnTo kept', async ({ page }) => {
+  // the admin home
+  const res = await page.request.get(`${ADMIN}/`, { maxRedirects: 0 });
+  expect(res.status()).toBe(307);
+  expect(res.headers()['location']).toMatch(/\/login\?returnTo=%2Fproducts$/);
+  await page.goto(`${ADMIN}/`);
+  await expect(page).toHaveURL(`${ADMIN}/login?returnTo=%2Fproducts`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('登入團隊後台');
+  await expect(page.getByText('請先登入')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '前往登入' })).toHaveCount(0);
+  // a deep link keeps its path and query, and signing in returns there
+  const deep = '/products?from=mail&x=1';
+  await page.goto(`${ADMIN}${deep}`);
+  await expect(page).toHaveURL(`${ADMIN}/login?returnTo=${encodeURIComponent(deep)}`);
+  await page.getByLabel('Email').fill('lead@e2e.test');
+  await page.getByLabel('名稱').fill('專案負責人');
+  await page.getByRole('button', { name: '測試登入' }).click();
+  await page.waitForURL((u) => !u.pathname.startsWith('/login'));
+  // /products then opens the first product, as before
+  await expect(page).toHaveURL(/\/products\/[0-9a-f-]{36}\/dashboard$/);
+  // signed in: the home and /products keep their usual destinations (no redirect to Login)
+  await page.goto(`${ADMIN}/`);
+  await expect(page).toHaveURL(/\/products\/[0-9a-f-]{36}\/dashboard$/);
+  // the Login page itself is never redirected (no loop), signed in or not
+  await page.goto(`${ADMIN}/login`);
+  await expect(page).toHaveURL(`${ADMIN}/login`);
+});
+
+test('signed out: an expired session goes to Login with returnTo; an unreadable account state offers a retry, not a redirect', async ({ page, context }) => {
+  const product = '/products/00000000-0000-4000-8000-000000000000/feedback';
+  await context.addCookies([{ name: 'csb_session', value: 'expired-or-revoked', url: ADMIN }]);
+  await page.goto(`${ADMIN}${product}`);
+  await expect(page).toHaveURL(`${ADMIN}/login?returnTo=${encodeURIComponent(product)}`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('登入團隊後台');
+  // /me itself failing is not "signed out": the page says so and retries, it does not send the person away
+  let fail = true;
+  await page.route('**/api/v1/me', (r) => (fail ? r.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"code":"INTERNAL","message":"x","fieldErrors":{},"retryable":true,"requestId":""}}' }) : r.continue()));
+  await page.goto(`${ADMIN}/products`);
+  await expect(page.getByText('無法確認登入狀態，請檢查連線後重試。')).toBeVisible();
+  await expect(page).toHaveURL(`${ADMIN}/products`);
+  fail = false;
+  await page.getByRole('button', { name: /重試|重新載入/ }).click();
+  await expect(page).toHaveURL(`${ADMIN}/login?returnTo=%2Fproducts`);
+});

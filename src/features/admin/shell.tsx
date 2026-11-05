@@ -79,7 +79,7 @@ const SECTIONS_BOTTOM = [
 export function AdminShell({ children }: { children: ReactNode }) {
   // no product id on /products: the product list with no product selected
   const { productId } = useParams<{ productId?: string }>();
-  const { site, me, meLoaded } = useSite();
+  const { site, me, meLoaded, meError, reloadMe } = useSite();
   const pathname = usePathname();
   const router = useRouter();
   const products = useResource<ProductItem[]>(me?.role === 'team' ? '/products' : null);
@@ -128,13 +128,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
   }, [found, productId]);
 
   if (!meLoaded) return <main id="main" tabIndex={-1} className="main"><LoadingState /></main>;
-  if (!me) {
-    return (
-      <main id="main" tabIndex={-1} className="login-wrap">
-        <DeniedState title="請先登入" message="後台需要團隊成員以 Google 登入。" action={<a className="btn btn-primary" href={loginHref(pathname)}>前往登入</a>} />
-      </main>
-    );
-  }
+  // the account could not be read (network or server): say so, never send a signed-in person to login
+  if (!me && meError) return <main id="main" tabIndex={-1} className="main"><ErrorState message="無法確認登入狀態，請檢查連線後重試。" onRetry={reloadMe} /></main>;
+  // not signed in (or the session expired): straight to the Login page, back here afterwards
+  if (!me) return <main id="main" tabIndex={-1} className="main"><ToLogin /></main>;
   if (me.role !== 'team') {
     return (
       <main id="main" tabIndex={-1} className="login-wrap">
@@ -252,6 +249,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
       ) : null}
     </Ctx.Provider>
   );
+}
+
+/** Replaces the page with Login (no history entry for the page that needed a session). */
+function ToLogin() {
+  useEffect(() => {
+    window.location.replace(loginHref(window.location.pathname + window.location.search));
+  }, []);
+  return <LoadingState label="正在前往登入頁…" />;
 }
 
 function NavLink({ href, active, children, icon, onNavigate }: { href: string; active: boolean; children: ReactNode; icon: ReactNode; onNavigate: (href: string) => void }) {
