@@ -178,7 +178,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <>
       <Link className="brand" href={`/products/${product.id}/dashboard`}><BrandMark /><span>Chainseabase</span></Link>
       <div className="product-switch">
-        <label className="sr-only" htmlFor="product-switch">切換產品</label>
+        <label className="product-switch-label" htmlFor="product-switch">目前產品<span className="sr-only">（切換產品）</span></label>
         <select id="product-switch" className="select" value={product.id} onChange={(e) => switchProduct(e.target.value)}>
           {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
@@ -204,7 +204,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <>
       <Link className="brand" href="/products"><BrandMark /><span>Chainseabase</span></Link>
       <div className="product-switch">
-        <label className="sr-only" htmlFor="product-switch">切換產品</label>
+        <label className="product-switch-label" htmlFor="product-switch">目前產品<span className="sr-only">（切換產品）</span></label>
         <select id="product-switch" className="select" value="" disabled={!list.length} onChange={(e) => { if (e.target.value) go(`/products/${e.target.value}/dashboard`); }}>
           <option value="" disabled>{list.length ? '尚未選取產品' : '尚無產品'}</option>
           {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}

@@ -66,7 +66,7 @@ export function FeedbackPage() {
         </div>
         <Button variant="primary" onClick={() => setCreating(true)} disabled={!tax.data}><IconPlus />新增 Feedback</Button>
       </div>
-      <div className="toolbar" role="search">
+      <div className="toolbar toolbar-panel" role="search">
         <div style={{ position: 'relative', flex: '1 1 260px', maxWidth: 420 }}>
           <label htmlFor="fb-search" className="sr-only">搜尋 Feedback</label>
           <span style={{ position: 'absolute', left: 10, top: 9, color: 'var(--muted)' }}><IconSearch /></span>

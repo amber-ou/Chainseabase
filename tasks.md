@@ -344,7 +344,7 @@ E2E 新增邀請頁兩案（1440／768／390）：開啟即顯示「邀請已失
   - 已改為先以 `toHaveCount` 等待 9 項。sidebar 三種尺寸各重複 3 次共 27 passed；完整 `test:e2e` 重跑 128 passed、0 failed。
 - 真實 Google 登入未在本環境執行（沒有 Google client）；Google OAuth 的伺服器流程仍由既有整合測試以 fake client 驗證。
 
-## UI-06：登入入口與 Product 視覺（2026-11-05，待使用者確認 Product 視覺）
+## UI-06：登入入口與 Product 視覺（2026-11-05；Product 視覺已併入「全站 UI／UX 整合調整」）
 
 範圍：[變更需求](docs/change-requests/sidebar-position.md)「第六階段」。不是最後驗收；只調整後台登入入口與 Product 相關介面，API、資料庫、權限與商業邏輯未改。
 
@@ -380,3 +380,32 @@ E2E 新增邀請頁兩案（1440／768／390）：開啟即顯示「邀請已失
   - 同時斷言：清單在 `Card` 內、新增按鈕為 shadcn Button（`bg-primary`）、目前產品為 `Badge`、列操作為 `DropdownMenu`；h1 字級與字重、按鈕高 36px 且為近黑、卡片無可見陰影、寬度不超過 768px、列高至少 56px。
   - 原有的 Product、刪除、鍵盤、axe 與手機版測試全數通過。
 - 調整前後對照圖由同一支 spec 在 `a474435` 與本次程式碼各跑一次產生。
+
+## UI-07：全站 UI／UX 整合調整（2026-11-05）
+
+狀態：**預覽完成，尚未完成完整測試**。完整回歸、全套 E2E、跨裝置與正式可及性檢查，待使用者確認畫面後再進行，屆時另記「完整測試完成」。設計決定見[變更需求](docs/change-requests/sidebar-position.md)「全站 UI／UX 整合調整」。不是最後驗收。
+
+延續 `328850e`（UI-06），不重做、不覆寫先前成果。登入入口、returnTo、登入錯誤處理、權限與已登入導向保持 UI-06 的行為。
+
+- **Skill**：
+  - UI/UX Pro Max（commit `b7d5353`）：在隔離目錄使用其搜尋腳本（Python 標準函式庫，無網路），未安裝進儲存庫；查詢結果與採用、不採用的部分記在變更需求。
+  - Taste app-screens 指引、shadcn/ui 照舊使用。
+- **Design Tokens**（`src/app/globals.css` `:root`）：
+  - 只有 light mode。中性石板灰配單一 Chainsea 海軍藍 `#0b2e83`，焦點 `#1d4ed8`；新增 `--sunken`、`--text-2`、`--border-strong`、`--disabled-*`、`--info-*`、`--negative-border`、`--warning-border`、`--content-max`（1440）與 `--reading-max`（960）。
+  - 舊樣式中寫死的色碼都改用 tokens。所有文字色在每種底色上至少 4.5:1（計算值），輸入框邊框 3:1。
+- **版面與元件**：
+  - 主內容區上限 1440px；設定頁 960px（`.page-narrow`）。
+  - Product 取消 768px 上限，寬螢幕以欄位呈現資料。Roadmap 欄位平分寬度（至少 260px）。
+  - 共用頁首字級統一；搜尋與篩選面板（`.toolbar-panel`）在手機上每個控制項滿寬。
+  - 側邊欄白底，目前位置為海軍藍；「目前產品」標籤可見。
+  - 下拉選單統一 chevron，停用狀態仍可閱讀；舊 Modal 的間距與標題和 shadcn Dialog 對齊。
+- **不變**：路由、側邊欄順序、API、資料結構、權限、刪除範圍與 Google／Email 語意；Login 右側仍為空白；沒有新依賴。
+
+修改檔案：`src/app/globals.css`、`src/features/dashboard/dashboard.tsx`、`src/features/admin/shell.tsx`、`src/features/feedback/feedback-page.tsx`、`src/features/portal/portal-feedback.tsx`、`src/features/settings/settings-page.tsx`。測試：新增 `tests/e2e/preview-shots.spec.ts`（各主要頁面在三種尺寸的截圖，並確認無崩潰與水平溢出）；`tests/e2e/product-visual.spec.ts` 依新設計更新兩項斷言（主色改為海軍藍、清單改為使用內容寬度），其餘斷言保留；`playwright.config.ts`（平板／手機納入 preview-shots）。
+
+預覽階段已執行（Linux 容器，隔離 e2e 資料庫；Google、寄信為 fake）：
+- lint、typecheck、build、`git diff --check` 皆 exit 0。
+- `preview-shots`（Login、Product、Calendar、Feedback 與詳情、Roadmap、User 與成員頁、Personal、Notification、Setting、前台首頁、前台 Feedback、前台 Roadmap、邀請頁，1440／768／390）：3 passed，無頁面錯誤、無水平溢出。
+- `product-visual` 與 `login` spec：passed。
+
+尚未執行：完整 `npm test`、`test:ui`、全套 `test:e2e`（含 sidebar、keyboard、a11y 與其餘頁面的回歸）、security:scan、正式可及性檢查、Windows 主機、真實 Google 與寄信。

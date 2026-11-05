@@ -42,7 +42,7 @@ export function PortalFeedbackPage() {
           aria-describedby={!product.viewer.canInteract ? 'create-hint' : undefined}><IconPlus />新增回饋</Button>
       </div>
       {!product.viewer.canInteract ? <p id="create-hint" className="small muted" style={{ marginTop: -12, marginBottom: 12 }}>{product.viewer.loggedIn ? '你尚未受邀參與此產品，無法新增或互動。' : '登入並受邀後才能新增、投票與留言。'}</p> : null}
-      <div className="toolbar" role="search">
+      <div className="toolbar toolbar-panel" role="search">
         <div style={{ position: 'relative', flex: '1 1 260px', maxWidth: 420 }}>
           <label className="sr-only" htmlFor="pq">搜尋公開回饋</label>
           <span style={{ position: 'absolute', left: 10, top: 9, color: 'var(--muted)' }}><IconSearch /></span>

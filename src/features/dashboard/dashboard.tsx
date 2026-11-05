@@ -102,19 +102,15 @@ export function ProductListPage() {
   );
 
   return (
-    // one column for the title row and the list: a short list does not stretch across the canvas
-    <div className="flex max-w-3xl flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h1 ref={headingRef} tabIndex={-1} className="text-2xl leading-8 font-semibold outline-none max-sm:text-xl max-sm:leading-7">Product</h1>
-          {products.length ? (
-            <p className="text-sm text-muted-foreground">
-              {products.length} 個產品
-            </p>
-          ) : null}
+    // the shared page header; the list uses the content width, its columns carrying the product data
+    <div className="flex flex-col">
+      <div className="page-head">
+        <div>
+          <h1 ref={headingRef} tabIndex={-1} className="outline-none">Product</h1>
+          <p className="sub">{products.length ? `${products.length} 個產品。選取一列即切換目前產品，其他頁面會顯示該產品的資料。` : '尚未建立產品。'}</p>
         </div>
         {products.length ? create : null}
-      </header>
+      </div>
       {!products.length ? (
         <Empty className="border border-dashed border-border bg-card">
           <EmptyHeader>
@@ -128,20 +124,27 @@ export function ProductListPage() {
           {!product ? (
             <p role="status" className="border-b border-border px-4 py-3 text-sm text-muted-foreground">尚未選取產品。請從清單選取產品，或新增產品。</p>
           ) : null}
+          {/* column labels for the wide layout (the rows below carry the same order) */}
+          <div aria-hidden="true" className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1fr)_2.5rem] gap-4 border-b border-border bg-[var(--sunken)] px-4 py-2 text-xs text-muted-foreground md:grid">
+            <span>名稱</span><span>前台網址</span><span>建立日期</span><span />
+          </div>
           <ul aria-label="產品" className="m-0 flex list-none flex-col divide-y divide-border p-0">
             {products.map((p) => {
               const current = p.id === productId;
               return (
-                <li key={p.id} className={`group flex items-center gap-2 pr-3 ${current ? 'bg-muted' : ''}`}>
+                <li key={p.id} className={`group flex items-center gap-2 pr-3 ${current ? 'bg-muted' : 'hover:bg-[var(--sunken)]'}`}>
                   <Link ref={(el) => { if (el) rowRefs.current.set(p.id, el); else rowRefs.current.delete(p.id); }}
                     href={`/products/${p.id}/dashboard`} aria-current={current ? 'true' : undefined}
                     onClick={() => { if (!current) focusRowAfterSwitch = p.id; }}
-                    className="flex min-h-14 min-w-0 flex-1 flex-col justify-center gap-0.5 rounded-md px-4 py-2.5 text-foreground no-underline outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                    className="flex min-h-14 min-w-0 flex-1 flex-col justify-center gap-0.5 rounded-md px-4 py-2.5 text-foreground no-underline outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1fr)] md:items-center md:gap-4">
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="min-w-0 truncate font-medium group-hover:underline">{p.name}</span>
                       {current ? <Badge variant="outline" className="shrink-0 bg-background">目前產品</Badge> : null}
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">前台 /p/{p.slug} · 建立於 {ymd(p.createdAt)}</span>
+                    {/* phones: one grey line under the name; wide screens: their own columns */}
+                    <span className="truncate text-xs text-muted-foreground md:hidden">前台 /p/{p.slug} · 建立於 {ymd(p.createdAt)}</span>
+                    <span className="hidden truncate text-sm text-muted-foreground md:block">/p/{p.slug}</span>
+                    <span className="hidden text-sm text-muted-foreground tabular-nums md:block">{ymd(p.createdAt)}</span>
                   </Link>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

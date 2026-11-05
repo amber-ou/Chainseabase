@@ -27,8 +27,8 @@ export default defineConfig({
   },
   projects: [
     { name: 'desktop-1440', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }, testIgnore: /(keyboard-phone|product-empty)\.spec\.ts/ },
-    { name: 'tablet-768', use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 } }, testMatch: /(responsive|shadcn|sidebar|calendar-page|product-delete|login|product-visual)\.spec\.ts/ },
-    { name: 'mobile-390', use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, hasTouch: true }, testMatch: /(responsive|a11y|keyboard-phone|shadcn|sidebar|calendar-page|product-delete|login|product-visual)\.spec\.ts/ },
+    { name: 'tablet-768', use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 } }, testMatch: /(responsive|shadcn|sidebar|calendar-page|product-delete|login|product-visual|preview-shots)\.spec\.ts/ },
+    { name: 'mobile-390', use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, hasTouch: true }, testMatch: /(responsive|a11y|keyboard-phone|shadcn|sidebar|calendar-page|product-delete|login|product-visual|preview-shots)\.spec\.ts/ },
     // deletes every product (the empty state): only after every other project has finished
     { name: 'empty-last', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } }, testMatch: /product-empty\.spec\.ts/, dependencies: ['desktop-1440', 'tablet-768', 'mobile-390'] },
   ],

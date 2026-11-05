@@ -15,12 +15,13 @@ import type { Taxonomy } from '@/features/feedback/types';
 export function SettingsPage() {
   const [tab, setTab] = useState('me');
   return (
-    <>
+    // forms keep a reading width instead of stretching across the screen
+    <div className="page-narrow">
       <div className="page-head"><div><h1>Setting</h1><p className="sub">管理個人資料、分類標籤與工作職掌。</p></div></div>
       <Tabs label="設定" value={tab} onChange={setTab} tabs={[{ id: 'me', label: '個人設定' }, { id: 'tags', label: '管理標籤' }, { id: 'people', label: '管理 Person tag' }]}>
         {tab === 'me' ? <PersonalSettings /> : tab === 'tags' ? <TagSettings /> : <PersonTagSettings />}
       </Tabs>
-    </>
+    </div>
   );
 }
 

@@ -42,16 +42,19 @@ test('Product states for the visual review', async ({ page }) => {
     return {
       h1: [h1.fontSize, h1.fontWeight], addHeight: add.getBoundingClientRect().height, addBg: getComputedStyle(add).backgroundColor,
       cardShadow: getComputedStyle(card).boxShadow, cardWidth: card.getBoundingClientRect().width,
+      // the main column's content width (its padding removed, capped at --content-max)
+      contentWidth: (() => { const m = document.querySelector('main')!; const cs = getComputedStyle(m); return Math.min(m.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--content-max'))); })(),
       rowHeight: (document.querySelector('main ul[aria-label="產品"] > li') as HTMLElement).getBoundingClientRect().height,
     };
   });
   const width = page.viewportSize()!.width;
   expect(style.h1).toEqual([width < 640 ? '20px' : '24px', '600']);
   expect(style.addHeight).toBe(36);
-  expect(style.addBg).toBe('rgb(20, 20, 20)'); // --primary, near-black
+  expect(style.addBg).toBe('rgb(11, 46, 131)'); // --primary, the Chainsea navy (site-wide UI/UX pass)
   // a border or a shadow, never both: every shadow layer Tailwind composes is transparent
   expect(style.cardShadow === 'none' || /^(rgba\(0, 0, 0, 0\) 0px 0px 0px 0px(, )?)+$/.test(style.cardShadow)).toBe(true);
-  expect(style.cardWidth).toBeLessThanOrEqual(768); // a short list does not span the canvas
+  // site-wide pass: the list uses the content width (columns carry the product data on wide screens)
+  expect(Math.abs(style.cardWidth - style.contentWidth)).toBeLessThanOrEqual(1);
   expect(style.rowHeight).toBeGreaterThanOrEqual(56);
   await shot(page, 'product-list');
 
