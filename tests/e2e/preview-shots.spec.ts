@@ -13,9 +13,10 @@ const shot = async (page: Page, name: string) => {
 };
 
 async function sampleFeedback(page: Page, productId: string) {
-  const list = await page.request.get(`${ADMIN}/api/v1/products/${productId}/feedback`);
-  if (((await list.json()).data as unknown[]).length >= 3) return;
-  for (const title of ['登入後首頁載入過慢', '匯出報表時欄位順序錯誤', '希望支援批次修改狀態']) {
+  // the items this page clicks must exist whatever other tests created before (only missing titles are added)
+  const list = await page.request.get(`${ADMIN}/api/v1/products/${productId}/feedback?limit=100`);
+  const have = new Set(((await list.json()).data as { title: string }[]).map((f) => f.title));
+  for (const title of ['登入後首頁載入過慢', '匯出報表時欄位順序錯誤', '希望支援批次修改狀態'].filter((t) => !have.has(t))) {
     const r = await page.request.post(`${ADMIN}/api/v1/products/${productId}/feedback`, {
       headers: { origin: ADMIN, 'idempotency-key': randomUUID() }, data: { title, description: `${title}，請協助確認。` },
     });
@@ -47,6 +48,8 @@ test('every main page renders for the preview', async ({ page }) => {
   }
   // a detail: the feedback modal, and a member profile
   await page.goto(`${base}/feedback`);
+  // search first: with many items from other tests it may not be on the first page
+  await page.getByLabel('搜尋 Feedback').fill('登入後首頁載入過慢');
   await page.getByRole('button', { name: '登入後首頁載入過慢' }).first().click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await shot(page, 'feedback-detail');
