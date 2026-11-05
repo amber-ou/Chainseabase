@@ -29,15 +29,19 @@ export const Button = forwardRef<HTMLButtonElement, BtnProps>(function Button(
   );
 });
 
-export function Field({ label, hint, error, children, id, required }: { label: ReactNode; hint?: ReactNode; error?: string | null; children: (p: { id: string; 'aria-invalid'?: boolean; 'aria-describedby'?: string }) => ReactNode; id?: string; required?: boolean }) {
+/**
+ * Label above the control, hint and error under it, both tied to the control (aria-describedby).
+ * Required: a visible asterisk plus a spoken 「必填」 and aria-required on the control.
+ */
+export function Field({ label, hint, error, children, id, required }: { label: ReactNode; hint?: ReactNode; error?: string | null; children: (p: { id: string; 'aria-invalid'?: boolean; 'aria-describedby'?: string; 'aria-required'?: boolean }) => ReactNode; id?: string; required?: boolean }) {
   const auto = useId();
   const fid = id ?? auto;
   const hintId = hint ? `${fid}-hint` : undefined;
   const errId = error ? `${fid}-err` : undefined;
   return (
     <div className="field">
-      <label className="field-label" htmlFor={fid}>{label}{required ? <span aria-hidden="true"> *</span> : null}</label>
-      {children({ id: fid, 'aria-invalid': error ? true : undefined, 'aria-describedby': [hintId, errId].filter(Boolean).join(' ') || undefined })}
+      <label className="field-label" htmlFor={fid}>{label}{required ? <><span className="field-required" aria-hidden="true"> *</span><span className="sr-only">（必填）</span></> : null}</label>
+      {children({ id: fid, 'aria-invalid': error ? true : undefined, 'aria-describedby': [hintId, errId].filter(Boolean).join(' ') || undefined, 'aria-required': required || undefined })}
       {hint ? <span id={hintId} className="field-hint">{hint}</span> : null}
       {error ? <span id={errId} className="field-error" role="alert">{error}</span> : null}
     </div>
@@ -77,12 +81,14 @@ export function EmptyState({ title, children, action }: { title: string; childre
   );
 }
 
-export function ErrorState({ title = '讀取失敗', message, onRetry }: { title?: string; message?: string; onRetry?: () => void }) {
+/** A failure with its next step: `next` (a link or button) when given, a retry, or the generic reload advice. */
+export function ErrorState({ title = '讀取失敗', message, onRetry, next }: { title?: string; message?: string; onRetry?: () => void; next?: ReactNode }) {
   return (
     <div className="state state-error" role="alert">
       <span className="state-title" style={{ display: 'flex', gap: 6, alignItems: 'center' }}><IconAlert />{title}</span>
       {message ? <span>{message}</span> : null}
-      {onRetry ? <Button size="sm" onClick={onRetry}>重試</Button> : null}
+      {/* always a next step: retry when the caller can, otherwise reload */}
+      {next ?? (onRetry ? <Button size="sm" onClick={onRetry}>重試</Button> : <span className="small">請重新整理頁面再試；持續發生請聯絡管理員。</span>)}
     </div>
   );
 }

@@ -22,7 +22,11 @@ export function UserProfilePage() {
   const feedback = useResource<Feedback[]>(tab === 'feedback' ? `/products/${product.id}/users/${userId}/feedback?limit=100` : null);
   const comments = useResource<UserComment[]>(tab === 'comments' ? `/products/${product.id}/users/${userId}/comments?limit=100` : null);
   if (user.loading) return <LoadingState />;
-  if (user.error || !user.data) return <ErrorState title={user.error?.isNotFound ? '找不到成員' : '讀取失敗'} message={user.error?.isNotFound ? '此成員不在目前產品的名單中。' : user.error?.message} />;
+  if (user.error || !user.data) {
+    return <ErrorState title={user.error?.isNotFound ? '找不到成員' : '讀取失敗'} message={user.error?.isNotFound ? '此成員不在目前產品的名單中。' : user.error?.message}
+      onRetry={user.error?.isNotFound ? undefined : user.reload}
+      next={user.error?.isNotFound ? <Link className="btn" href={`/products/${product.id}/users`}><IconChevronLeft />回到 User</Link> : undefined} />;
+  }
   const u = user.data;
   return (
     <>

@@ -1,6 +1,6 @@
 # UI／UX 調整：側邊欄、Product、Calendar、Logo 與 Login（交付 CC）
 
-建立：2026-10-28；更新：2026-10-30。狀態：需求已確認；本文件為開發交付規格。實作進度：第二階段（2026-11-03）完成側邊欄上下分組；第三階段（2026-11-03）完成 Calendar 入口與頁面、Product 產品清單（含列內重新命名），側邊欄九項已齊（上方 Product → Calendar → Feedback → Roadmap → User → Live Portal；下方 Personal → Notification → Setting），第四階段（2026-11-03）完成永久刪除產品、防呆 Modal、無產品／未選取時的 Product 與側邊欄；第五階段（2026-11-04）完成 Login 左右分欄版面，並以使用者提供的原始 PNG（`public/brand/chainsea-logo.png`）替換 Login、邀請頁、後台側邊欄及前台頁首的品牌圖示；見 [tasks.md](../../tasks.md) UI-02～UI-05。本文件列出的各階段皆已實作（自動化驗證；真實 Google 登入未在雲端環境驗證）。第六階段（2026-11-05）：後台未登入直接進入 Login，Product 視覺調整。全站 UI／UX 整合調整（2026-11-05）：**預覽完成，尚未完成完整測試**（見下方同名一節）。
+建立：2026-10-28；更新：2026-10-30。狀態：需求已確認；本文件為開發交付規格。實作進度：第二階段（2026-11-03）完成側邊欄上下分組；第三階段（2026-11-03）完成 Calendar 入口與頁面、Product 產品清單（含列內重新命名），側邊欄九項已齊（上方 Product → Calendar → Feedback → Roadmap → User → Live Portal；下方 Personal → Notification → Setting），第四階段（2026-11-03）完成永久刪除產品、防呆 Modal、無產品／未選取時的 Product 與側邊欄；第五階段（2026-11-04）完成 Login 左右分欄版面，並以使用者提供的原始 PNG（`public/brand/chainsea-logo.png`）替換 Login、邀請頁、後台側邊欄及前台頁首的品牌圖示；見 [tasks.md](../../tasks.md) UI-02～UI-05。本文件列出的各階段皆已實作（自動化驗證；真實 Google 登入未在雲端環境驗證）。第六階段（2026-11-05）：後台未登入直接進入 Login，Product 視覺調整。全站 UI／UX 整合調整（2026-11-05）：第二次預覽（操作體驗、Inter＋Noto Sans TC、標題字重）**預覽完成，尚未完成完整測試**（見下方同名一節）。
 
 ## 範圍與優先順序
 
@@ -222,6 +222,20 @@ Setting
   - 下拉選單統一 chevron；停用狀態仍可閱讀。
   - 舊 Modal 的間距與標題字級和 shadcn Dialog 對齊；表格表頭、清單群組頭與看板欄改用同一個淺底 token。
 - **不變**：登入入口（第六階段）、returnTo、權限、API、資料結構、商業邏輯，以及 Google／Email 整合語意。Login 右側仍為空白。
+
+### 第二次預覽：操作體驗、統一字體與標題字重（2026-11-05）
+
+使用者指出第一次預覽主要是視覺與版面，要求補完操作體驗並統一字體。狀態仍為**預覽完成，尚未完成完整測試**；這不代表全站 UX 已全部完成，尚未處理的項目列在 tasks.md UI-07。
+
+- **字體（取代先前「沿用既有字體」）**：
+  - 英文與數字使用 Inter：由 `next/font/google` 在建置時下載並由本站提供，執行時不連 Google；建置環境需能連線 Google Fonts。
+  - 繁體中文使用 Noto Sans TC：沿用既有的 `@fontsource/noto-sans-tc`，依字元範圍分片，只下載頁面用到的字，只載入 400／500／600。
+  - 字體堆疊為 Inter 優先、Noto Sans TC 接續，最後才是系統字體。程式碼字面（`/2-3` 指令等）仍用 Geist Mono。
+- **標題字重**：
+  - 原因：標題設為 600，但 Noto Sans TC 只載入 400／500，瀏覽器因此合成粗體，例如 Calendar 的「產品日曆」。`<strong>` 的預設 700 也同樣是合成的。
+  - 修正：新增 Typography Tokens（`--fw-*`、`--fs-*`、`--lh-*`）。h1 頁面標題與對話框標題用 600；h2 區塊標題、h3、表單標籤、目前導覽項目與已選分頁用 500；`<strong>` 用 600。HTML 標籤層級不變。
+- **UI/UX Pro Max 的 UX 查詢**：在隔離目錄以 `--domain ux` 查詢表單錯誤位置、送出中防重複、必填標示、Modal 焦點、空狀態、錯誤復原、返回時保留狀態與字級層級；採用的部分見 tasks.md UI-07。
+- **前台是否自動導向 Login**：維持原行為，待使用者決定。
 
 ## 開發文件參照與影響範圍
 

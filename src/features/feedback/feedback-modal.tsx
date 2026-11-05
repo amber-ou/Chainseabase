@@ -102,6 +102,9 @@ function PersonalTagsRow({ feedbackId }: { feedbackId: string }) {
   const current = useResource<{ revision: number; tags: { id: string }[] }>(`/products/${product.id}/personal/feedback/${feedbackId}/tags`);
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [newName, setNewName] = useState('');
+  // adding a tag has its own state: its failure is not the "assignment reverted" message of the picker
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
   const save = async (ids: string[]) => {
     if (!current.data) return;
     setState('saving');
@@ -123,18 +126,25 @@ function PersonalTagsRow({ feedbackId }: { feedbackId: string }) {
       )}</Field>
       <form className="field" onSubmit={async (e) => {
         e.preventDefault();
-        if (!newName.trim()) return;
+        if (!newName.trim() || adding) return;
+        setAdding(true);
+        setAddError(null);
         try {
           await api.post(`/products/${product.id}/personal/tags`, { body: { name: newName.trim() } });
           setNewName('');
           void mine.reload();
-        } catch { setState('error'); }
+        } catch (er) {
+          // the typed name stays, so it can be corrected and sent again
+          setAddError(`${errorMessage(er)}名稱仍保留，可修改後再新增。`);
+        } finally { setAdding(false); }
       }}>
         <label className="field-label" htmlFor="new-personal-tag">新增個人 Tag</label>
         <div style={{ display: 'flex', gap: 6 }}>
-          <input id="new-personal-tag" className="input" maxLength={50} value={newName} onChange={(e) => setNewName(e.target.value)} />
-          <Button type="submit" size="sm">新增</Button>
+          <input id="new-personal-tag" className="input" maxLength={50} value={newName} onChange={(e) => setNewName(e.target.value)}
+            aria-invalid={addError ? true : undefined} aria-describedby={addError ? 'new-personal-tag-error' : undefined} />
+          <Button type="submit" size="sm" pending={adding} disabled={!newName.trim()}>新增</Button>
         </div>
+        {addError ? <span id="new-personal-tag-error" className="field-error" role="alert">{addError}</span> : null}
       </form>
     </div>
   );

@@ -409,3 +409,57 @@ E2E 新增邀請頁兩案（1440／768／390）：開啟即顯示「邀請已失
 - `product-visual` 與 `login` spec：passed。
 
 尚未執行：完整 `npm test`、`test:ui`、全套 `test:e2e`（含 sidebar、keyboard、a11y 與其餘頁面的回歸）、security:scan、正式可及性檢查、Windows 主機、真實 Google 與寄信。
+
+### UI-07 第二次預覽：操作體驗、統一字體與標題字重（2026-11-05）
+
+狀態：**預覽完成，尚未完成完整測試**。第一次預覽（`c9817bd`）主要是視覺與版面，並非全站 UX 已完成；本次補上下列項目。
+
+本次新增改善（原本問題 → 修改）：
+- **字體**：英文原本用 Geist，改為 Inter（`next/font/google`，建置時下載並由本站提供）；繁中沿用 Noto Sans TC（`@fontsource`），補上 600 字重。程式碼字面仍用 Geist Mono。
+- **標題過粗**：標題 600 原本是合成粗體（Noto 只載入 400／500），`<strong>` 的 700 也是。改為集中的 Typography Tokens：頁面標題與對話框標題 600；區塊標題、h3、標籤、目前導覽與已選分頁 500；`<strong>` 600。所有字重都來自實際載入的字檔。
+- **Setting 新增與改名選項**：原本失敗時清空輸入，也可重複送出。現在只有成功才清空，送出中顯示 pending，Enter 可儲存改名，錯誤訊息說明輸入仍保留（`OptionList`、`AddInline`、`useTaxonomyMutations`）。
+- **Personal 新增與改名欄位**：原本失敗時清空輸入或關閉對話框。現在只有成功才清空或關閉；改名對話框內顯示送出中與錯誤；重新開啟時不顯示先前的錯誤。
+- **Feedback 詳情的個人 Tag 新增**：原本失敗時顯示錯誤的訊息（「已還原」），且沒有 pending。現在有自己的錯誤訊息（與欄位關聯）與 pending，失敗保留名稱。
+- **Feedback 清單**：
+  - 搜尋、類別與標籤寫入網址（`q`、`category`、`tag`）：從其他頁返回或重新整理時都保留；切換產品時因路徑不同而清空，不沿用前一個產品的 id。
+  - 「載入更多」失敗時保留已載入的項目，並提供可重試的訊息。
+- **共用 `Field`**：必填欄位除了可見的星號，另有螢幕閱讀器讀得到的「（必填）」與 `aria-required`。
+- **共用 `ErrorState`**：每個錯誤都有下一步。找不到產品時「返回 Product」；找不到成員時「回到 User」，其他讀取錯誤可重試；看板設定讀取失敗可重試；前台找不到產品時「回到首頁」；前台回饋不存在時「回到清單」。
+
+使用的 Skill：
+- **UI/UX Pro Max**（`b7d5353`，隔離目錄，`--domain ux`）：
+  - 「Error Placement／Focusable Error Summary」→ 錯誤與欄位以 `aria-describedby` 關聯。
+  - 「Loading Buttons／Submit Feedback」→ 送出中顯示 pending、不可重複送出。
+  - 「Required Indicators」→ 必填標示。
+  - 「Error Recovery」→ `ErrorState` 的下一步。
+  - 「Back Button」→ Feedback 篩選寫入網址。
+  - 「Empty States」→ 沿用既有空狀態的操作按鈕。
+  - 「Font Size Scale／Heading Hierarchy」→ Typography Tokens，保留標題層級。
+  - 未採用它建議的新字型與毛玻璃效果。
+- **Taste**：字重層級（區塊標題不加粗）。**shadcn/ui** 元件與 Design Tokens 照舊。
+
+沿用既有、檢查後未改：
+- 舊 Modal：初始焦點、Tab 範圍、Escape、焦點返回、矮視窗捲動。
+- 舊 Button：送出中 pending。
+- Feedback 新增與編輯：有未儲存內容時，關閉前會確認。
+- User 邀請與角色變更、Roadmap 新增看板：失敗保留輸入，並顯示欄位錯誤。
+- 產品刪除防呆與登入入口。
+
+尚未完成：
+- Schedule 指令輸入、Roadmap 拖曳、Notification 與前台互動尚未逐項重新檢查。
+- 表單沒有加上錯誤摘要與失敗後的焦點移動。
+- User 邀請不支援 Enter 送出：沒有變更，避免誤寄。
+- 前台未登入時是否自動導向 Login：待決定，維持原行為。
+
+修改檔案：`src/app/layout.tsx`、`src/app/globals.css`、`src/components/ui.tsx`、`src/features/settings/settings-page.tsx`、`src/features/personal/personal-page.tsx`、`src/features/feedback/feedback-page.tsx`、`src/features/feedback/feedback-modal.tsx`、`src/features/users/user-profile.tsx`、`src/features/roadmap/roadmap-page.tsx`、`src/features/portal/portal-shell.tsx`、`src/features/portal/portal-feedback.tsx`、`src/features/admin/shell.tsx`；新增 `tests/e2e/typography.spec.ts`。
+
+預覽階段已執行（Linux 容器，隔離 e2e 資料庫；Google、寄信為 fake）：
+- lint、typecheck、build 皆 exit 0。
+- `preview-shots`、`product-visual`、`login`（1440／768／390）與 `typography`（1440）：19 passed。`typography` 以瀏覽器實際使用的字體確認：
+  - 「產品日曆」由 Noto Sans TC 的 500（Medium）字檔繪製。
+  - Calendar 標題由 Inter 600 繪製。
+  - 「目前產品：產品1」的中文用 Noto Sans TC、數字用 Inter，兩者都是網頁字型。
+  - 7 個後台頁與前台登入頁的文字只用 400／500／600。
+- 前一次推送（`17efee9`）前的本機完整 `test:e2e`：140 passed。
+
+尚未執行：本次變更後的完整 `npm test`、`test:ui`、全套 `test:e2e`、security:scan、正式可及性檢查、Windows 主機、真實 Google 與寄信。

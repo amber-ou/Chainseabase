@@ -57,8 +57,9 @@ export function PersonalPage() {
   const team = (users.data ?? []).filter((u) => u.role === 'team');
 
   /** Every private change saves immediately; failure restores the last confirmed state. */
-  const mutate = async (label: string, fn: (rev: number) => Promise<unknown>, optimistic?: (v: ViewData) => ViewData) => {
-    if (!view?.view) return;
+  /** Resolves true when saved: callers clear their input or close their dialog only then. */
+  const mutate = async (label: string, fn: (rev: number) => Promise<unknown>, optimistic?: (v: ViewData) => ViewData): Promise<boolean> => {
+    if (!view?.view) return false;
     const confirmed = view;
     if (optimistic) setView(optimistic(view));
     setSave('saving');
@@ -70,6 +71,7 @@ export function PersonalPage() {
       announce(label);
       setRetry(null);
       await load(subjectId);
+      return true;
     } catch (e) {
       setView(confirmed);
       setSave('error');
@@ -77,6 +79,7 @@ export function PersonalPage() {
       setSaveError(conflict ? '其他分頁已更新此檢視，已重新載入' : `儲存失敗：${errorMessage(e)}`);
       setRetry(() => () => void mutate(label, fn, optimistic));
       if (conflict) await load(subjectId);
+      return false;
     } finally {
       inflight.current--;
       setPendingId(null);
@@ -98,7 +101,8 @@ export function PersonalPage() {
     label: c.name,
     headerExtra: (
       <ActionMenu label={`欄位「${c.name}」選項`} items={[
-        { label: '重新命名', onSelect: () => setRenaming({ id: c.id, name: c.name }) },
+        // a fresh dialog starts without an earlier save's error
+        { label: '重新命名', onSelect: () => { if (save === 'error') setSave('idle'); setRenaming({ id: c.id, name: c.name }); } },
         { label: c.isDefault ? '預設欄不可刪除' : '刪除欄位', disabled: c.isDefault, danger: !c.isDefault, onSelect: () => setDeleting({ id: c.id, name: c.name, count: c.cards.length }) },
       ]} />
     ),
@@ -157,7 +161,8 @@ export function PersonalPage() {
             e.preventDefault();
             const name = newCol.trim();
             if (!name || !viewId) return;
-            void mutate(`已新增欄位「${name}」`, (rev) => api.post(`/products/${product.id}/personal/views/${viewId}/columns`, { body: { name, expectedRevision: rev } })).then(() => setNewCol(''));
+            // the name stays when the add fails, so it can be sent again
+            void mutate(`已新增欄位「${name}」`, (rev) => api.post(`/products/${product.id}/personal/views/${viewId}/columns`, { body: { name, expectedRevision: rev } })).then((ok) => { if (ok) setNewCol(''); });
           }}>
             <label className="sr-only" htmlFor="new-col">新欄位名稱</label>
             <input id="new-col" className="input" style={{ width: 220 }} maxLength={50} placeholder="新欄位名稱" value={newCol} onChange={(e) => setNewCol(e.target.value)} />
@@ -167,11 +172,13 @@ export function PersonalPage() {
         </>
       )}
       {renaming && viewId ? (
-        <ConfirmModal title="重新命名欄位" confirmLabel="儲存名稱" onCancel={() => setRenaming(null)} onConfirm={() => {
+        // the result shows inside the dialog: one save at a time, and a failure is visible where the name is
+        <ConfirmModal title="重新命名欄位" confirmLabel="儲存名稱" pending={save === 'saving'} error={save === 'error' ? saveError ?? '儲存失敗' : null} onCancel={() => setRenaming(null)} onConfirm={() => {
           const name = renaming.name.trim();
           if (!name) return;
           const id = renaming.id;
-          void mutate('已更新欄位名稱', (rev) => api.patch(`/products/${product.id}/personal/views/${viewId}/columns/${id}`, { body: { name, expectedRevision: rev } })).then(() => setRenaming(null));
+          // a failed rename keeps the dialog and the typed name open (the save status says why)
+          void mutate('已更新欄位名稱', (rev) => api.patch(`/products/${product.id}/personal/views/${viewId}/columns/${id}`, { body: { name, expectedRevision: rev } })).then((ok) => { if (ok) setRenaming(null); });
         }}>
           <label className="field-label" htmlFor="rename-col">欄位名稱</label>
           <input id="rename-col" className="input" maxLength={50} value={renaming.name} onChange={(e) => setRenaming({ ...renaming, name: e.target.value })} />

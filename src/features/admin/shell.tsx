@@ -145,7 +145,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const product = productId ? list.find((p) => p.id === productId) ?? null : null;
   if (productId && !product) {
     // an old link or another tab of a deleted product: nothing of it is requested or shown
-    return <main id="main" tabIndex={-1} className="main"><ErrorState title="找不到產品" message="此產品不存在，可能已被刪除。" /><p style={{ marginTop: 12 }}><Link className="btn" href="/products">返回 Product</Link></p></main>;
+    return <main id="main" tabIndex={-1} className="main"><ErrorState title="找不到產品" message="此產品不存在，可能已被刪除。" next={<Link className="btn" href="/products">返回 Product</Link>} /></main>;
   }
   const section = product ? pathname.split('/')[3] ?? 'dashboard' : 'dashboard';
   const go = (href: string) => {

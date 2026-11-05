@@ -152,17 +152,27 @@ function DeleteOptionModal({ target, revision, onClose, onDone }: { target: Dele
   );
 }
 
-function OptionList({ items, onRename, onDelete, extra }: { items: { id: string; name: string; isDefault?: boolean }[]; onRename: (id: string, name: string) => Promise<void>; onDelete: (id: string) => void; extra?: (id: string) => ReactNode }) {
+/** onRename resolves true when saved: a failed rename keeps what was typed (the error shows above the list). */
+function OptionList({ items, onRename, onDelete, extra }: { items: { id: string; name: string; isDefault?: boolean }[]; onRename: (id: string, name: string) => Promise<boolean>; onDelete: (id: string) => void; extra?: (id: string) => ReactNode }) {
   const [edit, setEdit] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const save = async (id: string) => {
+    if (saving) return;
+    setSaving(id);
+    const ok = await onRename(id, edit[id]);
+    setSaving(null);
+    if (ok) setEdit((s) => { const n = { ...s }; delete n[id]; return n; });
+  };
   return (
     <div>
       {items.map((o) => (
         <div key={o.id} className="option-row">
           <label className="sr-only" htmlFor={`opt-${o.id}`}>名稱</label>
-          <input id={`opt-${o.id}`} className="input name" maxLength={50} value={edit[o.id] ?? o.name} onChange={(e) => setEdit((s) => ({ ...s, [o.id]: e.target.value }))} />
+          <input id={`opt-${o.id}`} className="input name" maxLength={50} value={edit[o.id] ?? o.name} onChange={(e) => setEdit((s) => ({ ...s, [o.id]: e.target.value }))}
+            onKeyDown={(e) => { if (e.key === 'Enter' && edit[o.id] !== undefined && edit[o.id].trim() && edit[o.id] !== o.name) { e.preventDefault(); void save(o.id); } }} />
           {o.isDefault ? <span className="chip">預設</span> : null}
           {extra?.(o.id)}
-          {edit[o.id] !== undefined && edit[o.id] !== o.name ? <Button size="sm" onClick={async () => { await onRename(o.id, edit[o.id]); setEdit((s) => { const n = { ...s }; delete n[o.id]; return n; }); }}>儲存</Button> : null}
+          {edit[o.id] !== undefined && edit[o.id] !== o.name ? <Button size="sm" variant="primary" pending={saving === o.id} disabled={!edit[o.id].trim()} onClick={() => void save(o.id)}>儲存</Button> : null}
           <Button size="sm" variant="ghost" onClick={() => onDelete(o.id)}>移除</Button>
         </div>
       ))}
@@ -171,14 +181,23 @@ function OptionList({ items, onRename, onDelete, extra }: { items: { id: string;
   );
 }
 
-function AddInline({ label, onAdd, children }: { label: string; onAdd: (name: string) => Promise<void>; children?: ReactNode }) {
+/** onAdd resolves true when added: the field clears only then, so a failed add keeps what was typed. */
+function AddInline({ label, onAdd, children }: { label: string; onAdd: (name: string) => Promise<boolean>; children?: ReactNode }) {
   const [name, setName] = useState('');
+  const [pending, setPending] = useState(false);
   return (
-    <form style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} onSubmit={async (e) => { e.preventDefault(); if (!name.trim()) return; await onAdd(name.trim()); setName(''); }}>
+    <form style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }} onSubmit={async (e) => {
+      e.preventDefault();
+      if (!name.trim() || pending) return;
+      setPending(true);
+      const ok = await onAdd(name.trim());
+      setPending(false);
+      if (ok) setName('');
+    }}>
       <label className="sr-only" htmlFor={`add-${label}`}>{label}</label>
       <input id={`add-${label}`} className="input" style={{ flex: '1 1 160px' }} maxLength={50} placeholder={label} value={name} onChange={(e) => setName(e.target.value)} />
       {children}
-      <Button type="submit" size="sm" disabled={!name.trim()}>新增</Button>
+      <Button type="submit" size="sm" pending={pending} disabled={!name.trim()}>新增</Button>
     </form>
   );
 }
@@ -187,11 +206,14 @@ function useTaxonomyMutations() {
   const { product } = useProduct();
   const tax = useResource<Taxonomy>(`/products/${product.id}/taxonomy`);
   const [error, setError] = useState<string | null>(null);
-  const run = async (fn: (rev: number) => Promise<unknown>) => {
-    if (!tax.data) return;
+  /** Resolves true when saved; on failure the message says what to do and callers keep the input. */
+  const run = async (fn: (rev: number) => Promise<unknown>): Promise<boolean> => {
+    if (!tax.data) return false;
     setError(null);
-    try { await fn(tax.data.productRevision); } catch (e) { setError(e instanceof ApiError && e.code === 'REVISION_CONFLICT' ? '設定已被其他人更新，已重新載入，請再試一次。' : errorMessage(e)); }
+    let ok = true;
+    try { await fn(tax.data.productRevision); } catch (e) { ok = false; setError(e instanceof ApiError && e.code === 'REVISION_CONFLICT' ? '設定已被其他人更新，已重新載入；你輸入的內容仍保留，請再按一次儲存。' : `${errorMessage(e)}你輸入的內容仍保留，可修正後再試。`); }
     await tax.reload();
+    return ok;
   };
   return { tax, error, run, product };
 }

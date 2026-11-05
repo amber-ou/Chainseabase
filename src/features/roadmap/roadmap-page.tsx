@@ -226,7 +226,7 @@ function RoadmapSettings({ roadmapId, onClose, onChanged, onDeleted, onMoveTab }
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  if (!board.data) return <Modal title="看板設定" onClose={onClose}>{board.error ? <ErrorState message={board.error.message} /> : <LoadingState />}</Modal>;
+  if (!board.data) return <Modal title="看板設定" onClose={onClose}>{board.error ? <ErrorState message={board.error.message} onRetry={board.reload} /> : <LoadingState />}</Modal>;
   const rm = board.data.roadmap;
   const save = async () => {
     setPending(true);

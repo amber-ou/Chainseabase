@@ -56,7 +56,7 @@ export function PortalAccessState({ error }: { error: ApiError | null }) {
   // wait for /me so an uninvited account is not first shown "not found"
   if (error?.isNotFound && !meLoaded) return <LoadingState />;
   if (me?.role === 'none' && (error?.isNotFound || error?.code === 'NOT_A_MEMBER')) return <PortalNotInvited />;
-  if (error?.isNotFound) return <ErrorState title="找不到產品" message="產品不存在，或你沒有受邀參與這個產品。" />;
+  if (error?.isNotFound) return <ErrorState title="找不到產品" message="產品不存在，或你沒有受邀參與這個產品。" next={<Link className="btn" href="/">回到首頁</Link>} />;
   return <ErrorState message={error?.message} />;
 }
 

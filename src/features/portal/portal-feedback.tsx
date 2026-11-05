@@ -128,7 +128,7 @@ function PortalFeedbackModal({ id, onClose, onChanged, onRequire }: { id: string
   const [editing, setEditing] = useState<{ title: string; description: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   if (res.loading) return <Modal title="Feedback" onClose={onClose}><LoadingState /></Modal>;
-  if (res.error || !res.data) return <Modal title="Feedback" onClose={onClose}><ErrorState title="找不到內容" message="此回饋不存在、已改為內部或已移除。" /></Modal>;
+  if (res.error || !res.data) return <Modal title="Feedback" onClose={onClose}><ErrorState title="找不到內容" message="此回饋不存在、已改為內部或已移除。" next={<Button onClick={onClose}>回到清單</Button>} /></Modal>;
   const f = res.data;
   const endpoints: CommentEndpoints = {
     list: `/public/products/${product.slug}/feedback/${f.id}/comments`,

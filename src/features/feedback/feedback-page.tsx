@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { api, ApiError } from '@/client/api';
+import { api, ApiError, errorMessage } from '@/client/api';
 import { useDebounced, useResource } from '@/client/hooks';
 import { relativeTime, PRIORITY_LABEL } from '@/client/format';
 import { Avatar, Button, EmptyState, ErrorState, LoadingState, Spinner } from '@/components/ui';
@@ -19,10 +19,22 @@ export function FeedbackPage() {
   const params = useSearchParams();
   const item = params.get('item');
   const [creating, setCreating] = useState(false);
-  const [q, setQ] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [tagIds, setTagIds] = useState<string[]>([]);
+  // search and filters live in the URL: Back from another page or a reload keeps them, and a switch to
+  // another product (another path) starts clean instead of reusing this product's category or tag ids
+  const [q, setQ] = useState(() => params.get('q') ?? '');
+  const [categoryId, setCategoryId] = useState(() => params.get('category') ?? '');
+  const [tagIds, setTagIds] = useState<string[]>(() => params.getAll('tag'));
   const debouncedQ = useDebounced(q, 300);
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const wanted = debouncedQ.trim();
+    if (wanted) sp.set('q', wanted); else sp.delete('q');
+    if (categoryId) sp.set('category', categoryId); else sp.delete('category');
+    sp.delete('tag');
+    for (const t of tagIds) sp.append('tag', t);
+    const next = sp.toString();
+    if (next !== window.location.search.replace(/^\?/, '')) router.replace(`${pathname}${next ? `?${next}` : ''}`, { scroll: false });
+  }, [debouncedQ, categoryId, tagIds, pathname, router]);
   const tax = useResource<Taxonomy>(`/products/${product.id}/taxonomy`);
   const query = useMemo(() => {
     const sp = new URLSearchParams({ limit: '50' });
@@ -35,7 +47,8 @@ export function FeedbackPage() {
   const [extra, setExtra] = useState<Feedback[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  useEffect(() => { setExtra([]); setCursor(list.meta.nextCursor ?? null); }, [list.data, list.meta.nextCursor]);
+  const [moreError, setMoreError] = useState<string | null>(null);
+  useEffect(() => { setExtra([]); setMoreError(null); setCursor(list.meta.nextCursor ?? null); }, [list.data, list.meta.nextCursor]);
 
   const openItem = (id: string | null) => {
     const sp = new URLSearchParams(params.toString());
@@ -48,10 +61,14 @@ export function FeedbackPage() {
   const loadMore = async () => {
     if (!cursor) return;
     setLoadingMore(true);
+    setMoreError(null);
     try {
       const r = await api.get<Feedback[]>(`/products/${product.id}/feedback?${query}&cursor=${encodeURIComponent(cursor)}`);
       setExtra((e) => [...e, ...r.data]);
       setCursor(r.meta.nextCursor ?? null);
+    } catch (e) {
+      // what is already listed stays; the same button retries from the same place
+      setMoreError(`${errorMessage(e)}已載入的項目不受影響，可再按一次「載入更多」。`);
     } finally {
       setLoadingMore(false);
     }
@@ -95,7 +112,12 @@ export function FeedbackPage() {
       ) : (
         <GroupedList items={items} tax={tax.data!} counts={list.meta.statusCounts ?? {}} onOpen={openItem} />
       )}
-      {cursor && items.length > 0 ? <div style={{ marginTop: 12 }}><Button onClick={loadMore} pending={loadingMore}>載入更多</Button></div> : null}
+      {cursor && items.length > 0 ? (
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+          {moreError ? <div className="banner banner-error" role="alert">{moreError}</div> : null}
+          <Button onClick={loadMore} pending={loadingMore}>載入更多</Button>
+        </div>
+      ) : null}
 
       {creating && tax.data ? (
         <FeedbackModal mode="create" taxonomy={tax.data} onClose={() => setCreating(false)} onChanged={() => void list.reload()} />
