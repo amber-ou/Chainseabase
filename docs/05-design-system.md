@@ -1,5 +1,7 @@
 # Design System 與畫面規格
 
+> **2026-11-06**：Schedule 已依使用者確認永久移除（migration `0005_remove_schedule.sql`，見 [08 決策](08-decisions.md)）。本文件中的 Schedule 規格、資料表、API 與驗收案例（S01–S17）不再適用，保留僅供歷史參考。
+
 ## 設計來源與方向
 
 使用使用者指定的 [taste skill](https://github.com/leonxlnx/taste-skill/blob/6010f91a9935f1c167dfc500fb1a475681892e6b/skills/taste-skill/SKILL.md) 與其 app-screens 指引，不套用行銷頁的巨大標題、圖片數量或捲動動畫要求。
@@ -20,7 +22,7 @@ node <skill>/scripts/draw.mjs --app --kind workspace \
   --style achromatic-ledger --out <planning-directory>
 ```
 
-本次完成方向與元件規格，**未製作可互動頁面、未執行瀏覽器 inspector，也沒有視覺通過分數**。Featurebase 用作資訊配置參考，最終互動以本文件及已確認需求為準。
+規劃階段只完成方向與元件規格；實作後的 lint／inspector 結果記錄在 [驗收追蹤報告](acceptance-report.md) V04。Featurebase 用作資訊配置參考，最終互動以本文件及已確認需求為準。
 
 ### 產品需求優先的調整
 
@@ -178,7 +180,7 @@ Schedule
 ## 前台網站
 
 - 使用相同字體與元件，但採簡潔頂部產品名稱、Feedback／Roadmap 導覽與登入控制，不保留後台 sidebar。
-- 匿名訪客可瀏覽與搜尋公開內容；按投票、留言或新增時，提示登入；登入後若未受邀，顯示缺少該產品互動資格，不假裝加入成功。
+- 匿名訪客進入內容頁導向登入，不預載公司內容；登入後若未受邀，顯示缺少產品存取資格，不提供列表／搜尋／互動資料。受邀者仍只見前台允許欄位，不能以 UI 隱藏代替 API 授權。
 - 前台 Feedback 仍以 Modal 開啟；沒有 Schedule、私人 Tag、內部欄位或內部 API 呼叫。
 - 只有選擇公開的狀態 Roadmap 可見；卡片不提供拖曳。
 
@@ -201,3 +203,7 @@ Schedule
 3. 開啟每張最後版本截圖，修正溢出、焦點、低對比、文字截斷與多餘空間。
 4. 自動化與人工驗證 Modal focus、鍵盤拖曳替代、螢幕閱讀器表格標題與成功／錯誤宣告。
 5. 確認 Google 活動、公開前台與私人資料使用正確資料來源；漂亮假資料不算功能驗收。
+
+## 元件實作基礎（2026-11-02）
+
+正式導入 shadcn/ui 作為新 UI 的優先元件來源；Taste 設計方向與既有 tokens 保留。Button／Input／Dialog 等元件以共用語意 tokens 呈現，不直接套用另一份全站主題。現有頁面逐頁遷移，完整規則、來源版本與測試方式見 [shadcn/ui 整合規範](ui/shadcn-integration.md)。

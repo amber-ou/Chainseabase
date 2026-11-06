@@ -1,0 +1,454 @@
+import { useEffect, useId, useRef, useState } from "react";
+import type { CSSProperties, DragEvent } from "react";
+import "./roadmap.css";
+
+export type RoadmapStatus = "pool" | "progress" | "done" | "discussion" | "delayed";
+
+export type RoadmapCard = {
+  id: string;
+  title: string;
+  columnId: RoadmapStatus;
+  label: string;
+  owner: string;
+  showOwnerAvatar?: boolean;
+};
+
+export type RoadmapMove = {
+  cardId: string;
+  fromColumnId: RoadmapStatus;
+  toColumnId: RoadmapStatus;
+};
+
+export type RoadmapStyleProps = {
+  /** Initial, in-memory demo data; changes to this prop do not reset a mounted board. */
+  initialCards?: readonly RoadmapCard[];
+  /** Notification only. This reference does not persist data or call an API. */
+  onCardMove?: (move: RoadmapMove) => void;
+  className?: string;
+  style?: CSSProperties;
+};
+
+export const ROADMAP_COLUMNS: readonly { id: RoadmapStatus; label: string }[] = [
+  { id: "pool", label: "需求池" },
+  { id: "progress", label: "進行中" },
+  { id: "done", label: "已完成" },
+  { id: "discussion", label: "待討論" },
+  { id: "delayed", label: "延後" },
+];
+
+export const ROADMAP_INITIAL_CARDS: readonly RoadmapCard[] = [
+  {
+    id: "1132",
+    title: "1132",
+    columnId: "done",
+    label: "需求討論",
+    owner: "歐瑜",
+    showOwnerAvatar: false,
+  },
+];
+
+const DRAG_TYPE = "application/x-roadmap-style-card";
+
+function Icon({
+  name,
+}: {
+  name: "plus" | "sliders" | "filter" | "search" | "chevron" | "more" | "left" | "right";
+}) {
+  return (
+    <svg className="rm-icon" viewBox="0 0 18 18" aria-hidden="true">
+      {name === "plus" && <path d="M9 4v10M4 9h10" />}
+      {name === "sliders" && <path d="M3 5h3m4 0h5M3 13h7m4 0h1M8 3v4m4 4v4" />}
+      {name === "filter" && <path d="M4 5h10M6 9h6M8 13h2" />}
+      {name === "search" && (
+        <>
+          <circle cx="7.5" cy="7.5" r="4.5" />
+          <path d="m11 11 4 4" />
+        </>
+      )}
+      {name === "chevron" && <path d="m5 7 4 4 4-4" />}
+      {name === "left" && <path d="m11 4-5 5 5 5" />}
+      {name === "right" && <path d="m7 4 5 5-5 5" />}
+      {name === "more" && (
+        <>
+          <circle cx="3.5" cy="9" r=".8" fill="currentColor" />
+          <circle cx="9" cy="9" r=".8" fill="currentColor" />
+          <circle cx="14.5" cy="9" r=".8" fill="currentColor" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function StatusIcon({ status }: { status: RoadmapStatus }) {
+  return (
+    <svg className="rm-status" data-status={status} viewBox="0 0 16 16" aria-hidden="true">
+      <circle
+        cx="8"
+        cy="8"
+        r="6"
+        fill={status === "done" || status === "delayed" ? "currentColor" : "none"}
+        strokeDasharray={status === "discussion" ? "1.3 2.3" : undefined}
+      />
+      {status === "done" && <path d="m4.9 8 2 2 4.2-4.3" stroke="#fff" />}
+      {status === "progress" && <path d="M8 4v8a4 4 0 0 0 0-8" fill="currentColor" stroke="none" />}
+      {status === "delayed" && <path d="m6 6 4 4m0-4-4 4" stroke="#fff" />}
+    </svg>
+  );
+}
+
+function PreviewButton({
+  icon,
+  label,
+  className = "",
+}: {
+  icon?: Parameters<typeof Icon>[0]["name"];
+  label: string;
+  className?: string;
+}) {
+  return (
+    <button
+      className={`rm-preview-button ${className}`}
+      type="button"
+      disabled
+      aria-label={label}
+      title={`${label}（僅為外觀展示）`}
+    >
+      {icon && <Icon name={icon} />}
+      {!className.includes("rm-icon-only") && label}
+    </button>
+  );
+}
+
+function scrollBehavior(): ScrollBehavior {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+}
+
+/**
+ * Standalone style reference. The only stateful interactions are cross-column
+ * drag-and-drop and horizontal board navigation. All other controls are inert.
+ */
+export default function RoadmapStyle({
+  initialCards = ROADMAP_INITIAL_CARDS,
+  onCardMove,
+  className = "",
+  style,
+}: RoadmapStyleProps) {
+  const [cards, setCards] = useState(() => initialCards.map((card) => ({ ...card })));
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropColumn, setDropColumn] = useState<RoadmapStatus | null>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const [announcement, setAnnouncement] = useState("");
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const viewportId = useId();
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    const layout = layoutRef.current;
+    if (!viewport || !layout) return;
+
+    const updateEdges = () => {
+      const next = {
+        left: viewport.scrollLeft > 1,
+        right: viewport.scrollLeft < viewport.scrollWidth - viewport.clientWidth - 1,
+      };
+      setEdges((current) =>
+        current.left === next.left && current.right === next.right ? current : next,
+      );
+    };
+    const handleWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || viewport.scrollWidth <= viewport.clientWidth) return;
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      const scale =
+        event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? 16
+          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? viewport.clientWidth
+            : 1;
+      const canScroll =
+        delta < 0
+          ? viewport.scrollLeft > 0
+          : viewport.scrollLeft < viewport.scrollWidth - viewport.clientWidth;
+      if (!delta || !canScroll) return;
+      event.preventDefault();
+      viewport.scrollLeft += delta * scale;
+    };
+
+    viewport.addEventListener("scroll", updateEdges, { passive: true });
+    viewport.addEventListener("wheel", handleWheel, { passive: false });
+    const observer = new ResizeObserver(updateEdges);
+    observer.observe(viewport);
+    observer.observe(layout);
+    updateEdges();
+    return () => {
+      viewport.removeEventListener("scroll", updateEdges);
+      viewport.removeEventListener("wheel", handleWheel);
+      observer.disconnect();
+    };
+  }, []);
+
+  const scrollBoard = (direction: -1 | 1) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const width = viewport.querySelector(".rm-lane")?.getBoundingClientRect().width ?? 333;
+    viewport.scrollBy({ left: direction * width, behavior: scrollBehavior() });
+  };
+
+  const endDrag = () => {
+    setDraggedId(null);
+    setDropColumn(null);
+  };
+
+  const dropCard = (event: DragEvent<HTMLElement>, columnId: RoadmapStatus) => {
+    event.preventDefault();
+    endDrag();
+    let payload: { boardId?: unknown; cardId?: unknown };
+    try {
+      payload = JSON.parse(event.dataTransfer.getData(DRAG_TYPE));
+      if (!payload || typeof payload !== "object") return;
+    } catch {
+      return;
+    }
+    if (payload.boardId !== viewportId || typeof payload.cardId !== "string") return;
+    const card = cards.find((item) => item.id === payload.cardId);
+    if (!card || card.columnId === columnId) return;
+
+    setCards((current) =>
+      current.map((item) => (item.id === card.id ? { ...item, columnId } : item)),
+    );
+    setAnnouncement(
+      `FB-${card.id} 已移至${ROADMAP_COLUMNS.find((column) => column.id === columnId)?.label}`,
+    );
+    onCardMove?.({ cardId: card.id, fromColumnId: card.columnId, toColumnId: columnId });
+  };
+
+  return (
+    <main className={`roadmap-style ${className}`} style={style}>
+      <header className="rm-page-header">
+        <h1>Roadmap</h1>
+        <p>每張看板只依一個維度分欄；拖曳只修改該維度，每筆 Feedback 恰好出現在一欄。</p>
+        <PreviewButton className="rm-control rm-create" icon="plus" label="新增 Feedback" />
+      </header>
+
+      <section className="rm-controls" aria-label="Roadmap 導覽與工具列">
+        <nav className="rm-tabs" aria-label="Roadmap 檢視（僅為外觀展示）">
+          {["產品進度", "1232", "484984"].map((label, index) => (
+            <button
+              className={`rm-preview-button rm-tab${index === 0 ? " rm-tab-active" : ""}`}
+              key={label}
+              type="button"
+              disabled
+              aria-current={index === 0 ? "page" : undefined}
+            >
+              {label}
+            </button>
+          ))}
+          <PreviewButton
+            className="rm-control rm-add-tab rm-icon-only"
+            icon="plus"
+            label="新增 Roadmap"
+          />
+        </nav>
+        <div className="rm-toolbar">
+          <div className="rm-toolbar-group">
+            <label className="rm-select">
+              <select aria-label="看板分欄維度（僅為外觀展示）" disabled defaultValue="status">
+                <option value="status">狀態</option>
+              </select>
+              <Icon name="chevron" />
+            </label>
+            <button
+              className="rm-preview-button rm-control"
+              type="button"
+              role="switch"
+              aria-label="發佈到前台（僅為外觀展示）"
+              aria-checked="true"
+              disabled
+            >
+              <span className="rm-switch" aria-hidden="true">
+                <span />
+              </span>
+              發佈到前台
+            </button>
+            <PreviewButton
+              className="rm-control rm-square rm-icon-only"
+              icon="sliders"
+              label="顯示設定"
+            />
+          </div>
+          <div className="rm-toolbar-group">
+            <PreviewButton
+              className="rm-control rm-square rm-icon-only"
+              icon="filter"
+              label="篩選"
+            />
+            <label className="rm-search">
+              <Icon name="search" />
+              <input
+                aria-label="搜尋標題或描述（僅為外觀展示）"
+                placeholder="搜尋標題或描述..."
+                disabled
+              />
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section className="rm-board" aria-label="Roadmap 看板">
+        <div
+          className="rm-viewport"
+          id={viewportId}
+          ref={viewportRef}
+          role="region"
+          aria-label="狀態看板，可左右捲動"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.target !== event.currentTarget) return;
+            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+              event.preventDefault();
+              scrollBoard(event.key === "ArrowLeft" ? -1 : 1);
+            } else if (event.key === "Home" || event.key === "End") {
+              event.preventDefault();
+              event.currentTarget.scrollTo({
+                left: event.key === "Home" ? 0 : event.currentTarget.scrollWidth,
+                behavior: scrollBehavior(),
+              });
+            }
+          }}
+        >
+          <div className="rm-layout" ref={layoutRef}>
+            {ROADMAP_COLUMNS.map((column) => {
+              const columnCards = cards.filter((card) => card.columnId === column.id);
+              return (
+                <section
+                  className="rm-lane"
+                  key={column.id}
+                  data-column={column.id}
+                  data-drop-active={dropColumn === column.id || undefined}
+                  aria-label={`${column.label}欄位`}
+                  onDragOver={(event) => {
+                    if (!draggedId || !event.dataTransfer.types.includes(DRAG_TYPE)) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    setDropColumn(column.id);
+                  }}
+                  onDragLeave={(event) => {
+                    if (
+                      !(event.relatedTarget instanceof Node) ||
+                      !event.currentTarget.contains(event.relatedTarget)
+                    )
+                      setDropColumn((current) => (current === column.id ? null : current));
+                  }}
+                  onDrop={(event) => dropCard(event, column.id)}
+                >
+                  <div className="rm-lane-header">
+                    <StatusIcon status={column.id} />
+                    <h2>{column.label}</h2>
+                    <span className="rm-count">{columnCards.length}</span>
+                    <div className="rm-actions">
+                      <PreviewButton
+                        className="rm-small rm-icon-only"
+                        icon="more"
+                        label={`${column.label}欄位選項`}
+                      />
+                      <PreviewButton
+                        className="rm-small rm-icon-only"
+                        icon="plus"
+                        label={`新增至${column.label}`}
+                      />
+                    </div>
+                  </div>
+                  <div className="rm-stack">
+                    {columnCards.map((card) => (
+                      <article
+                        className="rm-card"
+                        key={card.id}
+                        draggable
+                        data-card-id={card.id}
+                        data-dragging={draggedId === card.id || undefined}
+                        aria-label={`FB-${card.id} ${card.title}`}
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData(
+                            DRAG_TYPE,
+                            JSON.stringify({ boardId: viewportId, cardId: card.id }),
+                          );
+                          event.dataTransfer.effectAllowed = "move";
+                          setDraggedId(card.id);
+                        }}
+                        onDragEnd={endDrag}
+                      >
+                        <div className="rm-card-meta">
+                          <span className="rm-identifier">FB-{card.id}</span>
+                          <div className="rm-actions">
+                            {card.showOwnerAvatar && (
+                              <span className="rm-assignee" title={card.owner}>
+                                {card.owner.slice(0, 1)}
+                              </span>
+                            )}
+                            <PreviewButton
+                              className="rm-small rm-icon-only"
+                              icon="more"
+                              label={`${card.title} 更多選項`}
+                            />
+                          </div>
+                        </div>
+                        <div className="rm-card-title">
+                          <StatusIcon status={column.id} />
+                          <span>{card.title}</span>
+                        </div>
+                        <div className="rm-card-labels">
+                          <span className="rm-priority" aria-label="一般優先順序">
+                            <svg viewBox="0 0 16 16" aria-hidden="true">
+                              <rect x="2" y="9" width="2.5" height="5" rx=".5" />
+                              <rect x="6.5" y="5.5" width="2.5" height="8.5" rx=".5" />
+                              <rect x="11" y="2" width="2.5" height="12" rx=".5" opacity=".25" />
+                            </svg>
+                          </span>
+                          <span className="rm-label">
+                            <span className="rm-label-dot" />
+                            {card.label}
+                          </span>
+                        </div>
+                        <p className="rm-card-footer">由 {card.owner} 提出</p>
+                      </article>
+                    ))}
+                    {columnCards.length === 0 && (
+                      <PreviewButton className="rm-empty" label="新增 Feedback" />
+                    )}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </div>
+        {(edges.left || edges.right) && (
+          <>
+            <button
+              className="rm-scroll-arrow rm-scroll-left"
+              type="button"
+              aria-label="向左捲動看板"
+              aria-controls={viewportId}
+              disabled={!edges.left}
+              onClick={() => scrollBoard(-1)}
+            >
+              <Icon name="left" />
+            </button>
+            <button
+              className="rm-scroll-arrow rm-scroll-right"
+              type="button"
+              aria-label="向右捲動看板"
+              aria-controls={viewportId}
+              disabled={!edges.right}
+              onClick={() => scrollBoard(1)}
+            >
+              <Icon name="right" />
+            </button>
+          </>
+        )}
+        <span className="rm-sr-only" role="status" aria-live="polite">
+          {announcement}
+        </span>
+      </section>
+    </main>
+  );
+}

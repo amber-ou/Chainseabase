@@ -1,5 +1,7 @@
 # Chainseabase 開發文件
 
+現行部署入口：[Windows 原生規格與 WIN 任務](windows-native-deployment.md)。核心功能沿用既有實作；部署與受邀讀取改造尚待驗收。
+
 文件基準日：2026-10-23（Asia/Taipei）。版本：1.0。
 
 狀態：使用者已確認架構與主要互動規則；本套文件將確認內容轉為可實作、可驗收的規格。**文件完成不代表程式、雲端服務或第三方整合已完成。**
@@ -14,7 +16,7 @@
 | --- | --- |
 | [01 產品需求與權限](01-product-requirements.md) | 確認功能、角色、產品範圍與公開資料界線。 |
 | [02 系統架構與資料模型](02-architecture-and-data.md) | 建立模組、資料表、隔離與索引。 |
-| [03 核心互動與一致性規則](03-interaction-rules.md) | 實作 Schedule 指令、單維度 Roadmap 與私人 Personal。 |
+| [03 核心互動與一致性規則](03-interaction-rules.md) | 單維度 Roadmap 與私人 Personal（Schedule 部分已移除，僅供歷史參考）。 |
 | [04 API 契約](04-api-contracts.md) | 對接前後端，統一驗證、錯誤與併發語意。 |
 | [05 Design System 與畫面規格](05-design-system.md) | 依 taste skill 方向實作元件、畫面與完整狀態。 |
 | [06 Google Calendar 與雲端部署](06-calendar-and-deployment.md) | 配置 OAuth、日曆讀寫、寄信、資料庫與雲端交付。 |
@@ -42,4 +44,4 @@
 - 設計來源：[taste skill](https://github.com/leonxlnx/taste-skill)，固定 commit `6010f91a9935f1c167dfc500fb1a475681892e6b`，使用 `design-taste-frontend` 的 app-screen 流程。
 - 已執行設計方向產生，選擇 `achromatic-ledger`，seed `20261023`；[原始方向資料](design/taste-direction.json)。
 - 本輪官方網站 HTTP 查閱曾遭環境代理 403；不將文件中的第三方能力規劃視為當前帳號、方案或 OAuth 審核狀態的驗證。
-- 應用尚未存在，因此尚未執行功能測試、Calendar API 實機讀寫、瀏覽器畫面檢查或部署驗收。
+- 應用已實作並有自動化測試；Calendar API 實機讀寫、Google 登入、寄信與部署驗收仍待外部設定，見 [驗收追蹤報告](acceptance-report.md)。

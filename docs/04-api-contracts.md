@@ -1,6 +1,8 @@
 # API 契約
 
-本文件為待實作契約，不表示端點已存在。基底 `/api/v1`；Google callback 與 auth library 路由可獨立，但必須遵守相同權限與 host 限制。
+> **2026-11-06**：Schedule 已依使用者確認永久移除（migration `0005_remove_schedule.sql`，見 [08 決策](08-decisions.md)）。本文件中的 Schedule 規格、資料表、API 與驗收案例（S01–S17）不再適用，保留僅供歷史參考。
+
+本契約已實作於 `src/server/api/`（實作補充見文末）。基底 `/api/v1`；Google callback 路由同樣在此基底下，遵守相同權限與 host 限制。
 
 ## 通用格式
 
@@ -79,16 +81,18 @@
 | POST `/me/avatar-upload` | 簽發本人頭像上傳用途；限制 MIME、大小與 bucket path。 |
 | GET `/products` | 團隊所有產品；前台可另外用 public products 查詢公開入口。 |
 | POST `/products` | 團隊，name；初始化選項與預設看板，同交易。 |
-| PATCH `/products/:p` | 團隊，name、expectedRevision。無封存／刪除端點。 |
+| PATCH `/products/:p` | 團隊，name、expectedRevision。不提供封存。 |
+| DELETE `/products/:p` | 團隊（測試成員 403、未登入 401、前台 host 404）。`If-Match: "{revision}"` 必填（缺少 428、過期 409 `REVISION_CONFLICT`）；body 僅 `{ confirmName }`，須與目前名稱完全相同（不去空白、不折疊大小寫，否則 400 `INVALID_REQUEST`）。單一交易永久刪除產品及其平台內專屬資料，先鎖定產品列；邀請只移除此產品關聯，尚未接受且因此沒有任何產品的測試邀請在同一交易撤銷（`revokedReason: product_deleted`，保留紀錄）並取消排隊中的邀請信工作（`outbox_jobs.state = cancelled`）；已接受、團隊邀請及仍有其他產品的邀請不變；成功 200 `{ id, deleted: true }`，已不存在 404。保留其他產品、帳號、session、個人 Google 授權與邀請本身（只移除此產品關聯）；不呼叫 Google。系統鍵產品（初始「產品1」）留下 `product_tombstones` 紀錄，初始化不重建。見[變更需求](change-requests/sidebar-position.md)「永久刪除產品」。 |
 | GET `/products/:p/users` | 團隊；所有有效團隊及該產品受邀測試成員。 |
 | GET `/products/:p/users/:u` | 團隊；使用者資料與產品內計數。 |
 | GET `/products/:p/users/:u/feedback` | 團隊；該人建立的產品 Feedback。 |
 | GET `/products/:p/users/:u/comments` | 團隊；該人的產品普通／Schedule 留言，不含私人 Tag。 |
 | POST `/invitations` | 團隊，email、role、productIds；排入 Email 工作。 |
 | GET `/invitations` | 團隊，邀請狀態，不回原始 token。 |
-| POST `/invitations/:id/resend` | 團隊，重新寄送並處理舊 token 失效。 |
-| DELETE `/invitations/:id` | 團隊，撤銷。 |
-| POST `/invitations/accept` | 已登入 Google，token；驗證 Email 與產品集合，交易內接受。 |
+| POST `/invitations/:id/resend` | 團隊，重新寄送並處理舊 token 失效；已接受／撤銷，或測試邀請已無任何產品時 410。 |
+| DELETE `/invitations/:id` | 團隊，撤銷（`revokedReason: manual`）。邀請 DTO 含 `revokedReason`：`manual`、`superseded`（同 Email 新邀請取代）、`product_deleted`。 |
+| POST `/invitations/inspect` | 已登入（未登入 401），body 僅 `{ token }`；不消耗邀請，回 `{ valid, alreadyAccepted, message }`，不透露 Email、角色或產品。邀請頁開啟時呼叫，無效時顯示「邀請已失效」。 |
+| POST `/invitations/accept` | 已登入 Google，token；驗證 Email 與產品集合，交易內接受。撤銷、過期、已被他人使用，或測試邀請已無任何存在的產品時 410 `INVITATION_INVALID`（訊息以「邀請已失效」開頭），不建立無產品的測試成員。先以 FOR SHARE 鎖定受邀產品再鎖邀請，與產品刪除使用相同鎖順序。 |
 | PATCH `/users/:u/role` | 團隊，role、testerProductIds、expectedRevision；最後團隊保護。 |
 | DELETE `/users/:u/membership` | 團隊，移除成員資格、撤銷 session，保留歷史作者。 |
 | PUT `/products/:p/users/:u/person-tags` | 團隊，personTagIds、expectedRevision（product revision）；[] 表示未安排。 |
@@ -104,13 +108,13 @@
 | GET `/products/:p/feedback/:f` | 團隊；內部 DTO，不混入他人個人 Tag。 |
 | PATCH `/products/:p/feedback/:f` | 團隊；允許欄位明確列舉，含 visibility。 |
 | DELETE `/products/:p/feedback/:f` | 團隊；軟刪除與關聯檢視失效。 |
-| GET `/public/products/:slug` | 匿名；公開產品入口資訊。 |
-| GET `/public/products/:slug/feedback` | 匿名；只查 public、未刪除，支援 q。 |
-| GET `/public/products/:slug/feedback/:f` | 匿名；公開 DTO。 |
+| GET `/public/products/:slug` | 團隊或該產品受邀測試成員；公開產品入口資訊。 |
+| GET `/public/products/:slug/feedback` | 團隊或該產品受邀測試成員；只查 public、未刪除，支援 q。 |
+| GET `/public/products/:slug/feedback/:f` | 團隊或該產品受邀測試成員；公開 DTO。 |
 | POST `/portal/products/:p/feedback` | 團隊或該產品測試成員；只接受 title、description，後端設 public 與預設分類。 |
 | PATCH `/portal/products/:p/feedback/:f` | 自己的公開內容或團隊；只接受 title、description、expectedRevision。 |
 | PUT / DELETE `/portal/products/:p/feedback/:f/vote` | 已授權成員，設定／取消本人投票。 |
-| GET `/public/products/:slug/feedback/:f/comments` | 匿名；僅 general、normal、公開可見留言。 |
+| GET `/public/products/:slug/feedback/:f/comments` | 團隊或該產品受邀測試成員；僅 general、normal、公開可見留言。 |
 | GET / POST `/products/:p/feedback/:f/comments` | 團隊；一般留言串；建立 body、replyToId。 |
 | POST `/portal/products/:p/feedback/:f/comments` | 已授權成員；同上，公開 Feedback。 |
 | PATCH / DELETE `/products/:p/comments/:c` | 團隊普通留言編輯／移除，檢查 revision。 |
@@ -187,11 +191,23 @@ scheduleDraft.actions 由初始第 2 列按順序重播，支援 row.add、comme
   "beforeFeedbackId": null,
   "afterFeedbackId": "<neighbor-id>",
   "expectedFeedbackRevision": 6,
-  "expectedRoadmapRevision": 3
+  "expectedPlacementRevision": 2
 }
 ```
 
-before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 null 代表空欄或放最頂端，需在契約中依目標欄是否為空明確解讀為頂端。兩者同時提供必須為目標欄相鄰卡，且不得是自己。伺服器判定目標實際維度，禁止額外 body 欄位偷偷改類別／Tag。
+before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 null 一律解讀為目標欄最頂端（空欄即唯一位置）。客戶端送出畫面上相鄰的兩張卡，且不得是自己。伺服器判定目標實際維度，禁止額外 body 欄位偷偷改類別／Tag。
+
+**併發範圍（移動不檢查整張看板 revision）**
+
+| 情境 | 保護方式 | 結果 |
+| --- | --- | --- |
+| 看板結構變更（欄位名稱、欄位順序、排序模式、名稱／描述、公開） | `roadmaps.revision`（`expectedRevision`／`If-Match`）；移動不送也不檢查此值 | 結構編輯彼此衝突回 409；移動只有在第一次把看板切成 freedom 時讓 revision +1 |
+| 同一筆 Feedback 被同時修改 | Feedback 列鎖；跨欄時檢查 `expectedFeedbackRevision`（同欄不檢查，因不改 Feedback 欄位）；每次移動檢查卡片自己的 `expectedPlacementRevision`（看板卡片與欄分頁回應中的 `placementRevision`，尚無排序紀錄為 0） | 409 `details.reason = "card_changed"`；客戶端重新載入，**不自動重試** |
+| 不同卡片的排序操作 | 目標欄列鎖序列化同欄寫入（鎖順序：Feedback 列 → 目標欄列）；看板列以共用鎖讀取 | 不同卡片互不衝突；他人卡片剛好落在同一對相鄰卡之間時，仍視為「放在兩卡之間」並緊接 after 卡之後 |
+| 落點已失效 | 相鄰卡離開目標欄，或 before／after 的先後已顛倒 | 409 `details.reason = "order_changed"`，不自動套用；客戶端重新載入後由使用者再放一次 |
+| 落點不合法 | 相鄰卡是自己或不存在 | 400 VALIDATION_FAILED |
+
+成功回應：`{ roadmapRevision, feedbackRevision, placementRevision, columnId, previousColumnId }`。`placementRevision` 只出現在內部看板與欄分頁回應，公開投影不含。
 
 ## Personal
 
@@ -261,3 +277,51 @@ before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 nul
 ```
 
 回傳 Google event ID、ETag、更新時間及可操作性；不回傳底層 OAuth token。Calendar 專用 code 包含 CALENDAR_REAUTH_REQUIRED、CALENDAR_READ_ONLY、EVENT_CONFLICT、UNSUPPORTED_EVENT_TYPE。外部 412 映射為 409 EVENT_CONFLICT。
+
+## 實作補充（與上表一起閱讀）
+
+以下為實作時補上的端點與確定的細節，不改變上方規則：
+
+| 方法／路徑 | 說明 |
+| --- | --- |
+| GET `/site` | 目前 host 對應的網站與 provider 模式（real／fake），不含秘密。 |
+| GET `/health` | 健康檢查（含資料庫）。 |
+| GET／POST `/jobs/run` | outbox 工作入口，需 `Authorization: Bearer <JOB_RUNNER_SECRET 或 CRON_SECRET>`；錯誤 secret 回 404。 |
+| POST `/me/avatar-upload` | 直接上傳圖片本體（content-type 為 `image/jpeg`、`image/png` 或 `image/webp`，≤ 2 MB）；伺服器驗證實際內容、重新編碼為 256px WebP 並移除中繼資料。GET `/avatars/:userId` 由伺服器讀取 private bucket。 |
+| GET `/products/:p/roadmaps/:r/board?limit=` | 一次取得所有欄位、伺服器計算的筆數與每欄第一頁卡片（內部卡片附 `placementRevision`，供移動檢查）。 |
+| GET `/products/:p/personal/feedback/:f/tags` | 本人對該 Feedback 的私人 Tag 與 revision（首次為 0）。 |
+| GET `/products/:p/calendar/events/:eventId` | 取得單一活動；整系列編輯先以此讀 master 與其 ETag。 |
+| GET／PUT `/portal/products/:p/notifications…` | 測試成員在前台的本人通知（只含可存取的公開內容）。 |
+| GET `/public/products` | 前台首頁的產品入口清單（名稱與 slug）：需登入；團隊為全部產品、測試者只列受邀產品、未受邀或已移除帳號為空陣列。 |
+| POST `/test-support/login`、`/test-support/calendar/connect` | **僅開發／E2E**：需 `E2E_TEST_LOGIN=enabled`，production 設定下永遠回 404。 |
+
+其他確定行為：
+
+- 一般留言排序以伺服器接受順序（插入序號）為準；清單 cursor 為不透明字串。
+- 普通 Schedule 留言的刪除以 `If-Match: "<comment revision>"` 加查詢參數 `scheduleRevision` 驗證兩個版本。
+- 刪除分類選項時 body 帶 `expectedRevision`（product revision）與 `replacementId` 或 `strategy: "detach"`。
+- Calendar 寫入若 Google 結果不明，回 **202** `{ state: "unknown", mutationId }`；以相同 Idempotency-Key 重試會先核對 Google（建立以固定 event ID、更新以 `extendedProperties.private.csbLastMutation`）再決定，不盲目重放。
+- 所有寫入要求 `Origin` 等於該網站 origin（CSRF 防護）；未列在 schema 的欄位一律 400（禁止 mass assignment）。
+
+## Windows 自架存取修訂（WIN-04）
+
+保留 `/public/` 路由與 public DTO 名稱以降低遷移範圍，但它們不再允許匿名。所有公司資料讀取（含 Roadmap、搜尋、留言、頭像、通知及直接 URL）先驗證 session 與產品／資源資格；未登入 401，無資格資源 404。頁面可導向登入，API 不得以登入頁 HTML 代替 401。只有登入、OAuth callback、邀請接受必要入口及不含敏感內容的健康檢查可例外。快取不得跨使用者洩漏內容，撤銷資格後每次請求重新檢查。
+
+實作（WIN-04）：
+- 讀取（`/public/*`、`/avatars/:u`、通知列表）：未登入 401；未受邀、已移除帳號及測試者讀其他產品一律 404，與不存在的 slug／ID 相同回應，且在查詢產品前判斷，無法探測產品是否存在。前台以 `/me` 的 `role: none` 說明「尚未受邀」。
+- 頭像：團隊可讀全部；測試者可讀自己、團隊成員、同產品成員及其受邀產品中的作者，其餘 404。回應 `Cache-Control: private, no-cache`、`Vary: Cookie` 與 ETag；`If-None-Match` 也要先通過授權才回 304。JSON 維持 `private, no-store`。
+- 寫入（前台互動、頭像上傳）：未登入 401，未受邀或已移除帳號 403 `NOT_A_MEMBER`（在查詢產品前判斷）。
+- 例外：登入、OAuth callback、邀請接受、`/me`、`/site`、`/health`（只有模式與後端名稱）。
+
+## Feedback 圖片（2026-11-06，第二階段 IM01–IM06）
+
+| 方法與路徑 | 權限 | 說明 |
+| --- | --- | --- |
+| `POST /products/:p/feedback-images` | team，後台 | 原始位元組上傳（`content-type: image/jpeg｜png｜webp`），最大 5 MB；依實際內容驗證並移除中繼資料。回傳待用圖片 `{ id, width, height, contentType }`（201）。每人待用上限 20 張，超過 24 小時的待用圖片會在下次上傳時清除。 |
+| `DELETE /products/:p/feedback-images/:i` | 上傳者本人，後台 | 只能移除自己的待用圖片；已關聯的圖片回 404。 |
+| `POST /products/:p/feedback` 的 `imageIds` | team | 最多 5 個，必須是自己在同一產品的待用圖片，依順序關聯；不符合時回 400，不會建立 Feedback。 |
+| `GET /products/:p/feedback/:f/images` | team | 已關聯圖片的清單。 |
+| `GET /products/:p/feedback/:f/images/:i/(original｜thumb)` | team | 圖片內容。 |
+| `GET /public/products/:slug/feedback/:f/images[/:i/(original｜thumb)]` | 受邀成員，且 Feedback 為公開 | 前台讀取；內部、已刪除或不在受邀產品內一律 404。 |
+
+圖片回應一律為 `Cache-Control: private, no-store, max-age=0`、`Vary: Cookie`、`X-Content-Type-Options: nosniff`，每次讀取都重新檢查權限。舊的 `/products/:p/feedback/:f/schedule*` 路由回 404，訊息為「Schedule 功能已移除。」，不讀寫任何資料。
