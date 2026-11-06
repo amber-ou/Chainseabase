@@ -366,6 +366,52 @@ Setting
 - **Chip Collection Reflow**：膠囊與已選標籤自動換行。
 - **Focus States**：無框編輯區在焦點時顯示 2px 外框。
 
+## 第三階段 UI／UX 調整（2026-11-06 新增）
+
+範圍：全站焦點、Switch、主要與取消按鈕（III-01、III-03、III-06、III-07），新增 Feedback 彈窗（III-02、III-04、III-05），以及 Roadmap（III-R01–III-R08）。狀態：**預覽完成，尚未完成完整測試**；證據見 tasks.md UI-10。延續第一、二階段，未重做。附件存放在 `docs/design-references/phase3-roadmap/`，與第二階段的 Feedback 附件（`phase2-feedback-dialog/`）分開。
+
+### 實作決定
+
+- **III-01 焦點**：
+  - 新增 `InputModality`（`src/components/input-modality.tsx`），在 `<html data-input>` 記錄操作方式：滑鼠、筆或觸控按下時為 pointer；Tab、Shift+Tab、F6、方向鍵、Home／End、PageUp／PageDown、Escape 為 keyboard。在文字欄內移動游標不算鍵盤導覽。
+  - pointer 時不畫焦點框（outline 與 shadcn ring 都不顯示）；keyboard 時顯示中性石板灰 `--focus-ring #475569`（白底 7.6:1），取代亮藍色。
+  - 實際焦點、輸入游標、錯誤框、focus trap 與焦點返回都不變；監聽器在卸載時移除。
+  - 連結與拖放目標仍使用原本的 `--focus`。
+- **III-03 Switch**：二元開關一律使用 shadcn Switch，標籤在開關右側，包括新增多筆、Roadmap 發佈與 Calendar 全天活動（`ui.tsx` 的 `Switch` 內部改用 shadcn，呼叫端不需修改）。勾選清單與單選項目不改。
+- **III-06 主要按鈕**：新增 `--action #18181b`（hover `#3f3f46`），套用到 shadcn Button 的 default variant 與舊 `.btn-primary`。危險操作仍使用 `--negative`。
+  - 「使用 Google 登入」按鈕沒有 Google 標誌或品牌樣式，屬於一般登入按鈕，所以改為黑色。若之後改用 Google 官方按鈕，應依其品牌規範。
+  - 導覽與徽章的海軍藍不變，這些不是按鈕。
+- **III-07 取消按鈕**：新增 `cancel` variant（`--cancel-bg #eceff3`、深色字、無邊框），用於所有「取消」，以及 AlertDialog 的取消（包括「繼續編輯」）。其他次要按鈕不變。
+- **III-02**：新增彈窗移除作者整列；詳情的作者與時間保留。
+- **III-04／III-05**：屬性列順序為狀態、類別、Person tag、已選標籤，最後是「＋」。已選標籤本身是按鈕，名稱為「取消選取：名稱」，點擊、Enter 或 Space 只取消本筆的選取，不刪除共用標籤；取消後焦點移到「＋」。
+- **提示泡泡**：提示文字（tooltip）不再攔截點擊（`pointer-events: none !important`，因為 Radix 在 modal 內會以 inline 樣式覆寫）。原因是手機上焦點回到「＋」時，提示會蓋住相鄰的標籤。
+- **III-R01**：沒有新增維度 Select；建立看板時選擇維度、建立後不可改，兩條規則不變。
+- **III-R02**：Tab 只顯示看板名稱，不改資料；使用者自己加的括號保留，例如「依類別（自訂括號）」。
+- **III-R03／III-R04**：看板為一整片白底，欄間沒有間距，以 1px 灰線分隔，各欄同高。欄寬至少 333px（卡片 300 加左右內距各 16 加分隔線 1），欄位少時平分可用寬度；欄數依看板設定。
+- **III-R05–R07**：
+  - 只在內容溢出時於左右邊界顯示箭頭，每次移動一欄的實際寬度，到邊界時停用。
+  - 滾輪取 deltaX／deltaY 中較大者並換算模式；Ctrl、沒有溢出、位移為 0 或已到邊界時，不攔截頁面捲動。
+  - 隱藏捲軸，但保留可捲動的容器；容器本身聚焦時，左右鍵與 Home／End 可移動，不攔截卡片內的控制項。
+  - 減少動態效果時立即移動；ResizeObserver 會重新判斷。
+  - 手機上卡片同樣至少 300px，在看板內捲動；工具列不裁切。
+- **III-R08**：拖曳仍呼叫原本的 moves API，依看板維度更新並寫入後端，失敗會還原並說明。拖曳時來源卡片半透明，目標欄為淡色底加內框。卡片選單、鍵盤與觸控的移動方式不變。
+
+附件中不採用：
+- disabled 示範控制項、假資料、固定五欄與欄序、只存在記憶體的移動。
+- 維度 Select。
+- 窄螢幕裁切工具列。
+- 系統字型堆疊與獨立色票：改用 Chainseabase tokens 與 Inter／Noto Sans TC。
+- 狀態圖示：沿用現有欄位色塊（第一階段 R01 保留）。
+
+### UI/UX Pro Max 指引（`--domain ux`）
+
+- **Focus States**：鍵盤焦點清楚可見；以中性色取代亮藍，只在滑鼠點擊時隱藏。
+- **Horizontal Scroll／Overflow Hidden**：溢出只在看板內，不撐寬頁面；以箭頭、滾輪、鍵盤與觸控提供替代捲動方式。
+- **Motion Sensitivity**：減少動態效果時立即捲動。
+- **Dragging Movements**：拖曳不是唯一方式，卡片選單仍可移動。
+- **Touch Target**：箭頭 36px。
+- **Color Contrast**：取消鈕、主要按鈕與焦點框都符合對比要求。
+
 ## 開發文件參照與影響範圍
 
 | 文件 | CC 要參照或調整的部分 |

@@ -80,7 +80,8 @@ export function RoadmapPage() {
               {list.map((r, i) => (
                 <button key={r.id} type="button" role="tab" className="tab" aria-selected={r.id === selectedId} tabIndex={r.id === selectedId ? 0 : -1}
                   onClick={() => select(r.id)} onKeyDown={(e) => onTabKey(e, i)}>
-                  {r.name}<span className="small muted">（{r.dimension === 'tag_group' ? r.tagGroupName : DIMENSION_LABEL[r.dimension]}）</span>
+                  {/* III-R02: the board's own name only (no added dimension hint); the name itself is never changed */}
+                  {r.name}
                 </button>
               ))}
             </div>
@@ -285,7 +286,7 @@ function CreateRoadmapModal({ taxonomy, onClose, onCreated }: { taxonomy: Taxono
     } finally { setPending(false); }
   };
   return (
-    <Modal title="新增看板" onClose={onClose} footer={<><Button onClick={onClose}>取消</Button><Button variant="primary" pending={pending} onClick={submit}>建立看板</Button></>}>
+    <Modal title="新增看板" onClose={onClose} footer={<><Button variant="cancel" onClick={onClose}>取消</Button><Button variant="primary" pending={pending} onClick={submit}>建立看板</Button></>}>
       {errors._ ? <div className="banner banner-error" role="alert">{errors._}</div> : null}
       <fieldset style={{ border: 0, padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <legend className="field-label" style={{ marginBottom: 6 }}>分欄維度（建立後不可修改）</legend>
@@ -350,7 +351,7 @@ function RoadmapSettings({ roadmapId, onClose, onChanged, onDeleted }: { roadmap
   return (
     <Modal title="看板設定" onClose={onClose} footer={<>
       {!rm.isDefault ? <span className="spacer"><Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>刪除看板</Button></span> : <span className="spacer small muted">預設看板不可刪除</span>}
-      <Button onClick={onClose}>取消</Button><Button variant="primary" pending={pending} disabled={Boolean(nameError)} onClick={save}>儲存</Button>
+      <Button variant="cancel" onClick={onClose}>取消</Button><Button variant="primary" pending={pending} disabled={Boolean(nameError)} onClick={save}>儲存</Button>
     </>}>
       {error ? <div className="banner banner-error" role="alert">{error}</div> : null}
       {/* R12-R14: name and column names only, in shadcn Input; the description, the dimension note, tab order and the Setting note are gone */}

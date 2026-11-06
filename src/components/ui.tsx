@@ -2,13 +2,14 @@
 
 import { forwardRef, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { IconAlert, IconCheck, IconLock } from './icons';
+import { Switch as UiSwitch } from './ui/switch';
 
 export function Spinner({ label }: { label?: string }) {
   return <span className="spinner" role={label ? 'status' : undefined} aria-label={label} />;
 }
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'default';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'cancel' | 'default';
   size?: 'sm' | 'md';
   pending?: boolean;
   icon?: boolean;
@@ -123,12 +124,17 @@ export function useAnnouncer() {
   return { announce: (m: string) => { setMsg(''); setTimeout(() => setMsg(m), 30); }, region };
 }
 
+/**
+ * A labelled on/off switch (phase 3 III-03): the official shadcn/ui Switch with its text on the right.
+ * Same props as before, so callers keep their state, save timing and disabled rules.
+ */
 export function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
+  const id = useId();
   return (
-    <label className="switch">
-      <input type="checkbox" role="switch" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} aria-checked={checked} />
-      <span>{label}</span>
-    </label>
+    <span className="switch-field" data-disabled={disabled || undefined}>
+      <UiSwitch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
+      <label htmlFor={id}>{label}</label>
+    </span>
   );
 }
 

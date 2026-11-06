@@ -128,6 +128,14 @@ npm run test:e2e
 
 共用的清單工具列 `src/components/list-controls.tsx`（SearchBox、FilterPopover 等）以官方 Input Group、Popover、Tooltip 與 Button 組合而成。
 
+## 第三階段元件調整（2026-11-06）
+
+依 III-06、III-07 調整的變體（按規範用 variants 客製化，沒有覆蓋其他設定）：
+- `button.tsx` 的 `default` 改用專案 token `--action`（黑底白字），並新增 `cancel` 變體（灰底深色字、無邊框）。
+- `alert-dialog.tsx` 的 `AlertDialogCancel` 預設變體由 `outline` 改為 `cancel`。
+
+其他元件與官方相同。焦點外觀（III-01）不改元件，只在 `globals.css` 依 `html[data-input]` 調整 ring 與 outline。
+
 ## 修改檔案索引
 
 - 相依／設定：`package.json`、`package-lock.json`、`components.json`、`postcss.config.mjs`、`tsconfig.json`。

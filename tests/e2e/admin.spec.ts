@@ -31,9 +31,9 @@ test('FB: create dialog keeps the defaults; continuous creation keeps the classi
   await expect(dialog.getByLabel('標題')).toHaveValue('');
   await expect(dialog.getByLabel('標題')).toHaveAttribute('placeholder', '請輸入標題');
   await expect(dialog.getByLabel('描述')).toHaveAttribute('placeholder', '簡短描述建議或是Bug');
-  // FB06: the real author, no fixed time
-  await expect(dialog.getByText('專案負責人')).toBeVisible();
-  await expect(dialog.getByText('建立後記錄時間')).toBeVisible();
+  // phase 3 III-02: no author row in the create dialog (the detail view still shows author and time)
+  await expect(dialog.getByText('建立後記錄時間')).toHaveCount(0);
+  await expect(dialog.locator('.avatar')).toHaveCount(0);
   // a required title: the error is next to the field and nothing is created
   await dialog.getByRole('button', { name: '建立' }).click();
   await expect(dialog.getByText('標題不可空白')).toBeVisible();
@@ -72,7 +72,7 @@ test('FB04/IM: a new tag and images are saved with the Feedback and shown in its
   await picker.getByLabel('搜尋或輸入新標籤').fill(tagName);
   await picker.getByRole('button', { name: `建立「${tagName}」並加入` }).click();
   await page.keyboard.press('Escape');
-  await expect(dialog.getByRole('button', { name: `移除標籤「${tagName}」` })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: `取消選取：${tagName}` })).toBeVisible();
   // images: a real upload with a preview
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAwAAAAJCAIAAACJ2loDAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAFElEQVQYlWMwTltFEDGMKmIgJggAdHuIRVoOAaQAAAAASUVORK5CYII=', 'base64');
   await dialog.locator('input[type="file"]').setInputFiles({ name: 'screen.png', mimeType: 'image/png', buffer: png });

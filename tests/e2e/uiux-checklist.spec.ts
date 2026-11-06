@@ -172,8 +172,9 @@ test('R01–R17: Roadmap tabs, toolbar, publish switch, filters and settings', a
   await addFeedback(page, product.id, hit);
   await addFeedback(page, product.id, unique('其他卡片'), '描述含有關鍵詞藍鯨');
   // many boards, so the tab row has to scroll (R05)
+  // phase 3 removed the dimension hint from the tabs: longer names keep the row wider than the page
   for (let i = 1; i <= 9; i++) {
-    const r = await page.request.post(`${P}/roadmaps`, { headers: { origin: ADMIN }, data: { name: `看板 ${i}`, dimension: i % 3 === 0 ? 'category' : 'status' } });
+    const r = await page.request.post(`${P}/roadmaps`, { headers: { origin: ADMIN }, data: { name: `看板 ${i} 第四季規劃`, dimension: i % 3 === 0 ? 'category' : 'status' } });
     expect(r.status(), await r.text()).toBe(201);
   }
   await page.goto(`${ADMIN}/products/${product.id}/roadmaps`);

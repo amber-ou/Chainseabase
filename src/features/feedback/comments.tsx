@@ -102,7 +102,7 @@ export function CommentThread({ productId, feedbackId, isPublic, endpoints, canI
                     <textarea id={`edit-${c.id}`} className="textarea" maxLength={5000} value={editing.body} onChange={(e) => setEditing({ ...editing, body: e.target.value })} />
                     <div style={{ display: 'flex', gap: 6 }}>
                       <Button size="sm" variant="primary" onClick={saveEdit}>儲存</Button>
-                      <Button size="sm" onClick={() => setEditing(null)}>取消</Button>
+                      <Button size="sm" variant="cancel" onClick={() => setEditing(null)}>取消</Button>
                     </div>
                   </div>
                 ) : <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{c.body}</p>}

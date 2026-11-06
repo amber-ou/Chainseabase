@@ -100,7 +100,7 @@ function CreatePortalFeedback({ productId, onClose, onCreated }: { productId: st
   const [pending, setPending] = useState(false);
   const key = useRef<string | null>(null);
   return (
-    <Modal title="新增回饋" onClose={onClose} footer={<><Button onClick={onClose}>取消</Button><Button variant="primary" pending={pending} onClick={async () => {
+    <Modal title="新增回饋" onClose={onClose} footer={<><Button variant="cancel" onClick={onClose}>取消</Button><Button variant="primary" pending={pending} onClick={async () => {
       if (!title.trim()) { setErrors({ title: '標題不可空白' }); return; }
       key.current ??= newKey();
       setPending(true);
@@ -160,7 +160,7 @@ function PortalFeedbackModal({ id, onClose, onChanged, onRequire }: { id: string
                 onChanged();
               } catch (e) { setError(e instanceof ApiError && e.status === 409 ? '內容已被更新，請重新整理後再編輯。' : errorMessage(e)); }
             }}>儲存</Button>
-            <Button onClick={() => setEditing(null)}>取消</Button>
+            <Button variant="cancel" onClick={() => setEditing(null)}>取消</Button>
           </div>
         </div>
       ) : (

@@ -34,7 +34,7 @@ test('Product states for the visual review', async ({ page }) => {
   await expect(list.getByText(/\/p\//)).toHaveCount(0);
   // shadcn Button rendered through DialogTrigger asChild (the trigger's data-slot wins), with the Button classes
   await expect(main.getByRole('button', { name: '新增產品', exact: true })).toHaveAttribute('data-slot', 'dialog-trigger');
-  await expect(main.getByRole('button', { name: '新增產品', exact: true })).toHaveClass(/bg-primary/);
+  await expect(main.getByRole('button', { name: '新增產品', exact: true })).toHaveClass(/bg-action/); // phase 3 III-06: primary actions are black
   await expect(main.locator('[data-slot="badge"]')).toHaveText('目前產品');
   await expect(list.getByRole('button', { name: '行動 App 的操作', exact: true })).toHaveAttribute('data-slot', 'dropdown-menu-trigger');
   const style = await page.evaluate(() => {
@@ -53,7 +53,7 @@ test('Product states for the visual review', async ({ page }) => {
   const width = page.viewportSize()!.width;
   expect(style.h1).toEqual([width < 640 ? '20px' : '24px', '600']);
   expect(style.addHeight).toBe(36);
-  expect(style.addBg).toBe('rgb(11, 46, 131)'); // --primary, the Chainsea navy (site-wide UI/UX pass)
+  expect(style.addBg).toBe('rgb(24, 24, 27)'); // --action: general primary actions are black (phase 3 III-06)
   // a border or a shadow, never both: every shadow layer Tailwind composes is transparent
   expect(style.cardShadow === 'none' || /^(rgba\(0, 0, 0, 0\) 0px 0px 0px 0px(, )?)+$/.test(style.cardShadow)).toBe(true);
   // P01: one column on phones, more where there is room

@@ -8,7 +8,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        // phase 3 III-06: general primary actions are black with white text (project variant)
+        default: "bg-action text-on-action hover:bg-action-hover",
+        // phase 3 III-07: cancel actions, grey fill and dark ink without a visible border (project variant)
+        cancel: "bg-cancel text-cancel-foreground hover:bg-cancel-hover",
         destructive:
           "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40",
         outline:

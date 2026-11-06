@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { Avatar } from '@/components/ui';
 import { ActionMenu, type MenuItemDef } from '@/components/menu';
 
@@ -45,6 +46,8 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
     onMove?.(cardId, targetColumnId, beforeId, afterId);
   };
 
+  const scroll = useBoardScroll(rootRef, Boolean(plain), columns.length);
+
   const finishDrop = (colId: string) => {
     if (!dragId || !onMove || !drop) return;
     const col = columns.find((c) => c.id === colId)!;
@@ -75,9 +78,13 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
   return (
     <>
       {readOnly ? null : <p className="board-swipe-hint small muted" aria-hidden="true">左右滑動查看其他欄位（共 {columns.length} 欄）</p>}
-      {/* focusable so keyboard users can scroll the columns horizontally (WCAG 2.1.1) */}
-      <div ref={rootRef} className={`board-scroll${readOnly ? ' board-stack-mobile' : ''}`} tabIndex={0} role="region" aria-label="看板，可左右捲動">
-        <div className={`board${plain ? ' board-plain' : ''}`} role="list" aria-label="看板欄位">
+      <div className={plain ? 'board-frame' : undefined}>
+      {/* focusable so keyboard users can scroll the columns horizontally (WCAG 2.1.1); Roadmap (plain):
+          arrows and Home / End on the container itself move one column / to either end (phase 3 III-R07) */}
+      <div ref={rootRef} className={`board-scroll${readOnly ? ' board-stack-mobile' : ''}`} tabIndex={0} role="region" aria-label="看板，可左右捲動"
+        onKeyDown={plain ? scroll.onKeyDown : undefined}>
+        <div className={`board${plain ? ' board-plain' : ''}`} role="list" aria-label="看板欄位"
+          style={plain ? { gridTemplateColumns: `repeat(${Math.max(columns.length, 1)}, minmax(var(--board-col-min), 1fr))` } : undefined}>
           {columns.map((col) => (
             <section key={col.id} className="column" role="listitem" aria-label={`${col.title}，${col.count} 筆`} data-drop={drop?.col === col.id || undefined}
               onDragOver={(e) => {
@@ -99,6 +106,7 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
                   <div key={card.id}>
                     {drop?.col === col.id && drop.index === i ? <div className="drop-line" aria-hidden="true" /> : null}
                     <article className="kcard" data-card-id={card.id} data-pending={pendingId === card.id || undefined} draggable={!readOnly}
+                      data-dragging={dragId === card.id || undefined}
                       aria-label={card.title}
                       onDragStart={(e) => { setDragId(card.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', card.id); }}
                       onDragEnd={() => { setDragId(null); setDrop(null); }}
@@ -130,6 +138,74 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
           ))}
         </div>
       </div>
+      {plain && (scroll.edges.left || scroll.edges.right) ? (
+        <>
+          {/* III-R05: only when the board is wider than its space; one column per press */}
+          <button type="button" className="board-arrow board-arrow-left" aria-label="向左捲動看板" disabled={!scroll.edges.left} onClick={() => scroll.by(-1)}><ChevronLeftIcon aria-hidden="true" /></button>
+          <button type="button" className="board-arrow board-arrow-right" aria-label="向右捲動看板" disabled={!scroll.edges.right} onClick={() => scroll.by(1)}><ChevronRightIcon aria-hidden="true" /></button>
+        </>
+      ) : null}
+      </div>
     </>
   );
+}
+
+const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Horizontal board navigation (phase 3 III-R05 to III-R07), for the Roadmap board only.
+ * - edges: whether there is more to the left / right (1px tolerance), kept current on scroll and on
+ *   resize of the container or its content (ResizeObserver).
+ * - by(±1): scroll by the real width of one column; smooth unless reduced motion is preferred.
+ * - Wheel over the board: the larger of deltaX / deltaY moves it sideways (line mode × 16, page mode ×
+ *   the visible width). Not taken when Ctrl is held (zoom), when nothing overflows, when the delta is
+ *   zero or when the board is already at that end, so the page scrolls as usual. Touch and trackpad
+ *   horizontal gestures are the native scrolling of the container.
+ * - Keys on the container itself (never on a card or control inside it): ← / → one column, Home / End.
+ */
+function useBoardScroll(ref: React.RefObject<HTMLDivElement | null>, enabled: boolean, count: number) {
+  const [edges, setEdges] = useState({ left: false, right: false });
+  useEffect(() => {
+    const el = ref.current;
+    if (!enabled || !el) return;
+    const update = () => {
+      const next = { left: el.scrollLeft > 1, right: el.scrollLeft < el.scrollWidth - el.clientWidth - 1 };
+      setEdges((cur) => (cur.left === next.left && cur.right === next.right ? cur : next));
+    };
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || el.scrollWidth <= el.clientWidth) return;
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      const scale = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : e.deltaMode === WheelEvent.DOM_DELTA_PAGE ? el.clientWidth : 1;
+      const canMove = delta < 0 ? el.scrollLeft > 0 : el.scrollLeft < el.scrollWidth - el.clientWidth - 1;
+      if (!delta || !canMove) return;
+      e.preventDefault();
+      el.scrollLeft += delta * scale;
+    };
+    el.addEventListener('scroll', update, { passive: true });
+    el.addEventListener('wheel', onWheel, { passive: false });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    update();
+    return () => {
+      el.removeEventListener('scroll', update);
+      el.removeEventListener('wheel', onWheel);
+      ro.disconnect();
+    };
+  }, [ref, enabled, count]);
+  const by = useCallback((dir: -1 | 1) => {
+    const el = ref.current;
+    if (!el) return;
+    const width = el.querySelector('.column')?.getBoundingClientRect().width ?? 333;
+    el.scrollBy({ left: dir * width, behavior: reducedMotion() ? 'auto' : 'smooth' });
+  }, [ref]);
+  const onKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); by(e.key === 'ArrowLeft' ? -1 : 1); }
+    else if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault();
+      e.currentTarget.scrollTo({ left: e.key === 'Home' ? 0 : e.currentTarget.scrollWidth, behavior: reducedMotion() ? 'auto' : 'smooth' });
+    }
+  }, [by]);
+  return { edges, by, onKeyDown };
 }

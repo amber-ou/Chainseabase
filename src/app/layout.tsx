@@ -10,6 +10,7 @@ import '@fontsource/noto-sans-tc/600.css';
 import './globals.css';
 import { getConfig, siteForHost } from '@/server/config';
 import { SiteProvider, type SiteInfo } from '@/client/site';
+import { InputModality } from '@/components/input-modality';
 import { ToastProvider } from '@/components/toast';
 
 export const dynamic = 'force-dynamic';
@@ -41,6 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="zh-Hant-TW" className={`${inter.variable} ${GeistMono.variable}`}>{/* taste-skill-ignore: mono variable for literal commands */}
       <body>
+        <InputModality />
         <a className="skip-link" href="#main">跳到主要內容</a>
         <SiteProvider initial={info}>
           <ToastProvider>{children}</ToastProvider>

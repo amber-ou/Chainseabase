@@ -466,7 +466,7 @@ function EventModal({ productId, bindingRevision, event, defaults, canWrite, onC
   const title = isNew ? '新增活動' : readOnly ? event!.summary : '編輯活動';
   if (!isNew && event!.isInstance && scope === null && !readOnly) {
     return (
-      <Modal title="編輯重複活動" onClose={onClose} footer={<><Button onClick={onClose}>取消</Button></>}>
+      <Modal title="編輯重複活動" onClose={onClose} footer={<><Button variant="cancel" onClick={onClose}>取消</Button></>}>
         <p>「{event!.summary}」是重複活動。要修改哪個範圍？</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Button onClick={() => setScope('single')}>本次活動（只影響 {startOf(event!).toFormat('MM/dd HH:mm')} 這一次）</Button>
@@ -482,7 +482,7 @@ function EventModal({ productId, bindingRevision, event, defaults, canWrite, onC
     </> : <>
       {!isNew ? <span className="spacer"><Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>刪除</Button></span> : null}
       {event?.htmlLink ? <a className="btn btn-ghost" href={event.htmlLink} target="_blank" rel="noopener noreferrer">在 Google 開啟</a> : null}
-      <Button onClick={onClose}>取消</Button>
+      <Button variant="cancel" onClick={onClose}>取消</Button>
       <Button variant="primary" pending={pending} disabled={scope === 'series' && !master} onClick={save}>{banner?.kind === 'unknown' ? '再次核對並儲存' : '儲存'}</Button>
     </>}>
       {scope === 'series' ? <div className="banner banner-info small">正在編輯整個系列：表單顯示系列的原始起始時間，不是你點選的那一次。</div> : null}

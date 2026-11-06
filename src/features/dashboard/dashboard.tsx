@@ -335,7 +335,7 @@ function NameDialog({ title, description, initial, confirm, trigger, open: contr
           </Field>
         </FieldGroup>
         <DialogFooter>
-          <Button variant="outline" onClick={() => changeOpen(false)}>取消</Button>
+          <Button variant="cancel" onClick={() => changeOpen(false)}>取消</Button>
           <Button aria-disabled={pending || undefined} aria-busy={pending || undefined} onClick={async () => {
             if (pending) return;
             setPending(true);

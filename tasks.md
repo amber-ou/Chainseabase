@@ -540,3 +540,45 @@ UI-08 預覽階段已執行（Linux 容器，隔離 e2e 資料庫，Google 與�
   - 真實 Google 與寄信。
 
 **完整回歸待使用者確認預覽後執行。**
+
+## UI-10：第三階段 UI／UX 調整（2026-11-06）
+
+狀態：**預覽完成，尚未完成完整測試**。範圍：III-01–III-07、III-R01–III-R08；決定、附件對應與 Skill 使用見[變更需求](docs/change-requests/sidebar-position.md)「第三階段 UI／UX 調整」。延續 UI-09（`db561fd`）。附件分開存放於 `docs/design-references/phase3-roadmap/`（第二階段 Feedback 附件在 `phase2-feedback-dialog/`）。
+
+| 編號 | 狀態 | 說明 |
+| --- | --- | --- |
+| III-01 | 預覽完成 | `InputModality` 判斷操作方式：滑鼠或觸控點擊不顯示焦點框，鍵盤顯示中性灰框；焦點、游標、錯誤、focus trap 不變 |
+| III-02 | 預覽完成 | 新增彈窗移除作者整列 |
+| III-03 | 預覽完成 | 新增多筆、Roadmap 發佈、Calendar 全天活動都使用 shadcn Switch，標籤在右側 |
+| III-04 | 預覽完成 | 狀態、類別、Person tag、已選標籤，最後是「＋」 |
+| III-05 | 預覽完成 | 點擊已選標籤即取消（Enter／Space 亦可），名稱為「取消選取：名稱」，焦點移到「＋」 |
+| III-06 | 預覽完成 | 一般主要按鈕為黑底白字（`--action`）；危險操作維持紅色 |
+| III-07 | 預覽完成 | 取消按鈕為灰底深色字（`cancel` variant，包含 AlertDialog 的取消） |
+| III-R01 | 符合（無變更） | 沒有維度 Select；既有維度規則不變 |
+| III-R02 | 預覽完成 | Tab 只顯示看板名稱 |
+| III-R03–R04 | 預覽完成 | 連續白底、1px 分隔線、無間距、同高；欄寬至少 333px、卡片至少 300px，欄少時平分 |
+| III-R05–R07 | 預覽完成 | 溢出時才顯示箭頭並在邊界停用；滾輪轉為水平捲動（Ctrl 與邊界時不攔截）；隱藏捲軸；左右鍵與 Home／End；減少動態效果；ResizeObserver |
+| III-R08 | 預覽完成 | 拖曳仍寫入後端，失敗會還原；來源卡片半透明，目標欄高亮 |
+
+修改檔案：
+- 新增：`src/components/input-modality.tsx`、`docs/design-references/`。
+- 元件與頁面：`src/app/layout.tsx`、`src/app/globals.css`、`src/components/ui.tsx`、`src/components/ui/button.tsx`、`src/components/ui/alert-dialog.tsx`、`src/components/modal.tsx`、`src/components/list-controls.tsx`、`src/features/feedback/feedback-create-dialog.tsx`、`src/features/roadmap/board.tsx`、`src/features/roadmap/roadmap-page.tsx`。
+- 取消按鈕：users、comments、settings、personal、dashboard、calendar、portal-feedback 等頁面。
+- 測試：新增 `tests/e2e/uiux-phase3.spec.ts`；依新設計更新 admin、uiux-phase2、uiux-checklist、product-visual 的斷言。
+
+預覽階段已執行（Linux 容器，隔離 e2e 資料庫，Google 與寄信為 fake）：
+- typecheck、lint、build、`git diff --check`、security:scan 皆 exit 0。
+- `uiux-phase3`（1440／768／390）：13 passed、2 skipped（手機專屬案例在其他寬度略過）。
+- 全套 Playwright：**180 passed、6 skipped**。過程中修正：
+  - Roadmap 樣式的 CSS 優先序。
+  - 提示泡泡在手機上蓋住相鄰標籤。
+  - 測試依新設計更新：主色、Tab 溢出條件、作者列、標籤取消。
+- 本次只改 UI，未重跑 `npm test`；上一輪（UI-09）為 207 passed。
+
+尚未執行：
+- 實體觸控板與手機手指拖曳卡片：HTML5 拖曳以桌面指標為主，觸控請用卡片選單。
+- Firefox／Safari。
+- 實機螢幕閱讀器。
+- Windows 主機查看。
+
+**完整回歸待使用者確認預覽後執行。**

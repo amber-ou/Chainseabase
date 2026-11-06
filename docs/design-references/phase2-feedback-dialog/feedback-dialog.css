@@ -1,0 +1,429 @@
+/*
+ * Feedback visual-only kit. No global selectors, Tailwind imports or JS.
+ * Apply fbk-scope to the existing dialog; keep its existing outer radius.
+ */
+.fbk-scope {
+  --fbk-font: Arial, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --fbk-surface: #fff;
+  --fbk-page: #eef1f5;
+  --fbk-heading: #404455;
+  --fbk-editor: #999;
+  --fbk-muted: #9295a0;
+  --fbk-muted-surface: #f4f5f7;
+  --fbk-divider: #e5e7eb;
+  --fbk-footer-divider: #f3f3f6;
+  --fbk-primary: #000;
+  --fbk-primary-hover: #000;
+  --fbk-focus: #8177d9;
+  --fbk-status: #3b916b;
+  --fbk-status-surface: #edf7f0;
+  --fbk-category: #8071b4;
+  --fbk-category-surface: #f3f0fa;
+  --fbk-pill-text: #687080;
+  font-family: var(--fbk-font);
+  font-synthesis: none;
+}
+
+:where(.fbk-scope, .fbk-scope *) {
+  box-sizing: border-box;
+}
+
+/* Preview canvas only; never apply fbk-preview to a production DialogContent. */
+.fbk-preview {
+  min-height: 100vh;
+  background: var(--fbk-page);
+}
+
+.fbk-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  background: var(--fbk-surface);
+  /* Deliberately no border-radius, position or transform on the shared shell. */
+}
+
+.fbk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--fbk-divider);
+  padding: 17px 22px 12px;
+}
+
+.fbk-heading {
+  margin: 0;
+  color: var(--fbk-heading);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+}
+
+.fbk-close {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: transparent;
+  color: #878995;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 300;
+  line-height: 1;
+  opacity: 1;
+}
+
+.fbk-body {
+  height: auto;
+  padding: 11px 24px 0;
+}
+
+.fbk-content {
+  padding-top: 23px;
+}
+
+.fbk-title,
+.fbk-description {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--fbk-editor);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  caret-color: #7b70d5;
+}
+
+.fbk-title:empty::before,
+.fbk-description:empty::before {
+  color: var(--fbk-editor);
+  pointer-events: none;
+  content: attr(data-placeholder);
+}
+
+.fbk-title {
+  min-height: 32px;
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.fbk-title:empty::before {
+  font-weight: 500;
+}
+
+.fbk-description {
+  min-height: 142px;
+  margin-top: 13px;
+  font-size: 13px;
+  line-height: 1.85;
+}
+
+.fbk-image-toolbar {
+  margin-top: 8px;
+}
+
+.fbk-image-button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: var(--fbk-muted-surface);
+  color: var(--fbk-editor);
+  opacity: 1;
+}
+
+.fbk-image-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Optional existing attachment previews; styles only, no file handling. */
+.fbk-image-previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 8px;
+  padding: 4px 0 0;
+  list-style: none;
+}
+
+.fbk-image-preview {
+  position: relative;
+  width: 88px;
+  height: 72px;
+  border: 1px solid #e8e7ee;
+  border-radius: 6px;
+  background: #f7f7f9;
+}
+
+.fbk-image-preview img {
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.fbk-image-remove {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid #e8e7ee;
+  border-radius: 50%;
+  padding: 0;
+  background: #fff;
+  color: #777b89;
+}
+
+.fbk-image-remove svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.fbk-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-bottom: 16px;
+}
+
+.fbk-pill {
+  display: inline-flex;
+  height: 32px;
+  min-height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--fbk-muted-surface);
+  color: var(--fbk-pill-text);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.fbk-pill-status {
+  background: var(--fbk-status-surface);
+  color: var(--fbk-status);
+}
+
+.fbk-pill-category {
+  background: var(--fbk-category-surface);
+  color: var(--fbk-category);
+}
+
+.fbk-pill-add {
+  height: 32px;
+  border: 0;
+  background: var(--fbk-muted-surface);
+  color: #8f929f;
+}
+
+.fbk-icon,
+.fbk-chevron {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fbk-chevron {
+  width: 12px;
+  height: 12px;
+  flex-basis: 12px;
+  opacity: 0.65;
+}
+
+.fbk-context {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-top: 8px;
+  padding-bottom: 20px;
+  color: var(--fbk-muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.fbk-avatar {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background:
+    linear-gradient(113deg, transparent 46%, #052c31 47% 55%, transparent 56%),
+    radial-gradient(circle at 70% 30%, #8b9e9c 0 8%, transparent 9%), #183c40;
+  color: #c9d8d5;
+  font-size: 8px;
+}
+
+.fbk-footer {
+  display: flex;
+  min-height: 59px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--fbk-footer-divider);
+  padding: 12px 24px 16px;
+  background: var(--fbk-surface);
+}
+
+.fbk-multiple {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 7px;
+  color: #8b8e9a;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.fbk-switch {
+  position: relative;
+  width: 27px;
+  height: 16px;
+  border-radius: 999px;
+  background: #c4c6d0;
+}
+
+.fbk-switch::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  content: "";
+}
+
+.fbk-switch[data-state="checked"] {
+  background: #8980da;
+}
+
+.fbk-switch[data-state="checked"]::after {
+  transform: translateX(11px);
+}
+
+.fbk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.fbk-action {
+  height: 29px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 15px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  opacity: 1;
+}
+
+.fbk-cancel {
+  background: var(--fbk-muted-surface);
+  color: #8e909c;
+}
+
+.fbk-create {
+  min-width: 60px;
+  background: var(--fbk-primary);
+  color: #fff;
+}
+
+/* Visual states for integration with existing interactive host components. */
+.fbk-scope button:not(:disabled) {
+  cursor: pointer;
+}
+
+.fbk-scope button:focus-visible {
+  outline: 2px solid var(--fbk-focus);
+  outline-offset: 3px;
+}
+
+.fbk-close:not(:disabled):hover {
+  background: #f4f4f7;
+  color: #343746;
+}
+
+.fbk-image-button:not(:disabled):hover {
+  background: var(--fbk-category-surface);
+  color: var(--fbk-category);
+}
+
+.fbk-create:not(:disabled):hover {
+  background: var(--fbk-primary-hover);
+}
+
+@media (max-width: 640px) {
+  .fbk-header {
+    padding-inline: 17px;
+  }
+
+  .fbk-body,
+  .fbk-footer {
+    padding-inline: 18px;
+  }
+
+  .fbk-title {
+    font-size: 19px;
+  }
+
+  .fbk-description {
+    min-height: 120px;
+  }
+}
+
+/* Radius/position belong to the preview canvas, NOT the host dialog. */
+@media (min-width: 1000px) {
+  .fbk-preview {
+    display: grid;
+    place-items: center;
+    padding: 24px;
+  }
+
+  .fbk-preview > .fbk-dialog {
+    width: min(894px, 100%);
+    border-radius: 8px;
+    box-shadow: 0 20px 60px rgb(30 41 59 / 18%);
+  }
+}

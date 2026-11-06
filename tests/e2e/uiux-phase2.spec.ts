@@ -106,7 +106,7 @@ for (const size of [null, { width: 320, height: 640 }, { width: 390, height: 520
     await expect(d.getByRole('img', { name: /圖片 2/ })).toBeVisible();
     // order: title, description, images, pills, author, footer (FB01)
     const y = async (l: ReturnType<typeof d.locator>) => (await l.boundingBox())!.y;
-    const order = [await y(d.getByLabel('標題')), await y(d.getByLabel('描述')), await y(d.getByRole('button', { name: /^新增圖片/ })), await y(d.getByRole('button', { name: /^狀態：/ })), await y(d.getByText('建立後記錄時間'))];
+    const order = [await y(d.getByLabel('標題')), await y(d.getByLabel('描述')), await y(d.getByRole('button', { name: /^新增圖片/ })), await y(d.getByRole('button', { name: /^狀態：/ })), await y(d.getByRole('button', { name: '建立' }))];
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     // FB04: image button tooltip; pills keep 32px and wrap; nothing overflows the page
     await d.getByRole('button', { name: /^新增圖片/ }).hover();

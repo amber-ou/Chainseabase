@@ -3,8 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CheckIcon, ChevronDownIcon, CircleDotIcon, ImageIcon, LayoutGridIcon, LoaderCircleIcon, PlusIcon, RotateCwIcon, SearchIcon, UserRoundIcon, XIcon } from 'lucide-react';
 import { api, ApiError, errorMessage, newKey } from '@/client/api';
-import { useSite } from '@/client/site';
-import { Avatar, useAnnouncer } from '@/components/ui';
+import { useAnnouncer } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -21,8 +20,8 @@ import { cn } from 'cn';
 /**
  * 新增 Feedback (phase 2 UI/UX checklist FB01-FB09, IM01-IM06). Layout from the Figma Make reference
  * (STYLE_SPEC.md), mapped to Chainseabase tokens: title and description as borderless editors, an
- * image button with previews, the status / category / Person tag pills and the ＋ tag entry, the
- * author, then 新增多筆 with 取消 and 建立. Built on the shared shadcn Dialog (focus trap, Escape,
+ * image button with previews, the status / category / Person tag pills, the chosen tags and the ＋ tag
+ * entry (phase 3: no author row), then 新增多筆 with 取消 and 建立. Built on the shared shadcn Dialog (focus trap, Escape,
  * overlay, portal, focus return); the styles live in `.fbc-*` rules that only this dialog uses.
  *
  * Unchanged from before: the server defaults, validation, the idempotent create request (one key per
@@ -56,7 +55,6 @@ function defaults(t: Taxonomy): Form {
 
 export function CreateFeedbackDialog({ taxonomy, onClose, onChanged, onTaxonomyChanged }: { taxonomy: Taxonomy; onClose: () => void; onChanged: () => void; onTaxonomyChanged?: () => void }) {
   const { product } = useProduct();
-  const { me } = useSite();
   const toast = useToast();
   const { announce, region } = useAnnouncer();
   const [form, setForm] = useState<Form>(() => defaults(taxonomy));
@@ -297,6 +295,19 @@ export function CreateFeedbackDialog({ taxonomy, onClose, onChanged, onTaxonomyC
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            {/* III-04: the chosen tags come before ＋, which stays last when the row wraps.
+                III-05: clicking a chosen tag (Enter / Space too) takes it off this Feedback; the shared tag stays */}
+            {chosenTags.map((t) => (
+              <button key={t.id} type="button" className="fbc-pill fbc-tag" aria-label={`取消選取：${t.label}`}
+                onClick={() => {
+                  set({ tagIds: form.tagIds.filter((x) => x !== t.id) });
+                  announce(`已取消選取標籤「${t.label}」`);
+                  // the pill is gone: focus moves on to ＋ instead of falling to the page
+                  requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-tag-add]')?.focus());
+                }}>
+                <span className="fbc-pill-text">{t.group ? `${t.group}：` : ''}{t.label}</span>
+              </button>
+            ))}
             <TagPicker options={allTags} value={form.tagIds} onChange={(v) => set({ tagIds: v })}
               onCreate={async (name) => {
                 // a newly created tag is ungrouped, in this product (the same rules as Setting)
@@ -315,20 +326,8 @@ export function CreateFeedbackDialog({ taxonomy, onClose, onChanged, onTaxonomyC
                 onTaxonomyChanged?.();
                 announce(`已建立並加入標籤「${r.data.tag.name}」`);
               }} />
-            {chosenTags.map((t) => (
-              <span key={t.id} className="fbc-pill fbc-tag">
-                <span className="fbc-pill-text">{t.group ? `${t.group}：` : ''}{t.label}</span>
-                {/* removing it here only takes it off this Feedback; the shared tag stays */}
-                <button type="button" className="fbc-tag-remove" aria-label={`移除標籤「${t.label}」`} onClick={() => set({ tagIds: form.tagIds.filter((x) => x !== t.id) })}><XIcon aria-hidden="true" /></button>
-              </span>
-            ))}
           </div>
 
-          {/* FB06: the real author; the creation time is recorded by the server when it is created */}
-          <div className="fbc-author">
-            <Avatar name={me?.displayName ?? ''} url={me?.avatarUrl} id={me?.id} size={20} />
-            <span>{me?.displayName}</span><span aria-hidden="true">·</span><span>建立後記錄時間</span>
-          </div>
         </div>
 
         <DialogFooter className="fbc-footer flex-row flex-wrap items-center justify-between gap-3 sm:justify-between">
@@ -337,7 +336,7 @@ export function CreateFeedbackDialog({ taxonomy, onClose, onChanged, onTaxonomyC
             <span aria-hidden="true">新增多筆</span>
           </label>
           <div className="fbc-actions">
-            <Button type="button" variant="outline" className="rounded-full" onClick={requestClose}>取消</Button>
+            <Button type="button" variant="cancel" className="rounded-full" onClick={requestClose}>取消</Button>
             <Button type="button" className="rounded-full" onClick={submit} aria-disabled={pending || uploading || undefined} aria-busy={pending || undefined}>
               {pending ? <LoaderCircleIcon className="animate-spin" aria-hidden="true" /> : null}建立
             </Button>
@@ -399,7 +398,7 @@ function TagPicker({ options, value, onChange, onCreate }: {
     <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setError(null); }}>
       <IconTip label="加入標籤">
         <PopoverTrigger asChild>
-          <button type="button" className="fbc-pill fbc-pill-add" aria-label={`加入標籤${value.length ? `（已選 ${value.length} 個）` : ''}`}><PlusIcon aria-hidden="true" /></button>
+          <button type="button" data-tag-add className="fbc-pill fbc-pill-add" aria-label={`加入標籤${value.length ? `（已選 ${value.length} 個）` : ''}`}><PlusIcon aria-hidden="true" /></button>
         </PopoverTrigger>
       </IconTip>
       <PopoverContent align="start" collisionPadding={16} className="w-[min(18rem,calc(100vw-2rem))] p-0" aria-label="加入標籤">

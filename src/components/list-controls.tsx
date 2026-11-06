@@ -49,7 +49,8 @@ export function FilterPopover({ active, onClear, children }: { active: boolean; 
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent>篩選</TooltipContent>
+        {/* a hint only: it never covers or catches taps meant for the controls next to it */}
+        <TooltipContent className="pointer-events-none">篩選</TooltipContent>
       </Tooltip>
       </TooltipProvider>
       <PopoverContent align="end" collisionPadding={16} aria-labelledby={titleId} className="flex max-h-[min(32rem,var(--radix-popover-content-available-height))] w-[min(20rem,calc(100vw-2rem))] flex-col gap-0 overflow-hidden p-0">
@@ -69,7 +70,7 @@ export function IconTip({ label, children }: { label: string; children: ReactNod
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>{children}</TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
+        <TooltipContent className="pointer-events-none">{label}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

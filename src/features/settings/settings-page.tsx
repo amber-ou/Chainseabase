@@ -152,7 +152,7 @@ function DeleteOptionModal({ target, revision, onClose, onDone }: { target: Dele
   const needReplacement = target.requiresReplacement || (!target.allowDetach && used);
   return (
     <Modal title={`移除「${target.name}」`} onClose={onClose} footer={<>
-      <Button data-autofocus onClick={onClose}>取消</Button>
+      <Button variant="cancel" data-autofocus onClick={onClose}>取消</Button>
       <Button variant="danger" className="btn-solid" pending={pending} disabled={needReplacement && !replacementId} onClick={submit}>{replacementId ? '遷移並移除' : '移除'}</Button>
     </>}>
       {usage.loading ? <LoadingState /> : (

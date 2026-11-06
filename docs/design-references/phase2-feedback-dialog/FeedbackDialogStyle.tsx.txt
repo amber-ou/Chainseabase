@@ -1,0 +1,104 @@
+/**
+ * Static visual reference only. No state, events, inputs, uploads or API calls.
+ * Import feedback-dialog.css once from the host project's stylesheet entry.
+ */
+export default function FeedbackDialogStyle() {
+  return (
+    <div className="fbk-scope fbk-preview">
+      <section className="fbk-dialog" aria-label="新增 Feedback（靜態樣式示意）">
+        <header className="fbk-header">
+          <h1 className="fbk-heading">新增 Feedback</h1>
+          <button className="fbk-close" type="button" aria-label="關閉（樣式示意）" disabled>
+            ×
+          </button>
+        </header>
+
+        <div className="fbk-body">
+          <div className="fbk-content">
+            <div className="fbk-title" data-placeholder="請輸入標題" />
+            <div className="fbk-description" data-placeholder="簡短描述建議或是Bug" />
+
+            <div className="fbk-image-toolbar">
+              <button
+                className="fbk-image-button"
+                type="button"
+                aria-label="新增圖片（樣式示意）"
+                disabled
+              >
+                <svg viewBox="0 0 20 20" aria-hidden="true">
+                  <rect x="3" y="3" width="14" height="14" rx="2" />
+                  <circle cx="7" cy="7" r="1.25" />
+                  <path d="m3.5 14 4-4 3 3 2.5-2.5 3.5 3.5" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="fbk-pills" aria-label="Feedback 屬性（樣式示意）">
+              <span className="fbk-pill fbk-pill-status">
+                <svg className="fbk-icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <circle cx="8" cy="8" r="5.5" />
+                  <circle cx="8" cy="8" r="2" fill="currentColor" stroke="none" />
+                </svg>
+                <span>新貼文</span>
+                <Chevron />
+              </span>
+              <span className="fbk-pill fbk-pill-category">
+                <svg className="fbk-icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <rect x="2.5" y="2.5" width="4" height="4" rx="1" />
+                  <rect x="9.5" y="2.5" width="4" height="4" rx="1" />
+                  <rect x="2.5" y="9.5" width="4" height="4" rx="1" />
+                  <rect x="9.5" y="9.5" width="4" height="4" rx="1" />
+                </svg>
+                <span>需求討論</span>
+                <Chevron />
+              </span>
+              <span className="fbk-pill fbk-pill-person">
+                <svg className="fbk-icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <circle cx="8" cy="5.25" r="2.5" />
+                  <path d="M3 13c0-2.5 2-4 5-4s5 1.5 5 4" />
+                </svg>
+                <span>未安排</span>
+                <Chevron />
+              </span>
+              <span className="fbk-pill fbk-pill-add" aria-label="加入標籤（樣式示意）">
+                <svg className="fbk-icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M8 3v10M3 8h10" />
+                </svg>
+              </span>
+            </div>
+          </div>
+
+          <div className="fbk-context">
+            <span className="fbk-avatar" aria-hidden="true">
+              歐
+            </span>
+            <span>歐瑜 2026 / 11 / 06&nbsp;&nbsp;11:26 </span>
+          </div>
+        </div>
+
+        <footer className="fbk-footer">
+          <div className="fbk-multiple">
+            <span className="fbk-switch" aria-hidden="true" />
+            <span>新增多筆</span>
+          </div>
+          <div className="fbk-actions">
+            <button className="fbk-action fbk-cancel" type="button" disabled>
+              取消
+            </button>
+            <button className="fbk-action fbk-create" type="button" disabled>
+              建立
+            </button>
+          </div>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function Chevron() {
+  return (
+    <svg className="fbk-chevron" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="m5 6.5 3 3 3-3" />
+    </svg>
+  );
+}

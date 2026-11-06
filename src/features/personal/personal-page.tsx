@@ -190,7 +190,7 @@ export function PersonalPage() {
                   {addError || (save === 'error' && saveError) ? <span id="new-col-error" className="field-error" role="alert">{saveError ?? addError}</span> : null}
                 </div>
                 <DialogFooter>
-                  <UiButton type="button" variant="outline" disabled={save === 'saving'} onClick={() => { setAdding(false); setNewCol(''); setAddError(null); }}>取消</UiButton>
+                  <UiButton type="button" variant="cancel" disabled={save === 'saving'} onClick={() => { setAdding(false); setNewCol(''); setAddError(null); }}>取消</UiButton>
                   <UiButton type="submit" disabled={!newCol.trim()} aria-busy={save === 'saving' || undefined}>{save === 'saving' ? '新增中…' : '新增'}</UiButton>
                 </DialogFooter>
               </form>

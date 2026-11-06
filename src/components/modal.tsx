@@ -69,7 +69,7 @@ export function ConfirmModal({ title, children, confirmLabel, onConfirm, onCance
 }) {
   return (
     <Modal title={title} onClose={onCancel} footer={<>
-      <Button data-autofocus onClick={onCancel}>取消</Button>
+      <Button variant="cancel" data-autofocus onClick={onCancel}>取消</Button>
       <Button variant={danger ? 'danger' : 'primary'} className={danger ? 'btn-solid' : ''} pending={pending} onClick={onConfirm}>{confirmLabel}</Button>
     </>}>
       <div>{children}</div>

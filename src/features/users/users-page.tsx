@@ -162,7 +162,7 @@ function InviteModal({ products, defaultProductId, onClose, onDone }: { products
     } finally { setPending(false); }
   };
   return (
-    <Modal title="Email 邀請" onClose={onClose} footer={<><Button onClick={onClose}>取消</Button><Button variant="primary" pending={pending} onClick={submit}>寄出邀請</Button></>}>
+    <Modal title="Email 邀請" onClose={onClose} footer={<><Button variant="cancel" onClick={onClose}>取消</Button><Button variant="primary" pending={pending} onClick={submit}>寄出邀請</Button></>}>
       {errors._ ? <div className="banner banner-error" role="alert">{errors._}</div> : null}
       <Field label="Email" required error={errors.email} hint="受邀者需使用此 Email 的 Google 帳號接受；連結 7 天內有效、只能使用一次。">{(p) => (
         <input {...p} className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-autofocus />
@@ -197,7 +197,7 @@ function RoleModal({ user, products, onClose, onDone }: { user: ProductUser; pro
     } finally { setPending(false); }
   };
   return (
-    <Modal title={`變更 ${user.displayName} 的角色`} onClose={onClose} footer={<><Button onClick={onClose}>取消</Button><Button variant="primary" pending={pending} onClick={submit}>確認變更</Button></>}>
+    <Modal title={`變更 ${user.displayName} 的角色`} onClose={onClose} footer={<><Button variant="cancel" onClick={onClose}>取消</Button><Button variant="primary" pending={pending} onClick={submit}>確認變更</Button></>}>
       {error ? <div className="banner banner-error" role="alert">{error}</div> : null}
       <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
         <legend className="field-label">新角色</legend>
@@ -222,7 +222,7 @@ function PersonTagsModal({ user, taxonomy, onClose, onDone }: { user: ProductUse
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   return (
-    <Modal title={`${user.displayName} 在「${product.name}」的 Person tag`} onClose={onClose} footer={<><Button onClick={onClose}>取消</Button><Button variant="primary" pending={pending} onClick={async () => {
+    <Modal title={`${user.displayName} 在「${product.name}」的 Person tag`} onClose={onClose} footer={<><Button variant="cancel" onClick={onClose}>取消</Button><Button variant="primary" pending={pending} onClick={async () => {
       setPending(true);
       setError(null);
       try {
