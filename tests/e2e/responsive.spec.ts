@@ -3,7 +3,7 @@ import { PORTAL, expectNoPageOverflow, login, openFirstProduct } from './helpers
 
 /**
  * V01/V02 (automated part): each core screen at 1440/768/390 has no whole-page
- * horizontal overflow; boards and the schedule scroll inside their containers.
+ * horizontal overflow; boards scroll inside their containers.
  * Screenshots are attached for manual review.
  */
 for (const section of ['dashboard', 'calendar', 'feedback', 'roadmaps', 'personal', 'users', 'settings']) {
@@ -23,21 +23,21 @@ for (const section of ['dashboard', 'calendar', 'feedback', 'roadmaps', 'persona
   });
 }
 
-test('feedback modal and schedule keep five columns with container scrolling', async ({ page }, info) => {
+test('the create Feedback dialog fits narrow and short windows; Tab stays inside', async ({ page }, info) => {
   await login(page, 'admin', 'lead@e2e.test', '專案負責人');
   await openFirstProduct(page, 'feedback');
   await page.getByRole('button', { name: '新增 Feedback' }).click();
   const d = page.getByRole('dialog', { name: '新增 Feedback' });
-  await d.getByRole('tab', { name: /Schedule/ }).click();
-  await expect(d.getByRole('columnheader')).toHaveCount(6);
+  await expect(d).toBeVisible();
   await expectNoPageOverflow(page);
-  const scroll = await d.locator('.schedule-scroll').evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }));
-  if (page.viewportSize()!.width < 900) expect(scroll.sw).toBeGreaterThan(scroll.cw);
+  const box = (await d.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
   // keyboard: Tab stays inside the dialog
   for (let i = 0; i < 25; i++) await page.keyboard.press('Tab');
   const inside = await page.evaluate(() => Boolean(document.activeElement?.closest('[role="dialog"]')));
   expect(inside).toBe(true);
-  await info.attach(`schedule-${page.viewportSize()!.width}`, { body: await page.screenshot(), contentType: 'image/png' });
+  await info.attach(`create-${page.viewportSize()!.width}`, { body: await page.screenshot(), contentType: 'image/png' });
 });
 
 test('portal pages fit the viewport', async ({ page }, info) => {

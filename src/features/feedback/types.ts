@@ -20,10 +20,9 @@ export interface Feedback {
   voteCount: number; commentCount: number;
 }
 export interface CommentItem {
-  id: string; feedbackId: string; stream: 'general' | 'schedule'; kind: 'normal' | 'command'; body: string;
+  id: string; feedbackId: string; stream: 'general'; kind: 'normal'; body: string;
   author: UserRef; createdAt: string; editedAt: string | null; revision: number; likeCount: number; likedByMe: boolean;
   replyTo: null | { id: string; author: string; excerpt: string | null; removed: boolean };
-  command: null | { operationId: string; action: 'append' | 'clear'; coordinate: string; historyRemoved: boolean; contentCleared: boolean; affectedCount: number };
 }
 
 export function versionGroup(t: Taxonomy) {

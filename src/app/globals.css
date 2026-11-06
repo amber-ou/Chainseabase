@@ -369,26 +369,75 @@ main[tabindex="-1"]:focus { outline: none; }
 .markdown ul, .markdown ol { margin: 0 0 8px; padding-left: 20px; }
 .markdown code { font-family: var(--mono); /* taste-skill-ignore: literal code */ background: var(--raised); padding: 0 4px; border-radius: 3px; }
 
-/* ---------- schedule ---------- */
-.schedule-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
-.schedule-table { width: 100%; min-width: 900px; border-collapse: collapse; table-layout: fixed; }
-.schedule-table th { height: 40px; background: var(--sunken); border-bottom: 1px solid var(--border); border-right: 1px solid var(--rule); font-weight: var(--fw-medium); text-align: left; padding: 0 10px; }
-.schedule-table th.row-head { width: 44px; text-align: center; color: var(--muted); font-size: var(--fs-small); }
-.schedule-table td { border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); vertical-align: top; padding: 0; min-width: 180px; }
-.cell-btn { display: flex; flex-direction: column; gap: 8px; width: 100%; min-height: 96px; padding: 8px 10px; background: none; border: 0; text-align: left; cursor: pointer; position: relative; }
-.cell-btn:hover { background: var(--sunken); }
-.cell-btn[aria-pressed="true"] { outline: 2px solid var(--focus); outline-offset: -2px; background: var(--info-bg); }
-.cell-hint { color: var(--muted); font-size: var(--fs-small); visibility: hidden; }
-.cell-btn:hover .cell-hint, .cell-btn:focus-visible .cell-hint, .cell-btn[aria-pressed="true"] .cell-hint { visibility: visible; }
-.entry { display: flex; flex-direction: column; gap: 2px; padding-top: 6px; border-top: 1px solid var(--rule); }
-.entry:first-child { border-top: 0; padding-top: 0; }
-.entry-head { display: flex; align-items: center; gap: 6px; font-size: var(--fs-small); color: var(--muted); }
-.entry-body { white-space: pre-wrap; overflow-wrap: anywhere; }
-.cmd-result { display: inline-flex; align-items: center; gap: 6px; color: var(--positive); font-weight: var(--fw-medium); }
-.cmd-result[data-kind="draft"] { color: var(--positive); }
-.cmd-result[data-kind="error"] { color: var(--negative); }
-.history-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
-.history-row .summary { flex: 1; min-width: 0; }
+/* ---------- 新增 Feedback dialog (phase 2 FB01-FB09) ----------
+   Layout from the Figma Make reference (STYLE_SPEC.md); colours, type and radii are Chainseabase
+   tokens instead of its #999 text, black button, purple switch and Arial (contrast and brand).
+   Only `.fbc-*` elements of this one dialog use these rules; the shared Dialog keeps its own shell. */
+/* the shell's size and padding are set with utilities on DialogContent (they are in a later layer) */
+.fbc-header { padding: 16px 56px 12px 24px; border-bottom: 1px solid var(--border); text-align: left; }
+.fbc-heading { font-size: var(--fs-section); line-height: var(--lh-section); font-weight: var(--fw-semibold); color: var(--text); }
+.fbc-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 20px 24px 0; display: flex; flex-direction: column; }
+.fbc-banner { margin-bottom: 12px; }
+.fbc-title, .fbc-description { display: block; width: 100%; border: 0; background: transparent; color: var(--text); resize: none; padding: 2px 4px; margin: 0 -4px; border-radius: var(--radius-control); font-family: inherit; overflow-wrap: anywhere; }
+.fbc-title::placeholder, .fbc-description::placeholder { color: var(--muted); opacity: 1; }
+.fbc-title:focus-visible, .fbc-description:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.fbc-title { min-height: 34px; font-size: 21px; line-height: 1.5; font-weight: var(--fw-semibold); field-sizing: content; }
+.fbc-title::placeholder { font-weight: var(--fw-medium); }
+.fbc-title[aria-invalid="true"] { outline: 2px solid var(--negative); outline-offset: 2px; }
+.fbc-field-error { margin-top: 4px; }
+.fbc-description { min-height: 142px; margin-top: 12px; font-size: var(--fs-body); line-height: 1.85; field-sizing: content; max-height: 40vh; overflow-y: auto; }
+.fbc-images { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.fbc-image-button, .fbc-retry { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: var(--radius-control); background: var(--raised); color: var(--text-2); cursor: pointer; }
+.fbc-image-button svg, .fbc-retry svg { width: 18px; height: 18px; }
+.fbc-image-button:hover { background: var(--active); color: var(--primary); }
+.fbc-image-button[aria-disabled="true"] { color: var(--muted); cursor: not-allowed; }
+.fbc-previews { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 6px 0 0; list-style: none; }
+.fbc-preview { position: relative; width: 88px; height: 72px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--sunken); }
+.fbc-preview img { width: 100%; height: 100%; border-radius: calc(var(--radius-control) - 1px); object-fit: cover; }
+.fbc-preview[data-state="uploading"] img { opacity: 0.5; }
+.fbc-preview[data-state="error"] { border-color: var(--negative); }
+.fbc-preview-state { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text); }
+.fbc-preview-state svg { width: 20px; height: 20px; }
+.fbc-preview-error { background: rgb(255 255 255 / 0.7); }
+.fbc-preview-remove { position: absolute; top: -8px; right: -8px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--surface); color: var(--text-2); cursor: pointer; }
+.fbc-preview-remove svg { width: 14px; height: 14px; }
+.fbc-image-error { margin: 0; font-size: var(--fs-small); line-height: var(--lh-small); color: var(--negative); }
+.fbc-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; padding-bottom: 16px; }
+.fbc-pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; max-width: 100%; padding: 0 12px; border: 1px solid transparent; border-radius: 999px; background: var(--raised); color: var(--text-2); font-family: inherit; font-size: var(--fs-small); line-height: 1.2; white-space: nowrap; cursor: pointer; }
+.fbc-pill svg { width: 14px; height: 14px; flex-shrink: 0; }
+.fbc-pill .fbc-chevron { width: 12px; height: 12px; opacity: 0.7; }
+.fbc-pill-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fbc-pill:hover { border-color: var(--border-strong); }
+.fbc-pill[data-state="open"] { border-color: var(--primary); }
+.fbc-pill-status { background: var(--positive-bg); color: var(--positive-ink); }
+.fbc-pill-category { background: var(--info-bg); color: var(--info-ink); }
+.fbc-pill-add { width: 32px; padding: 0; justify-content: center; color: var(--text-2); }
+.fbc-tag { cursor: default; padding-right: 4px; background: var(--surface); border-color: var(--border-strong); color: var(--text); }
+.fbc-tag-remove { display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 50%; background: none; color: var(--text-2); cursor: pointer; }
+.fbc-tag-remove:hover { background: var(--raised); }
+.fbc-tag-remove svg { width: 12px; height: 12px; }
+.fbc-author { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 4px 0 20px; color: var(--muted); font-size: var(--fs-small); line-height: var(--lh-small); }
+.fbc-footer { gap: 12px; padding: 12px 24px 16px; border-top: 1px solid var(--border); background: var(--surface); }
+.fbc-multi { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-small); color: var(--text-2); cursor: pointer; }
+.fbc-actions { display: flex; gap: 8px; margin-left: auto; }
+@media (max-width: 640px) {
+  .fbc-header { padding-left: 18px; }
+  .fbc-body { padding: 16px 18px 0; }
+  .fbc-footer { padding: 12px 18px 16px; }
+  .fbc-title { font-size: 19px; }
+  .fbc-description { min-height: 120px; }
+}
+/* the images of a created Feedback (detail view, IM03) */
+.fb-images { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.fb-images a { display: block; border-radius: var(--radius-control); }
+.fb-images img { display: block; width: 120px; height: 96px; object-fit: cover; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--sunken); }
+
+/* Personal toolbar (phase 2 PE03/PE04): the person (avatar, name, Person tags) inside the Select */
+.personal-subject { flex-wrap: nowrap; min-width: 0; max-width: 100%; }
+.personal-person { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; text-align: left; }
+.personal-person-name { font-weight: var(--fw-medium); color: var(--text); white-space: nowrap; }
+.personal-person-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.personal-subject-trigger { white-space: normal; }
 
 /* ---------- boards ---------- */
 /* R03-R05: one row that scrolls sideways on its own: the tabs, then 新增 Roadmap right after the last tab.

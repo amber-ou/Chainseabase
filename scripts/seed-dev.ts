@@ -7,7 +7,6 @@ import { createSql, setSql } from '../src/server/db';
 import { bootstrap } from './bootstrap-lib';
 import { createFeedback } from '../src/modules/feedback/service';
 import { createPersonTag, createTag, createTagGroup, setUserPersonTags, getTaxonomy } from '../src/modules/products/taxonomy';
-import { postScheduleComment } from '../src/modules/schedule/service';
 import { createGeneralComment } from '../src/modules/feedback/comments';
 import { createRoadmap } from '../src/modules/roadmap/service';
 
@@ -64,7 +63,7 @@ async function main() {
       ['Personal 私人欄位自動儲存', '整理後不需要按儲存。', 2, [fe, uiux], [], 'internal'],
       ['匯出 CSV（待討論）', '是否第一版需要？', 2, [], [], 'internal'],
       ['登入頁說明文字調整', '', 3, [uiux], [v10, ux], 'public'],
-      ['QA：Schedule 清空不復活', '驗證移除清空紀錄不會恢復內容。', 0, [qaTag], [v11], 'internal'],
+      ['QA：留言編輯紀錄', '確認編輯後的留言顯示「已編輯」。', 0, [qaTag], [v11], 'internal'],
       ['日曆全天活動顯示', '跨日活動結束日要正確。', 4, [fe], [], 'internal'],
     ];
     for (const [title, description, si, people, tags, visibility] of items) {
@@ -73,9 +72,7 @@ async function main() {
         title, description, statusId: statuses[si].id, personTagIds: people, tagIds: tags.filter((t) => t !== versionTag), versionTagId: versionTag, visibility,
       }, 'admin');
       if (title.startsWith('回饋列表')) {
-        let r = await postScheduleComment(tx, dev, p.id, fb.id, { body: '/2-3 規劃焦點順序', expectedRevision: 1 });
-        r = await postScheduleComment(tx, lead, p.id, fb.id, { body: '/2-2 提供焦點樣式稿', expectedRevision: r.scheduleRevision });
-        await postScheduleComment(tx, qa, p.id, fb.id, { body: '測試時請包含螢幕閱讀器。', expectedRevision: r.scheduleRevision });
+        await createGeneralComment(tx, qa, p.id, fb.id, { body: '測試時請包含螢幕閱讀器。' }, 'team');
         await createGeneralComment(tx, tester, p.id, fb.id, { body: '很需要這個功能！' }, 'portal');
       }
     }

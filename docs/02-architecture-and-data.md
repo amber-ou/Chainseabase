@@ -1,5 +1,7 @@
 # 系統架構與資料模型
 
+> **2026-11-06**：Schedule 已依使用者確認永久移除（migration `0005_remove_schedule.sql`，見 [08 決策](08-decisions.md)）。本文件中的 Schedule 規格、資料表、API 與驗收案例（S01–S17）不再適用，保留僅供歷史參考。
+
 ## 架構原則
 
 採模組化單體：同一份 Next.js／TypeScript 程式、兩個網站入口、共用伺服器服務層與 Windows PostgreSQL。約 30 人規模不需要微服務或自建常駐 WebSocket 叢集。

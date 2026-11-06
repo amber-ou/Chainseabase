@@ -269,7 +269,7 @@ function NavLink({ href, active, children, icon, onNavigate, className = 'nav-it
   );
 }
 
-const REASON_TEXT: Record<string, string> = { assigned: '指派你為負責人', comment: '在你建立的 Feedback 留言', schedule_comment: '在你建立的 Feedback 新增 Schedule 留言' };
+const REASON_TEXT: Record<string, string> = { assigned: '指派你為負責人', comment: '在你建立的 Feedback 留言' };
 
 interface NotificationItem { id: string; reasons: string[]; feedback: { id: string; title: string }; actor: { id: string; displayName: string; avatarUrl: string | null } | null; createdAt: string; readAt: string | null }
 

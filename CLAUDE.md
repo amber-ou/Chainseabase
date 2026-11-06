@@ -8,7 +8,7 @@
 
 應用程式已實作（Next.js 16.4.2／TypeScript／PostgreSQL），M1–M7 功能與自動化測試完成；Google 登入已由使用者在 Windows 驗證；Calendar、Resend、Supabase Storage 的真實流程仍未完整實測，Windows 基本建置、資料庫及 Google 登入已有使用者實機回報；Windows 網站服務（WIN-03）已實作並通過 CI，「未登入桌面即可完成啟動」未驗證；WIN-05 備份暫緩；目前為內部試用環境，試用前待辦見 tasks.md。開工前先讀 [tasks.md](tasks.md) 的狀態與證據，以及 [驗收追蹤報告](docs/acceptance-report.md)，不要重做已完成的任務。
 
-約 30 人使用的單公司多產品平台，Google 登入、前後台分站、Feedback／Schedule／Roadmap／Personal、站內通知，以及 Google Calendar 讀寫。已選 Windows 原生 Next.js／TypeScript、PostgreSQL、正式本機頭像（待實作），寄信暫保留 Resend。先讀 [Windows 規格](docs/windows-native-deployment.md) 與 WIN 任務。
+約 30 人使用的單公司多產品平台，Google 登入、前後台分站、Feedback（含圖片）／Roadmap／Personal、站內通知，以及 Google Calendar 讀寫。已選 Windows 原生 Next.js／TypeScript、PostgreSQL、正式本機頭像（待實作），寄信暫保留 Resend。先讀 [Windows 規格](docs/windows-native-deployment.md) 與 WIN 任務。
 
 程式位置：`src/modules/`（領域服務，業務規則在這裡）、`src/server/`（HTTP 路由、授權、冪等、outbox、adapters）、`src/features/`（UI）、`db/migrations/`（SQL）、`tests/`。所有 API 走 `src/server/api` 的單一路由器，新增端點時同時加 zod 白名單 schema、權限檢查與整合測試。
 
@@ -39,7 +39,8 @@
 - Roadmap 單維度、Tag 限 single 群組、同張看板每筆恰一欄；沒有 AND／OR 或人工卡片歸屬。
 - 版本欄位與版本 Tag 共用來源；拖曳只改指定維度。
 - Personal 保留負責人切換、私人自由欄位、自動儲存，不改共用資料。
-- Schedule 表頭算第 1 列，不能操作表頭；移除 clear 歷史不復原內容。
+- Schedule 已依使用者確認永久移除（2026-11-06，migration 0005），不得重新加入或以 Calendar 取代；Calendar／Google 日曆保留。
+- Feedback 圖片原檔與縮圖每次讀取都檢查所屬 Feedback 目前的權限，不提供公開靜態路徑或可共用快取。
 - 內部角色、產品資格與私人 owner 必須後端驗證；管理員不因此能讀別人的私人 Tag／token。
 - Google 登入、受邀資格、Calendar scopes 與 Google 日曆 ACL 是不同的檢查。
 

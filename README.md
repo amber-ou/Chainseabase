@@ -74,9 +74,9 @@ npm run dev
 
 ```text
 src/app/            # 前後台頁面與 /api/v1 單一路由入口（route handler → src/server/api）
-src/features/       # 各頁面 UI（feedback、schedule、roadmap、personal、calendar、portal…）
+src/features/       # 各頁面 UI（feedback、roadmap、personal、calendar、portal…）
 src/components/     # 共用元件（Modal、Tabs、MultiSelect、Menu、Markdown、狀態元件）
-src/modules/        # 領域服務：identity、products、feedback、schedule、roadmap、personal、notifications、calendar
+src/modules/        # 領域服務：identity、products、feedback（含圖片）、roadmap、personal、notifications、calendar
 src/server/         # 設定、DB、HTTP 路由、session、授權、冪等、outbox、第三方 adapters
 db/migrations/      # 版本化 SQL（含限制、trigger）
 scripts/            # migrate、bootstrap、seed、jobs、restore drill、load test、secret scan

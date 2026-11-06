@@ -161,7 +161,6 @@ describe('Portal, visibility and public projection', () => {
 
   it('F09 the invited tester projection contains only the allowlisted public fields', async () => {
     const fb = await createFeedback(w, { visibility: 'public', personTagIds: [w.ptUiux], versionTagId: w.v10, tagIds: [w.perf], priority: 'P1', title: '公開項目' });
-    expectOk(await api.post(`/products/${w.productA.id}/feedback/${fb.id}/schedule/comments`, { as: w.teamA, key: true, body: { body: '/2-3 內部工作', expectedRevision: 1 } }), 201);
     expectOk(await api.post(`/products/${w.productA.id}/feedback/${fb.id}/comments`, { as: w.teamA, body: { body: '公開留言' } }), 201);
     const rms = expectOk(await api.get(`/products/${w.productA.id}/roadmaps`, { as: w.teamA }));
     expectOk(await api.patch(`/products/${w.productA.id}/roadmaps/${rms[0].id}`, { as: w.teamA, body: { portalPublished: true, expectedRevision: rms[0].revision } }));
@@ -202,12 +201,20 @@ describe('Portal, visibility and public projection', () => {
     expect(r.headers.get('cache-control')).toContain('no-store');
   });
 
-  it('F11 general comments on public feedback are public; schedule comments never are', async () => {
+  it('F11 general comments on public feedback are public; the removed Schedule endpoints write nothing (SC01/SC04)', async () => {
     const fb = await createFeedback(w, { visibility: 'public' });
     expectOk(await api.post(`/products/${w.productA.id}/feedback/${fb.id}/comments`, { as: w.teamA, body: { body: '後台公開留言' } }), 201);
-    expectOk(await api.post(`/products/${w.productA.id}/feedback/${fb.id}/schedule/comments`, { as: w.teamA, key: true, body: { body: '排程內部說明', expectedRevision: 1 } }), 201);
+    const old = await api.post(`/products/${w.productA.id}/feedback/${fb.id}/schedule/comments`, { as: w.teamA, key: true, body: { body: '排程內部說明', expectedRevision: 1 } });
+    expect(old.status).toBe(404);
+    expect(old.body.error.message).toBe('Schedule 功能已移除。');
+    for (const path of ['schedule', 'schedule/comments', 'schedule/history']) {
+      expect((await api.get(`/products/${w.productA.id}/feedback/${fb.id}/${path}`, { as: w.teamA })).status, path).toBe(404);
+    }
+    // the old field is refused, not silently accepted (strict allowlist)
+    expect((await api.post(`/products/${w.productA.id}/feedback`, { as: w.teamA, key: true, body: { title: 'x', scheduleDraft: { actions: [] } } })).status).toBe(400);
     const pub = expectOk(await api.get(`/public/products/${w.productA.slug}/feedback/${fb.id}/comments`, { site: 'portal', as: w.tester }));
     expect(pub.map((c: any) => c.body)).toEqual(['後台公開留言']);
+    expect(Object.keys(pub[0])).not.toContain('command');
   });
 
   it('F12 vote and like PUT are idempotent, DELETE removes; counts never exceed one per user', async () => {

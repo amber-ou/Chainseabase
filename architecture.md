@@ -20,7 +20,7 @@ GitHub Pages 不能單獨承載登入、權限、日曆憑證及資料寫入。�
 
 - 共用分類變更透過同一領域服務，避免 Modal、Roadmap、Tag API 行為分歧。
 - 本地寫入使用交易、外鍵、revision 與冪等 key；衝突不能靜默覆寫。
-- Schedule 的留言、表格、歷史與事件同交易提交；清空的內容不因移除歷史復活。
+- Feedback 圖片先上傳為待用，建立 Feedback 時同交易關聯；刪除時檔案由 outbox 工作在提交後移除。Schedule 已移除（migration 0005）。
 - Roadmap rank 只決定排序，不能讓卡片留在與資料值不符的欄位。
 - Personal 位置不回寫 Feedback；私有 cache 與查詢以 owner 隔離。
 - Google／Resend 與本地 DB 無共同交易，以 mutation 狀態、outbox 與核對重試處理，不宣稱可一起 rollback。

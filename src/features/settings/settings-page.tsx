@@ -56,7 +56,7 @@ function PersonalSettings() {
   if (!me) return <LoadingState />;
   return (
     <>
-      <Section title="名稱" description="顯示在留言、Schedule 與 Feedback 上。歷史操作的作者識別不會因改名而改變。">
+      <Section title="名稱" description="顯示在留言與 Feedback 上。歷史操作的作者識別不會因改名而改變。">
         <Field label="顯示名稱" error={error}>{(p) => <input {...p} className="input" maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />}</Field>
         <div><Button variant="primary" pending={pending} disabled={!name.trim() || name === me.displayName} onClick={async () => {
           setPending(true);

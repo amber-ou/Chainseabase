@@ -117,7 +117,7 @@ export function FeedbackPage() {
       ) : null}
 
       {creating && tax.data ? (
-        <FeedbackModal mode="create" taxonomy={tax.data} onClose={() => setCreating(false)} onChanged={() => void list.reload()} />
+        <FeedbackModal mode="create" taxonomy={tax.data} onClose={() => setCreating(false)} onChanged={() => void list.reload()} onTaxonomyChanged={() => void tax.reload()} />
       ) : null}
       {item && tax.data ? (
         <FeedbackModal mode="edit" feedbackId={item} taxonomy={tax.data} onClose={() => openItem(null)} onChanged={() => void list.reload()} />

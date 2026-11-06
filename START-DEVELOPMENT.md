@@ -28,7 +28,7 @@ docs/07-delivery-and-acceptance.md 與 docs/acceptance-report.md。
 build、網站啟動及 Google 登入；這是實機回報，不代表完整測試通過。
 先完成 WIN-01 安全設定持久化與 PowerShell 操作，再處理 WIN-02 正式本機
 頭像、WIN-03 Windows 服務、WIN-04 僅受邀讀取，再依依賴完成 WIN-05～07。
-保留核心 Feedback／Schedule／Roadmap／Personal／Calendar 規則。
+保留核心 Feedback／Roadmap／Personal／Calendar 規則（Schedule 已於 2026-11-06 移除）。
 不得把開發 fake 視為正式儲存、開啟測試登入繞過權限，或新增第一版以外的附件功能。
 
 CLI、網站及排程要用一致的秘密載入規則；不能依賴開著 PowerShell 的環境變數。

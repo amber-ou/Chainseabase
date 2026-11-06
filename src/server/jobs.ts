@@ -1,6 +1,7 @@
 import { getSql, type Db } from './db';
 import { fanoutNotificationEvent } from '@/modules/notifications/service';
 import { sendInvitationJob } from '@/modules/identity/invitations';
+import { runStorageDeleteJob } from '@/modules/feedback/images';
 import { logError } from './log';
 
 interface JobRow { id: string; eventId: string | null; jobType: string; payload: Record<string, unknown>; attempts: number; maxAttempts: number }
@@ -17,6 +18,8 @@ async function runHandler(tx: Db, job: JobRow): Promise<'done' | 'retry' | 'fail
     case 'notifications.fanout':
       if (job.eventId) await fanoutNotificationEvent(tx, job.eventId);
       return 'done';
+    case 'storage.delete':
+      return runStorageDeleteJob(job.payload);
     case 'invitation.send':
       return sendInvitationJob(tx, job.id, String(job.payload.invitationId));
     default:

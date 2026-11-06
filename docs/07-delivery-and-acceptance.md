@@ -1,5 +1,7 @@
 # 交付階段與驗收案例
 
+> **2026-11-06**：Schedule 已依使用者確認永久移除（migration `0005_remove_schedule.sql`，見 [08 決策](08-decisions.md)）。本文件中的 Schedule 規格、資料表、API 與驗收案例（S01–S17）不再適用，保留僅供歷史參考。
+
 ## 完成定義與目前狀態
 
 本文件定義案例與完成條件；實際執行結果（含哪些只以 mock 驗證、哪些仍未執行）記錄於 [驗收追蹤報告](acceptance-report.md)。

@@ -1,5 +1,7 @@
 # API 契約
 
+> **2026-11-06**：Schedule 已依使用者確認永久移除（migration `0005_remove_schedule.sql`，見 [08 決策](08-decisions.md)）。本文件中的 Schedule 規格、資料表、API 與驗收案例（S01–S17）不再適用，保留僅供歷史參考。
+
 本契約已實作於 `src/server/api/`（實作補充見文末）。基底 `/api/v1`；Google callback 路由同樣在此基底下，遵守相同權限與 host 限制。
 
 ## 通用格式
@@ -310,3 +312,16 @@ before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 nul
 - 頭像：團隊可讀全部；測試者可讀自己、團隊成員、同產品成員及其受邀產品中的作者，其餘 404。回應 `Cache-Control: private, no-cache`、`Vary: Cookie` 與 ETag；`If-None-Match` 也要先通過授權才回 304。JSON 維持 `private, no-store`。
 - 寫入（前台互動、頭像上傳）：未登入 401，未受邀或已移除帳號 403 `NOT_A_MEMBER`（在查詢產品前判斷）。
 - 例外：登入、OAuth callback、邀請接受、`/me`、`/site`、`/health`（只有模式與後端名稱）。
+
+## Feedback 圖片（2026-11-06，第二階段 IM01–IM06）
+
+| 方法與路徑 | 權限 | 說明 |
+| --- | --- | --- |
+| `POST /products/:p/feedback-images` | team，後台 | 原始位元組上傳（`content-type: image/jpeg｜png｜webp`），最大 5 MB；依實際內容驗證並移除中繼資料。回傳待用圖片 `{ id, width, height, contentType }`（201）。每人待用上限 20 張，超過 24 小時的待用圖片會在下次上傳時清除。 |
+| `DELETE /products/:p/feedback-images/:i` | 上傳者本人，後台 | 只能移除自己的待用圖片；已關聯的圖片回 404。 |
+| `POST /products/:p/feedback` 的 `imageIds` | team | 最多 5 個，必須是自己在同一產品的待用圖片，依順序關聯；不符合時回 400，不會建立 Feedback。 |
+| `GET /products/:p/feedback/:f/images` | team | 已關聯圖片的清單。 |
+| `GET /products/:p/feedback/:f/images/:i/(original｜thumb)` | team | 圖片內容。 |
+| `GET /public/products/:slug/feedback/:f/images[/:i/(original｜thumb)]` | 受邀成員，且 Feedback 為公開 | 前台讀取；內部、已刪除或不在受邀產品內一律 404。 |
+
+圖片回應一律為 `Cache-Control: private, no-store, max-age=0`、`Vary: Cookie`、`X-Content-Type-Options: nosniff`，每次讀取都重新檢查權限。舊的 `/products/:p/feedback/:f/schedule*` 路由回 404，訊息為「Schedule 功能已移除。」，不讀寫任何資料。

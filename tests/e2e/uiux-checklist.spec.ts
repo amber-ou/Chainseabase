@@ -81,7 +81,7 @@ test('P01–P04: one card per product; the card switches product, its menu does 
   const items = list.getByRole('listitem');
   await expect(items.first().locator('[data-slot="card"]')).toHaveCount(1);
   await expect(list.getByText(/\/p\//)).toHaveCount(0); // P02: no portal address
-  await expect(list.getByText(/^建立於 /).first()).toBeVisible();
+  await expect(list.getByText(/^\d{4} \/ \d{2} \/ \d{2}$/).first()).toBeVisible(); // phase 2 PD02
   await expect(list.locator('[data-slot="badge"]')).toHaveText('目前產品');
   // P04: opening the card menu (and closing it) changes nothing
   const card = items.filter({ hasText: other.name });

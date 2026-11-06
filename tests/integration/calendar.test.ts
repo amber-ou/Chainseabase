@@ -333,8 +333,6 @@ describe('Calendar events', () => {
     expect(link.feedbackLink).toEqual({ feedbackId: mine.id, title: '甲的' });
     const after = expectOk(await api.get(`${P()}/feedback/${mine.id}`, { as: w.teamA }));
     expect(after).toEqual(before);
-    const sched = expectOk(await api.get(`${P()}/feedback/${mine.id}/schedule`, { as: w.teamA }));
-    expect(sched.revision).toBe(1);
     expect(expectOk(await events()).events[0].feedbackLink.feedbackId).toBe(mine.id);
   });
 

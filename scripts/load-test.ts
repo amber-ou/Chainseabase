@@ -1,7 +1,7 @@
 /**
  * O05 representative load against a running server. Two scenarios (LOAD_SCENARIO=normal|contention|both):
  *
- * - normal: N team members (default 30) mixing list, board, schedule command, roadmap move and
+ * - normal: N team members (default 30) mixing list, board, comment, roadmap move and
  *   notification reads with think time between actions (LOAD_THINK_MS, default 2000-6000);
  * - contention: the same members do nothing but drag cards on one board with no think time; most
  *   drops land in the same column, and a share of them (LOAD_SHARED_RATIO) targets a few hot cards
@@ -220,8 +220,8 @@ async function runScenario(name: 'normal' | 'contention') {
     while (Date.now() < deadline) {
       if (name === 'normal') {
         await call('feedback.list', cookie, 'GET', `${P}/feedback?limit=50`);
-        const sched = (await call('schedule.get', cookie, 'GET', `${P}/feedback/${own[i]}/schedule`)).json?.data;
-        if (sched) await call('schedule.command', cookie, 'POST', `${P}/feedback/${own[i]}/schedule/comments`, { body: `/2-${1 + (i % 5)} 負載 ${Date.now()}`, expectedRevision: sched.revision }, randomUUID());
+        // Schedule was removed (phase 2): a general comment takes its place in the mix
+        await call('comment.create', cookie, 'POST', `${P}/feedback/${own[i]}/comments`, { body: `負載留言 ${Date.now()}` }, randomUUID());
         const board = await fullBoard('roadmap.board', cookie, P, def.id);
         if (board) {
           const target = pick(board);

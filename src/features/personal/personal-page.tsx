@@ -4,10 +4,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, errorMessage } from '@/client/api';
 import { useResource } from '@/client/hooks';
 import { useSite } from '@/client/site';
-import { Avatar, Button, ErrorState, LoadingState, SaveStatus, useAnnouncer, type SaveState } from '@/components/ui';
+import { Avatar, ErrorState, LoadingState, SaveStatus, useAnnouncer, type SaveState } from '@/components/ui';
 import { ConfirmModal } from '@/components/modal';
 import { ActionMenu } from '@/components/menu';
-import { IconPlus } from '@/components/icons';
+import { ArrowUpDownIcon, PlusIcon } from 'lucide-react';
+import { Button as UiButton } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { IconTip } from '@/components/list-controls';
 import { useProduct, useUnsaved } from '@/features/admin/shell';
 import { FeedbackModal } from '@/features/feedback/feedback-modal';
 import type { Feedback, Taxonomy } from '@/features/feedback/types';
@@ -18,7 +24,7 @@ interface ViewData {
   subject: { id: string; displayName: string; avatarUrl: string | null; personTags: { id: string; name: string }[] };
   columns: { id: string; name: string; isDefault: boolean; cards: Feedback[] }[];
 }
-interface ProductUser { id: string; displayName: string; role: string; personTags: { id: string; name: string }[] }
+interface ProductUser { id: string; displayName: string; role: string; avatarUrl: string | null; personTags: { id: string; name: string }[] }
 
 export function PersonalPage() {
   const { product } = useProduct();
@@ -33,13 +39,15 @@ export function PersonalPage() {
   const [retry, setRetry] = useState<(() => void) | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [newCol, setNewCol] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; name: string; count: number } | null>(null);
   const [openCard, setOpenCard] = useState<string | null>(null);
   const inflight = useRef(0);
   const { announce, region } = useAnnouncer();
   // a pending save or an unsaved column-name draft blocks silent product switches
-  useUnsaved('personal', save === 'saving' || Boolean(renaming) || newCol.trim() !== '');
+  useUnsaved('personal', save === 'saving' || Boolean(renaming) || (adding && newCol.trim() !== ''));
 
   const load = useCallback(async (subject: string) => {
     try {
@@ -111,32 +119,84 @@ export function PersonalPage() {
   return (
     <>
       {region}
+      {/* PE01/PE02: the title only (no icon, no explanatory text); the rules themselves are unchanged */}
       <div className="page-head">
-        <div>
-          <h1 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span className="mark mark-personal" aria-hidden="true" />Personal</h1>
-          <p className="sub">只屬於你的整理空間：私人欄位與排序，不會修改 Feedback 的狀態、類別或任何標籤。</p>
-        </div>
+        <div><h1>Personal</h1></div>
         <SaveStatus state={save} errorText={saveError} onRetry={retry ?? undefined} />
       </div>
-      <div className="toolbar">
-        <label className="field-label" htmlFor="subject">負責人</label>
-        <select id="subject" className="select" style={{ width: 220 }} value={subjectId} onChange={(e) => switchSubject(e.target.value)}>
-          {team.map((u) => <option key={u.id} value={u.id}>{u.displayName}{u.id === me?.id ? '（我）' : ''}</option>)}
-        </select>
-        {v ? (
-          <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <Avatar name={v.subject.displayName} url={v.subject.avatarUrl} id={v.subject.id} size={24} />
-            {v.subject.personTags.length ? v.subject.personTags.map((t) => <span key={t.id} className="chip">{t.name}</span>) : <span className="chip chip-warning">未安排職掌</span>}
-          </span>
-        ) : null}
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <label className="sr-only" htmlFor="p-sort">排序</label>
-          <select id="p-sort" className="select" style={{ width: 160 }} value={v?.view?.sortMode ?? 'create_time'} disabled={!viewId}
-            onChange={(e) => { const mode = e.target.value as 'create_time' | 'freedom'; void mutate(`已切換為${mode === 'freedom' ? '自由排序' : '建立時間排序'}`, (rev) => api.patch(`/products/${product.id}/personal/views/${viewId}`, { body: { sortMode: mode, expectedRevision: rev } })); }}>
-            <option value="create_time">建立時間（新到舊）</option>
-            <option value="freedom">自由排序</option>
-          </select>
-        </span>
+      {/* PE04: 負責人 and its Select on the left; the sort icon and 新增欄位 on the right */}
+      <div className="list-toolbar">
+        <div className="list-toolbar-start personal-subject">
+          <label className="field-label" id="subject-label" htmlFor="subject">負責人</label>
+          {/* PE03: avatar, name (「我」 for yourself) and Person tags inside the trigger and in every option */}
+          <Select value={subjectId} onValueChange={switchSubject}>
+            <SelectTrigger id="subject" aria-labelledby="subject-label subject" className="personal-subject-trigger h-auto min-h-9 w-auto min-w-0 max-w-full bg-background py-1.5">
+              <SelectValue placeholder="選擇負責人" />
+            </SelectTrigger>
+            <SelectContent position="popper" align="start" className="max-w-[min(28rem,calc(100vw-2rem))]">
+              {team.map((u) => (
+                <SelectItem key={u.id} value={u.id} className="py-2">
+                  <span className="personal-person">
+                    <Avatar name={u.displayName} url={u.avatarUrl} id={u.id} size={22} />
+                    <span className="personal-person-name">{u.displayName}{u.id === me?.id ? '（我）' : ''}</span>
+                    <span className="personal-person-tags">
+                      {u.personTags.length ? u.personTags.map((t) => <span key={t.id} className="chip">{t.name}</span>) : <span className="chip chip-warning">未安排職掌</span>}
+                    </span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="list-toolbar-end">
+          <DropdownMenu>
+            <IconTip label="排序">
+              <DropdownMenuTrigger asChild>
+                <UiButton variant="outline" size="icon" className="bg-background" aria-label="排序" disabled={!viewId}><ArrowUpDownIcon aria-hidden="true" /></UiButton>
+              </DropdownMenuTrigger>
+            </IconTip>
+            <DropdownMenuContent align="end" className="min-w-48">
+              <DropdownMenuLabel>排序</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={v?.view?.sortMode ?? 'create_time'}
+                onValueChange={(value) => { const mode = value as 'create_time' | 'freedom'; void mutate(`已切換為${mode === 'freedom' ? '自由排序' : '建立時間排序'}`, (rev) => api.patch(`/products/${product.id}/personal/views/${viewId}`, { body: { sortMode: mode, expectedRevision: rev } })); }}>
+                <DropdownMenuRadioItem value="create_time">建立時間（新到舊）</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="freedom">自由排序</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* PE05: the name is asked in a dialog; nothing stays open under the board */}
+          <Dialog open={adding} onOpenChange={(o) => { if (save === 'saving' && !o) return; setAdding(o); if (!o) { setNewCol(''); setAddError(null); } }}>
+            <DialogTrigger asChild>
+              <UiButton variant="outline" className="bg-background" disabled={!viewId}><PlusIcon aria-hidden="true" />新增欄位</UiButton>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <form className="contents" onSubmit={async (e) => {
+                e.preventDefault();
+                const name = newCol.trim();
+                if (!name || !viewId || save === 'saving') return;
+                setAddError(null);
+                // the name stays when the add fails, so it can be sent again
+                const ok = await mutate(`已新增欄位「${name}」`, (rev) => api.post(`/products/${product.id}/personal/views/${viewId}/columns`, { body: { name, expectedRevision: rev } }));
+                if (ok) { setAdding(false); setNewCol(''); } else setAddError('新增失敗，名稱仍保留，可修改後再試。');
+              }}>
+                <DialogHeader>
+                  <DialogTitle>新增欄位</DialogTitle>
+                  <DialogDescription>私人欄位只有你看得到。</DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col gap-1.5">
+                  <label className="field-label" htmlFor="new-col">欄位名稱</label>
+                  <Input id="new-col" maxLength={50} value={newCol} autoFocus aria-invalid={addError ? true : undefined} aria-describedby={addError ? 'new-col-error' : undefined}
+                    onChange={(e) => { setNewCol(e.target.value); setAddError(null); }} />
+                  {addError || (save === 'error' && saveError) ? <span id="new-col-error" className="field-error" role="alert">{saveError ?? addError}</span> : null}
+                </div>
+                <DialogFooter>
+                  <UiButton type="button" variant="outline" disabled={save === 'saving'} onClick={() => { setAdding(false); setNewCol(''); setAddError(null); }}>取消</UiButton>
+                  <UiButton type="submit" disabled={!newCol.trim()} aria-busy={save === 'saving' || undefined}>{save === 'saving' ? '新增中…' : '新增'}</UiButton>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
       {loadError ? <ErrorState message={loadError.message} onRetry={() => load(subjectId)} /> : !v ? <LoadingState /> : (
         <>
@@ -157,18 +217,6 @@ export function PersonalPage() {
                 return { ...cur, columns: cols };
               });
             }} />
-          <form className="toolbar" style={{ marginTop: 12 }} onSubmit={(e) => {
-            e.preventDefault();
-            const name = newCol.trim();
-            if (!name || !viewId) return;
-            // the name stays when the add fails, so it can be sent again
-            void mutate(`已新增欄位「${name}」`, (rev) => api.post(`/products/${product.id}/personal/views/${viewId}/columns`, { body: { name, expectedRevision: rev } })).then((ok) => { if (ok) setNewCol(''); });
-          }}>
-            <label className="sr-only" htmlFor="new-col">新欄位名稱</label>
-            <input id="new-col" className="input" style={{ width: 220 }} maxLength={50} placeholder="新欄位名稱" value={newCol} onChange={(e) => setNewCol(e.target.value)} />
-            <Button type="submit" disabled={!newCol.trim()}><IconPlus />新增欄位</Button>
-            <span className="small muted">私人欄位只有名稱，沒有篩選條件；新指派的卡片會進入「負責的 Feedback」。</span>
-          </form>
         </>
       )}
       {renaming && viewId ? (

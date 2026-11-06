@@ -6,6 +6,7 @@
  * tests prove the platform never calls Google when deleting, not real Google behaviour.
  */
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import sharp from 'sharp';
 import { getSql, withTx } from '@/server/db';
 import { CALENDAR_SCOPES } from '@/server/adapters/google-oauth';
 import { deleteProduct } from '@/modules/products/service';
@@ -13,7 +14,7 @@ import { acceptInvitation, createInvitation, invitationTokenForJob } from '@/mod
 import { setCalendarApi } from '@/server/adapters/google-calendar';
 import type { SessionUser } from '@/server/session';
 import { bootstrap } from '../../scripts/bootstrap-lib';
-import { api, createFeedback, expectOk, installFakes, makeUser, resetDb, runJobs, seedWorld, type Fakes, type TestUser, type World } from '../helpers/harness';
+import { api, createFeedback, expectOk, installFakes, makeUser, resetDb, runJobs, seedWorld, type Fakes, type TestUser, type World, uploadImage } from '../helpers/harness';
 
 let fakes: Fakes;
 let w: World;
@@ -90,7 +91,7 @@ async function connectCalendar(u: TestUser) {
 
 const timed = { summary: '刪除驗收', allDay: false, startDateTime: '2026-11-03T14:00:00+08:00', endDateTime: '2026-11-03T15:00:00+08:00', timeZone: 'Asia/Taipei' };
 
-/** Feedback with tags, comments, likes, votes, schedule, Personal, notifications, calendar link, invitation. */
+/** Feedback with tags, comments, likes, votes, images, Personal, notifications, calendar link, invitation. */
 async function populate(productId: string, calendarId: string, extra: { personTagIds?: string[]; tagIds?: string[]; versionTagId?: string; tester?: TestUser } = {}) {
   const P = `/products/${productId}`;
   let personTagIds = extra.personTagIds;
@@ -102,11 +103,14 @@ async function populate(productId: string, calendarId: string, extra: { personTa
     expectOk(await api.put(`${P}/users/${w.teamB.id}/person-tags`, { as: w.teamA, body: { personTagIds: [pt], expectedRevision: tax.productRevision } }));
     personTagIds = [pt];
   }
-  const f = await createFeedback(w, { title: '要刪的回饋', visibility: 'public', personTagIds, tagIds: extra.tagIds ?? [], ...(extra.versionTagId ? { versionTagId: extra.versionTagId } : {}) }, w.teamA, productId);
+  // images: one attached to the feedback and one still pending (uploaded, not yet used)
+  const png = await sharp({ create: { width: 40, height: 30, channels: 3, background: '#88aacc' } }).png().toBuffer();
+  const attached = expectOk(await uploadImage(w.teamA, productId, png), 201);
+  expectOk(await uploadImage(w.teamB, productId, png), 201);
+  const f = await createFeedback(w, { title: '要刪的回饋', visibility: 'public', personTagIds, tagIds: extra.tagIds ?? [], imageIds: [attached.id], ...(extra.versionTagId ? { versionTagId: extra.versionTagId } : {}) }, w.teamA, productId);
   const c = expectOk(await api.post(`${P}/feedback/${f.id}/comments`, { as: w.teamA, body: { body: '團隊留言' } }), 201);
   expectOk(await api.put(`${P}/comments/${c.id}/like`, { as: w.teamB }));
   expectOk(await api.post(`${P}/feedback/${f.id}/comments`, { as: w.teamB, body: { body: '回覆', replyToId: c.id } }), 201);
-  expectOk(await api.post(`${P}/feedback/${f.id}/schedule/comments`, { as: w.teamA, key: true, body: { body: '/2-3 內部工作', expectedRevision: 1 } }), 201);
   if (extra.tester) expectOk(await api.put(`/portal/products/${productId}/feedback/${f.id}/vote`, { site: 'portal', as: extra.tester }));
   // Personal: a view with a column and a placement, a private tag on the card
   const v = expectOk(await api.post(`${P}/personal/views`, { as: w.teamB, body: { subjectUserId: w.teamB.id } }));
@@ -193,7 +197,7 @@ describe('product deletion: scope', () => {
     const a = await populate(w.productA.id, CAL_A, { tester: w.tester });
     expect((await del(w.productA.id, '產品甲', await revisionOf(w.productA.id))).status).toBe(200);
     const P = `/products/${w.productA.id}`;
-    for (const path of [`${P}/taxonomy`, `${P}/feedback`, `${P}/feedback/${a.feedbackId}`, `${P}/feedback/${a.feedbackId}/comments`, `${P}/feedback/${a.feedbackId}/schedule`, `${P}/roadmaps`, `${P}/calendar/binding`, `${P}/calendar/events?from=2026-11-01T00:00:00Z&to=2026-11-30T00:00:00Z`, `${P}/personal/tags`, `${P}/notifications`]) {
+    for (const path of [`${P}/taxonomy`, `${P}/feedback`, `${P}/feedback/${a.feedbackId}`, `${P}/feedback/${a.feedbackId}/comments`, `${P}/feedback/${a.feedbackId}/images`, `${P}/roadmaps`, `${P}/calendar/binding`, `${P}/calendar/events?from=2026-11-01T00:00:00Z&to=2026-11-30T00:00:00Z`, `${P}/personal/tags`, `${P}/notifications`]) {
       expect((await api.get(path, { as: w.teamA })).status, path).toBe(404);
     }
     expect((await api.post(`${P}/personal/views`, { as: w.teamB, body: { subjectUserId: w.teamB.id } })).status).toBe(404);

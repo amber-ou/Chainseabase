@@ -1,5 +1,8 @@
 # 決策紀錄與範圍界線
 
+> **2026-11-06 最新決策（取代 D13、D14、D16、D22 與 Schedule 相關的留言規則）**：使用者確認 Schedule 永久移除，含資料與資料表（migration `0005_remove_schedule.sql`，破壞性、不可只靠切回舊版回復）。Calendar／Google 日曆保留。同日新增 Feedback 圖片（每筆最多 5 張 JPEG／PNG／WebP、每張 5 MB），沿用既有私有儲存，原檔與縮圖每次讀取都檢查 Feedback 目前權限。詳見 [變更需求](change-requests/sidebar-position.md)「第二階段 UI／UX 調整」。
+
+
 ## 已確認的產品決策
 
 以下依使用者逐輪修訂與最後「都採用建議方案」整合；較新的規則取代較舊的建議。

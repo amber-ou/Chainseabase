@@ -1,19 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, ApiError, errorMessage, newKey } from '@/client/api';
+import { useEffect, useMemo, useState } from 'react';
+import { api, ApiError, errorMessage } from '@/client/api';
 import { useResource } from '@/client/hooks';
-import { useSite } from '@/client/site';
 import { formatDateTime, PRIORITY_LABEL } from '@/client/format';
-import { Avatar, Button, ErrorState, Field, LoadingState, Switch, useAnnouncer } from '@/components/ui';
+import { Avatar, Button, ErrorState, Field, LoadingState } from '@/components/ui';
 import { ConfirmModal, Modal } from '@/components/modal';
-import { Tabs } from '@/components/tabs';
 import { MultiSelect } from '@/components/multiselect';
 import { IconCheck, IconLock } from '@/components/icons';
 import { useToast } from '@/components/toast';
 import { useProduct, useUnsaved } from '@/features/admin/shell';
-import { emptyDraft, type DraftState } from '@/modules/schedule/draft';
-import { ScheduleDraftTab, ScheduleLiveTab } from '@/features/schedule/schedule-tab';
+import { CreateFeedbackDialog } from './feedback-create-dialog';
 import { CommentThread } from './comments';
 import { tagOptions, versionGroup, type Feedback, type Taxonomy } from './types';
 
@@ -29,15 +26,6 @@ interface FormState {
   visibility: 'internal' | 'public';
 }
 
-function defaults(t: Taxonomy): FormState {
-  return {
-    title: '', description: '',
-    statusId: t.statuses.find((s) => s.isDefault)?.id ?? t.statuses[0]?.id ?? '',
-    categoryId: t.categories.find((c) => c.isDefault)?.id ?? t.categories[0]?.id ?? '',
-    personTagIds: [], priority: 'P0', versionTagId: null, tagIds: [], visibility: 'internal',
-  };
-}
-
 function fromFeedback(f: Feedback): FormState {
   return {
     title: f.title, description: f.description, statusId: f.status.id, categoryId: f.category.id,
@@ -47,11 +35,12 @@ function fromFeedback(f: Feedback): FormState {
 }
 
 type Props =
-  | { mode: 'create'; taxonomy: Taxonomy; onClose: () => void; onChanged: () => void; personal?: boolean }
+  | { mode: 'create'; taxonomy: Taxonomy; onClose: () => void; onChanged: () => void; personal?: boolean; onTaxonomyChanged?: () => void }
   | { mode: 'edit'; feedbackId: string; taxonomy: Taxonomy; onClose: () => void; onChanged: () => void; personal?: boolean };
 
 export function FeedbackModal(props: Props) {
-  if (props.mode === 'create') return <CreateFeedback {...props} />;
+  // every create entry (Feedback, Roadmap, Personal) opens the same dialog (phase 2 FB09)
+  if (props.mode === 'create') return <CreateFeedbackDialog taxonomy={props.taxonomy} onClose={props.onClose} onChanged={props.onChanged} onTaxonomyChanged={props.onTaxonomyChanged} />;
   return <EditFeedback {...props} />;
 }
 
@@ -156,7 +145,7 @@ function ContentFields({ form, set, errors, autoFocus }: { form: FormState; set:
       <Field label="標題" required error={errors.title}>{(p) => (
         <input {...p} className="input fb-title-input" maxLength={200} value={form.title} onChange={(e) => set({ title: e.target.value })} data-autofocus={autoFocus || undefined} placeholder="簡短描述需求" />
       )}</Field>
-      <Field label="描述" hint="支援基本 Markdown：段落、清單、粗體與連結；不支援 HTML 與附件。" error={errors.description}>{(p) => (
+      <Field label="描述" hint="支援基本 Markdown：段落、清單、粗體與連結；不支援 HTML。" error={errors.description}>{(p) => (
         <textarea {...p} className="textarea" rows={5} maxLength={20000} value={form.description} onChange={(e) => set({ description: e.target.value })} />
       )}</Field>
       <Field label="公開範圍" hint={form.visibility === 'public' ? '公開：前台可看到標題、描述、狀態與一般留言。' : '內部：只有團隊後台可見。'}>{(p) => (
@@ -169,102 +158,11 @@ function ContentFields({ form, set, errors, autoFocus }: { form: FormState; set:
   );
 }
 
-function CreateFeedback({ taxonomy, onClose, onChanged, personal }: Extract<Props, { mode: 'create' }>) {
-  const { product } = useProduct();
-  const { me } = useSite();
-  const toast = useToast();
-  const { announce, region } = useAnnouncer();
-  const [form, setForm] = useState<FormState>(() => defaults(taxonomy));
-  const [draft, setDraft] = useState<DraftState>(emptyDraft);
-  const [multi, setMulti] = useState(false);
-  const [tab, setTab] = useState('content');
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [topError, setTopError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-  const [confirmClose, setConfirmClose] = useState(false);
-  const keyRef = useRef<string | null>(null);
-  const [now] = useState(() => new Date().toISOString());
-  const dirty = form.title.trim() !== '' || form.description.trim() !== '' || draft.actions.length > 0;
-  useUnsaved('feedback-create', dirty);
-  const set = (p: Partial<FormState>) => { keyRef.current = null; setForm((f) => ({ ...f, ...p })); };
-  const setDraftState = (d: DraftState) => { keyRef.current = null; setDraft(d); };
-
-  const submit = async () => {
-    setErrors({});
-    setTopError(null);
-    if (!form.title.trim()) {
-      setErrors({ title: '標題不可空白' });
-      setTab('content');
-      return;
-    }
-    // the same key is reused only when retrying an unchanged request
-    keyRef.current ??= newKey();
-    setPending(true);
-    try {
-      const r = await api.post<Feedback>(`/products/${product.id}/feedback`, {
-        key: keyRef.current,
-        body: { ...form, scheduleDraft: draft.actions.length ? { actions: draft.actions } : undefined },
-      });
-      keyRef.current = null;
-      onChanged();
-      if (multi) {
-        // keep classification, clear text and the whole schedule draft
-        setForm((f) => ({ ...f, title: '', description: '' }));
-        setDraft(emptyDraft());
-        setTab('content');
-        announce(`已建立「${r.data.title}」，可繼續新增下一筆`);
-        toast('success', `已建立「${r.data.title}」`);
-      } else {
-        toast('success', `已建立「${r.data.title}」`);
-        onClose();
-      }
-    } catch (e) {
-      const err = e instanceof ApiError ? e : null;
-      setErrors(err?.body.fieldErrors ?? {});
-      setTopError(errorMessage(e));
-      if (err?.body.fieldErrors && Object.keys(err.body.fieldErrors).some((k) => k.startsWith('scheduleDraft'))) setTab('schedule');
-    } finally {
-      setPending(false);
-    }
-  };
-
-  return (
-    <Modal wide title="新增 Feedback" onClose={() => (dirty ? setConfirmClose(true) : onClose())} footer={<>
-      <span className="spacer"><Switch checked={multi} onChange={setMulti} label="新增多筆" /></span>
-      <Button onClick={() => (dirty ? setConfirmClose(true) : onClose())}>取消</Button>
-      <Button variant="primary" pending={pending} onClick={submit}>建立</Button>
-    </>}>
-      {region}
-      <div className="fb-author">
-        <Avatar name={me?.displayName ?? ''} url={me?.avatarUrl} id={me?.id} size={28} />
-        <span>{me?.displayName}</span><span className="small">· 建立時間由伺服器記錄（{formatDateTime(now)} 起）</span>
-      </div>
-      {topError ? <div className="banner banner-error" role="alert">{topError}（內容已保留）</div> : null}
-      <Tabs label="Feedback 內容" value={tab} onChange={setTab} tabs={[{ id: 'content', label: '內容' }, { id: 'schedule', label: `Schedule${draft.actions.length ? `（草稿 ${draft.actions.length}）` : ''}` }]}>
-        {tab === 'content' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <ContentFields form={form} set={set} errors={errors} autoFocus />
-            <ClassificationRows form={form} set={set} tax={taxonomy} personal={personal} />
-          </div>
-        ) : (
-          <ScheduleDraftTab draft={draft} onChange={setDraftState} me={me} />
-        )}
-      </Tabs>
-      {confirmClose ? (
-        <ConfirmModal title="捨棄未建立的 Feedback？" confirmLabel="捨棄" danger onCancel={() => setConfirmClose(false)} onConfirm={onClose}>
-          標題、描述與 Schedule 草稿都尚未送出，關閉後不會建立任何資料，也不會寄出通知。
-        </ConfirmModal>
-      ) : null}
-    </Modal>
-  );
-}
-
 function EditFeedback({ feedbackId, taxonomy, onClose, onChanged, personal }: Extract<Props, { mode: 'edit' }>) {
   const { product } = useProduct();
   const toast = useToast();
   const res = useResource<Feedback>(`/products/${product.id}/feedback/${feedbackId}`);
   const [form, setForm] = useState<FormState | null>(null);
-  const [tab, setTab] = useState('content');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [banner, setBanner] = useState<{ kind: 'error' | 'conflict' | 'saved'; text: string } | null>(null);
   const [pending, setPending] = useState(false);
@@ -329,12 +227,12 @@ function EditFeedback({ feedbackId, taxonomy, onClose, onChanged, personal }: Ex
   };
 
   return (
-    <Modal wide title={fb.title} onClose={() => (dirty ? setConfirm('close') : onClose())} footer={tab === 'content' ? <>
+    <Modal wide title={fb.title} onClose={() => (dirty ? setConfirm('close') : onClose())} footer={<>
       <span className="spacer"><Button variant="danger" size="sm" onClick={() => setConfirm('delete')}>移除</Button></span>
       {dirty ? <span className="small muted">有未儲存的修改</span> : null}
       <Button onClick={() => (dirty ? setConfirm('close') : onClose())}>關閉</Button>
       <Button variant="primary" pending={pending} disabled={!dirty} onClick={save}>儲存</Button>
-    </> : undefined}>
+    </>}>
       <div className="fb-author">
         <Avatar name={fb.author.displayName} url={fb.author.avatarUrl} id={fb.author.id} size={28} />
         <span>{fb.author.displayName}</span><span className="small">· {formatDateTime(fb.createdAt)}</span>
@@ -346,19 +244,17 @@ function EditFeedback({ feedbackId, taxonomy, onClose, onChanged, personal }: Ex
           {banner.kind === 'conflict' ? <Button size="sm" onClick={async () => { await res.reload(); setForm(null); setBanner(null); }}>載入最新內容</Button> : null}
         </div>
       ) : null}
-      <Tabs label="Feedback 內容" value={tab} onChange={setTab} tabs={[{ id: 'content', label: '內容' }, { id: 'schedule', label: 'Schedule' }]}>
-        {tab === 'content' && form ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <ContentFields form={form} set={set} errors={errors} />
-            <ClassificationRows form={form} set={set} tax={taxonomy} personal={personal} feedbackId={fb.id} />
-            <section aria-label="留言">
-              <h3 style={{ marginBottom: 8 }}>留言</h3>
-              <CommentThread productId={product.id} feedbackId={fb.id} isPublic={fb.visibility === 'public'} />
-            </section>
-          </div>
-        ) : null}
-        {tab === 'schedule' ? <ScheduleLiveTab productId={product.id} feedbackId={fb.id} /> : null}
-      </Tabs>
+      {form ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <ContentFields form={form} set={set} errors={errors} />
+          <FeedbackImages productId={product.id} feedbackId={fb.id} />
+          <ClassificationRows form={form} set={set} tax={taxonomy} personal={personal} feedbackId={fb.id} />
+          <section aria-label="留言">
+            <h3 style={{ marginBottom: 8 }}>留言</h3>
+            <CommentThread productId={product.id} feedbackId={fb.id} isPublic={fb.visibility === 'public'} />
+          </section>
+        </div>
+      ) : null}
       {confirm === 'close' ? (
         <ConfirmModal title="放棄未儲存的修改？" confirmLabel="放棄修改" danger onCancel={() => setConfirm(null)} onConfirm={onClose}>
           表單中的修改尚未儲存，關閉後會遺失。
@@ -366,9 +262,37 @@ function EditFeedback({ feedbackId, taxonomy, onClose, onChanged, personal }: Ex
       ) : null}
       {confirm === 'delete' ? (
         <ConfirmModal title="移除這筆 Feedback？" confirmLabel="移除" danger pending={deleting} onCancel={() => setConfirm(null)} onConfirm={remove}>
-          「{fb.title}」會從列表、看板、Personal 與前台消失（軟刪除，保留稽核紀錄）。留言與 Schedule 不會再顯示。
+          「{fb.title}」會從列表、看板、Personal 與前台消失（軟刪除，保留稽核紀錄）。留言不會再顯示，附加的圖片會一併刪除。
         </ConfirmModal>
       ) : null}
     </Modal>
+  );
+}
+
+/**
+ * IM03: the images of a created Feedback. Every file is read through the API, which checks the
+ * Feedback's current access on each request (nothing is cached by the browser or shared caches).
+ */
+function FeedbackImages({ productId, feedbackId }: { productId: string; feedbackId: string }) {
+  const images = useResource<{ id: string; width: number; height: number }[]>(`/products/${productId}/feedback/${feedbackId}/images`);
+  if (images.loading) return null;
+  if (images.error) return <ErrorState message={images.error.message} onRetry={images.reload} />;
+  if (!images.data?.length) return null;
+  const base = `/api/v1/products/${productId}/feedback/${feedbackId}/images`;
+  return (
+    <section aria-label="圖片">
+      <h3 style={{ marginBottom: 8 }}>圖片</h3>
+      <ul className="fb-images">
+        {images.data.map((img, i) => (
+          <li key={img.id}>
+            <a href={`${base}/${img.id}/original`} target="_blank" rel="noopener noreferrer" aria-label={`開啟圖片 ${i + 1}（新分頁）`}>
+              {/* served by the API with an access check per request; no image optimisation pipeline */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`${base}/${img.id}/thumb`} alt={`圖片 ${i + 1}`} loading="lazy" />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

@@ -135,13 +135,12 @@ export function ProductListPage() {
                     <Link ref={(el) => { if (el) rowRefs.current.set(p.id, el); else rowRefs.current.delete(p.id); }}
                       href={`/products/${p.id}/dashboard`} aria-current={current ? 'true' : undefined}
                       onClick={() => { if (!current) focusRowAfterSwitch = p.id; }}
-                      className="flex min-h-24 min-w-0 flex-1 flex-col justify-between gap-3 rounded-lg py-4 pr-14 pl-4 text-foreground no-underline outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
-                      <span className="min-w-0 truncate font-medium group-hover:underline">{p.name}</span>
-                      {/* P02: name, creation date and the current marker; the portal address is not shown */}
-                      <span className="flex min-w-0 flex-wrap items-center gap-2">
-                        <span className="text-sm text-muted-foreground">建立於 <span className="tabular-nums">{ymd(p.createdAt)}</span></span>
-                        {current ? <Badge variant="outline" className="shrink-0 bg-background">目前產品</Badge> : null}
-                      </span>
+                      className="flex min-h-24 min-w-0 flex-1 flex-col items-start justify-start gap-2 rounded-lg py-4 pr-14 pl-4 text-foreground no-underline outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                      {/* PD01/PD04: name, then 目前產品 (the selected card only), then the date; no portal address */}
+                      <span className="min-w-0 max-w-full truncate font-medium group-hover:underline">{p.name}</span>
+                      {current ? <Badge variant="outline" className="shrink-0 bg-background">目前產品</Badge> : null}
+                      {/* PD02/PD03: YYYY / MM / DD in the small text token; the stored date and its time zone are unchanged */}
+                      <span className="mt-auto text-(length:--fs-small) leading-(--lh-small) text-muted-foreground tabular-nums">{ymd(p.createdAt).replaceAll('-', ' / ')}</span>
                     </Link>
                     <div className="absolute top-3 right-3">
                       <DropdownMenu>
@@ -266,7 +265,7 @@ function DeleteProductDialog({ target, open, onOpenChange, returnFocus, onDelete
           <div className="flex flex-col gap-2 rounded-md bg-muted px-4 py-3">
             <p className="m-0 font-medium">會一併刪除此產品在平台內的資料：</p>
             <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-muted-foreground">
-              <li>Feedback、留言、按讚、投票、Schedule 與 Roadmap 看板</li>
+              <li>Feedback、圖片、留言、按讚、投票與 Roadmap 看板</li>
               <li>狀態、類別、標籤、人員標籤，以及每位成員在此產品的 Personal 檢視與私人標籤</li>
               <li>此產品的通知、測試成員的產品資格，以及邀請中的此產品</li>
               <li>平台內的 Google 日曆綁定與活動關聯</li>

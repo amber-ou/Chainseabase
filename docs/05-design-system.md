@@ -1,5 +1,7 @@
 # Design System 與畫面規格
 
+> **2026-11-06**：Schedule 已依使用者確認永久移除（migration `0005_remove_schedule.sql`，見 [08 決策](08-decisions.md)）。本文件中的 Schedule 規格、資料表、API 與驗收案例（S01–S17）不再適用，保留僅供歷史參考。
+
 ## 設計來源與方向
 
 使用使用者指定的 [taste skill](https://github.com/leonxlnx/taste-skill/blob/6010f91a9935f1c167dfc500fb1a475681892e6b/skills/taste-skill/SKILL.md) 與其 app-screens 指引，不套用行銷頁的巨大標題、圖片數量或捲動動畫要求。

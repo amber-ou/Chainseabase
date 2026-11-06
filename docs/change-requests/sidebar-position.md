@@ -299,6 +299,73 @@ Setting
   - Input Labels 建議使用可見標籤，但清單要求只有 placeholder；改以 `aria-label` 提供名稱。
 - 「toggle」「card clickable」查無資料庫結果，這兩部分依 Taste 與 shadcn 慣例設計。
 
+## 第二階段 UI／UX 調整（2026-11-06 新增）
+
+範圍：Personal（PE01–PE05）、新增 Feedback 彈窗（FB01–FB09）、圖片上傳與存取（IM01–IM06）、全專案永久移除 Schedule（SC01–SC07）、Product 卡片資訊（PD01–PD04）。清單原文由使用者提供，本節記錄實作決定。狀態：**預覽完成，尚未完成完整測試**；進度與證據見 tasks.md UI-09。第一階段（UI-08）成果保留。
+
+### 使用者確認的決定
+
+- 新增彈窗隱藏優先級、版本與公開範圍；預設值不變（內部、P0、無版本，與原彈窗送出的值相同），改在詳情調整。
+- 圖片沿用既有私有儲存（頭像同一個根目錄或 Supabase 私有 bucket），放在獨立的 `feedback-images/` 目錄；不新增設定。
+- 圖片原檔與縮圖每次讀取都檢查所屬 Feedback 目前的權限；沒有公開靜態路徑，回應為 `Cache-Control: private, no-store`、`Vary: Cookie`，其他帳號無法透過快取取得。
+- Schedule 永久刪除，包括資料與資料表。
+
+### Figma Make 參考（STYLE_SPEC.md、AI_HANDOFF.md、FeedbackDialogStyle.tsx、feedback-dialog.css）
+
+依清單 3.1 只作版面參考。採用：
+- 版面順序：標題列有分隔線；無框標題與描述；圖片按鈕與縮圖（88×72）；32px 膠囊並自動換行；「＋」只有圖示；作者在膠囊下方；底部左側新增多筆，右側取消與建立。
+- 窄螢幕（≤640px）的內距與字級。
+- 內容自然撐高。
+
+以 Chainseabase tokens 取代（附件值的問題）：
+- `#999` 文字對白底只有約 2.8:1，改為正文色，placeholder 用 `--muted`（5.8:1）。
+- 膠囊色值：`#3b916b` 對 `#edf7f0` 約 3.5:1，改為 `--positive-*`、`--info-*`。
+- 11px／10px 改為小字 token 12px，標題列 13px 改為 16px。
+- 黑色建立鈕改為主色海軍藍，紫色開關改為 shadcn Switch，Arial 改為 Inter／Noto Sans TC。
+
+正式彈窗沿用 shadcn Dialog 的外框、遮罩、Portal、focus trap 與 Escape；只在此彈窗加 `.fbc-*` 樣式，不改共用元件。附件的靜態 disabled、假作者、固定時間與裝飾性開關都未帶入。
+
+### 實作決定
+
+- **PE01–PE05**：
+  - 移除 Personal 標題的方塊與兩段說明。
+  - 負責人改用 shadcn Select，觸發器與每個選項都包含頭像、名稱（自己標「（我）」）與 Person tag，Select 外不再重複顯示。
+  - 排序改為 icon 按鈕，有「排序」提示與名稱，展開既有的兩個選項。
+  - 新增欄位改在 Dialog 中輸入；空白名稱無法送出，送出中不能重送；失敗時保留名稱並顯示原因；關閉後焦點回到按鈕。
+- **FB01–FB09**：
+  - 新元件為 `feedback-create-dialog.tsx`，Feedback 頁與 Roadmap 頁的「新增 Feedback」都使用它；詳情維持原 Modal，只移除 Schedule 分頁並加入圖片區。
+  - 標題必填，錯誤顯示在欄位旁；建立沿用冪等鍵，防止重複送出；新增多筆保留分類、清空文字與圖片。
+  - 有輸入時關閉會先確認，捨棄時一併刪除已上傳的待用圖片。
+  - 「＋」可搜尋既有標籤（單選群組互斥），也可輸入新名稱即時建立（產品 revision 衝突時自動取得最新值重試一次；同名時說明）。移除標籤只移除本筆的套用，不刪除共用標籤。
+- **IM01–IM06**：
+  - 新增 `0006_feedback_images.sql`。圖片先上傳為「待用」，建立 Feedback 時在同一交易中關聯（只能關聯自己在同一產品的待用圖片，最多 5 張，順序保留）。
+  - 前後端都檢查格式與大小；後端依實際內容判斷 JPEG／PNG／WebP，不依宣告的類型。
+  - 原檔以相同格式重新編碼，去除 EXIF／GPS 並套用方向；另產生 320px WebP 縮圖。
+  - 讀取路由：後台限團隊；前台限受邀成員且該筆為公開；已刪除的 Feedback 一律 404。
+  - 刪除 Feedback、刪除產品、移除待用圖片，以及超過 24 小時的待用圖片（同一人下次上傳時清理），都在交易內刪除資料列，檔案由 `storage.delete` outbox 工作在提交後刪除並重試。每列只擁有自己的兩個檔案，不會誤刪其他 Feedback 的檔案。
+- **SC01–SC07**：
+  - 移除 Schedule 的服務、UI、API（舊網址回 404 並說明「Schedule 功能已移除。」）、通知原因、seed 與壓力測試中的 Schedule 動作及樣式。
+  - `0005_remove_schedule.sql` 依外鍵順序刪除四張 Schedule 表，只刪除共用表中的 Schedule 紀錄：stream 為 schedule 的留言與其按讚、Schedule 留言的通知、outbox 與事件、Schedule 路由的冪等紀錄。
+  - 留言 stream 與 kind 改為只允許 general／normal。不使用 cascade，不改寫既有 migration。
+  - Calendar／Google 日曆完全保留。
+- **PD01–PD04**：卡片由上而下為名稱、「目前產品」（只有選取的產品顯示）、`YYYY / MM / DD`（小字 token 12px）；日期仍以 Asia/Taipei 計算，不改儲存值。
+
+### SC07：部署與回復限制
+
+- 0005 為破壞性變更。套用到實際資料庫前，必須先完整備份並確認備份可讀（例如 `pg_restore --list` 檢查）。
+- 套用後，舊版程式碰到 Schedule 相關功能會失敗，不能只切回舊 release 復原；回復方式是還原套用前的備份，並同時回到對應的舊版程式。
+- 0006 為新增資料表，不影響舊資料。
+
+### UI/UX Pro Max 指引（`--domain ux`）
+
+- **Loading Buttons／Submit Feedback**：建立與新增欄位送出中不可重送，並有狀態。
+- **Error Placement**：標題錯誤顯示在欄位旁，圖片失敗顯示原因並可重試。
+- **Input Labels**：placeholder 不是唯一名稱，標題與描述都有 `aria-label`。
+- **Touch Target**：膠囊 32px，移除鈕 24px，並與相鄰元素保持間距。
+- **Color Contrast**：見上方「以 Chainseabase tokens 取代」。
+- **Chip Collection Reflow**：膠囊與已選標籤自動換行。
+- **Focus States**：無框編輯區在焦點時顯示 2px 外框。
+
 ## 開發文件參照與影響範圍
 
 | 文件 | CC 要參照或調整的部分 |

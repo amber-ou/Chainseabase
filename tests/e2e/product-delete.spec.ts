@@ -44,7 +44,7 @@ test('delete another product: exact name required, the row goes, the current pro
   await expect(dialog(page).getByRole('heading')).toHaveText(`永久刪除產品『${name}』？`);
   await expect(dialog(page)).toContainText('永久刪除，無法在平台內復原');
   await expect(dialog(page)).toContainText(`需與「${name}」完全相同`);
-  await expect(dialog(page)).toContainText('Feedback、留言、按讚、投票、Schedule 與 Roadmap 看板');
+  await expect(dialog(page)).toContainText('Feedback、圖片、留言、按讚、投票與 Roadmap 看板');
   await expect(dialog(page)).toContainText('Google 上的日曆、活動與分享權限');
   await expect(confirmInput(page)).toBeFocused();
   await expect(confirmButton(page)).toBeDisabled();

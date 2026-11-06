@@ -30,7 +30,7 @@
 
 - 登入、OAuth callback、邀請接受所需入口有明確例外，但不得洩漏公司內容；未受邀 Google 帳號不得取得內容。
 - 既有公開投影可保留為受邀 tester 可見投影，不代表 tester 可讀 team 內部欄位；不批次將全部 Feedback 改為同一可見性。
-- 保留 Roadmap、Schedule、Personal、通知、Calendar ACL 與併發規則。第一版只有頭像儲存，不新增 Feedback 一般附件。
+- 保留 Roadmap、Personal、通知、Calendar ACL 與併發規則（Schedule 已於 2026-11-06 移除）。儲存目錄存放頭像與 Feedback 圖片（`feedback-images/`，2026-11-06 起），都只經 API 讀取；不新增其他一般附件。
 - 未登入／未受邀 API、頭像、直接網址、搜尋、快取與通知均需驗收；移除成員資格後不得保留舊存取權。
 
 ## 必要程式調整

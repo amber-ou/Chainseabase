@@ -10,7 +10,7 @@
 | Feedback Modal、連續新增、搜尋與版本 | [產品需求](../docs/01-product-requirements.md) | [API 契約](../docs/04-api-contracts.md) | F01–F05、F14–F15 |
 | 標籤與 Person tag 設定 | [產品需求](../docs/01-product-requirements.md) | [API 契約](../docs/04-api-contracts.md) | F03–F07 |
 | 前台、公開／內部、留言與投票 | [產品需求](../docs/01-product-requirements.md) | [API 契約](../docs/04-api-contracts.md) | F08–F13、R14 |
-| Schedule | [指令、交易與歷史](../docs/03-interaction-rules.md) | [API 契約](../docs/04-api-contracts.md) | S01–S17 |
+| ~~Schedule~~ | 已於 2026-11-06 永久移除（migration 0005），S01–S17 不再適用 | — | — |
 | Roadmap 與版本規畫 | [唯一分欄、拖曳與排序](../docs/03-interaction-rules.md) | [API 契約](../docs/04-api-contracts.md) | R01–R14 |
 | Personal | [責任範圍與私人整理](../docs/03-interaction-rules.md) | [API 契約](../docs/04-api-contracts.md) | P01–P08 |
 | Notification | [產品需求](../docs/01-product-requirements.md)、[事件規則](../docs/03-interaction-rules.md) | [API 契約](../docs/04-api-contracts.md) | N01–N06 |
@@ -25,7 +25,6 @@
 - Roadmap 只依狀態、類別或單一單選 Tag 群組分欄，不重新加入 AND／OR。
 - 版本顯示與版本 Tag 共用來源；拖曳只修改選定維度。
 - Personal 保留負責人切換，但私人欄位沒有條件篩選；操作自動儲存。
-- Schedule 的歷史移除不等於全面 undo，清空過的內容不復活。
 - 公司內容禁止匿名讀取；Google 登入不等於受邀或有 Calendar 權限。新版 A02／F09 與 WIN-04 必須重新驗證。
 
 已確認與被取代的規則見 [決策紀錄](../docs/08-decisions.md)。

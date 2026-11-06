@@ -4,8 +4,6 @@ import { uuidParam } from '../http';
 import { getSql } from '../db';
 import { AppError } from '../errors';
 import { hasProductInteraction, requireProduct, requireProductReader, requireReader, requireTeam, requireUser } from '../authz';
-import { addRow, getSchedule, getScheduleHistory, hideOperation, postScheduleComment } from '@/modules/schedule/service';
-import { getCommentDto, listComments } from '@/modules/feedback/comments';
 import {
   createRoadmap, deleteRoadmap, getBoard, getColumnPage, listRoadmaps, moveCard as moveRoadmapCard, reorderColumns as reorderRoadmapColumns,
   reorderRoadmaps, updateColumnLabel, updateRoadmap,
@@ -30,54 +28,18 @@ const zMove = {
 };
 
 export function registerWorkRoutes(r: Router) {
-  // ---------------- Schedule ----------------
-  r.get('/products/:p/feedback/:f/schedule', ['admin'], async (ctx) => {
-    const { productId } = await teamProduct(ctx);
-    return { data: await getSchedule(getSql(), productId, uuidParam(ctx, 'f')) };
-  });
-
-  r.post('/products/:p/feedback/:f/schedule/rows', ['admin'], async (ctx) => {
-    const { user, productId } = await teamProduct(ctx);
-    const feedbackId = uuidParam(ctx, 'f');
-    const body = await ctx.body(z.object({ expectedRevision: zRevision }).strict());
-    return mutate(ctx, { body }, async (tx) => ({ status: 201, data: await addRow(tx, user, productId, feedbackId, body.expectedRevision) }));
-  });
-
-  r.get('/products/:p/feedback/:f/schedule/comments', ['admin'], async (ctx) => {
-    const { user, productId } = await teamProduct(ctx);
-    const q = ctx.query(z.object({ cursor: z.string().max(200).optional(), limit: zLimit }));
-    const res = await listComments(getSql(), productId, uuidParam(ctx, 'f'), 'schedule', user.id, q);
-    return { data: res.items, meta: { nextCursor: res.nextCursor } };
-  });
-
-  r.post('/products/:p/feedback/:f/schedule/comments', ['admin'], async (ctx) => {
-    const { user, productId } = await teamProduct(ctx);
-    const feedbackId = uuidParam(ctx, 'f');
-    // body is parsed by the schedule grammar; failures leave no comment, entry, history or notification
-    const body = await ctx.body(z.object({ body: z.string().max(6000), replyToId: zUuid.nullable().optional(), expectedRevision: zRevision }).strict());
-    return mutate(ctx, { keyRequired: true, body }, async (tx) => {
-      const res = await postScheduleComment(tx, user, productId, feedbackId, body);
-      return { status: 201, data: { ...res, comment: await getCommentDto(tx, res.commentId, user.id), schedule: await getSchedule(tx, productId, feedbackId) } };
-    });
-  });
-
-  r.get('/products/:p/feedback/:f/schedule/history', ['admin'], async (ctx) => {
-    const { productId } = await teamProduct(ctx);
-    const q = ctx.query(z.object({ cursor: z.string().regex(/^\d+$/).optional(), limit: zLimit }));
-    const res = await getScheduleHistory(getSql(), productId, uuidParam(ctx, 'f'), { limit: q.limit, beforeSeq: q.cursor ? Number(q.cursor) : undefined });
-    return { data: res.items, meta: { nextCursor: res.nextCursor } };
-  });
-
-  r.delete('/products/:p/feedback/:f/schedule/history/:op', ['admin'], async (ctx) => {
-    const { user, productId } = await teamProduct(ctx);
-    const feedbackId = uuidParam(ctx, 'f');
-    const opId = uuidParam(ctx, 'op');
-    const rev = ctx.ifMatchRevision();
-    return mutate(ctx, { body: { rev } }, async (tx) => {
-      const res = await hideOperation(tx, user, productId, feedbackId, opId, rev);
-      return { data: { ...res, schedule: await getSchedule(tx, productId, feedbackId) } };
-    });
-  });
+  // ---------------- Schedule (removed, migration 0005) ----------------
+  // old clients and stale links get a clear answer instead of a generic one; nothing is read or written
+  const removed = async (ctx: Ctx) => {
+    await teamProduct(ctx);
+    throw new AppError('NOT_FOUND', 'Schedule 功能已移除。');
+  };
+  r.get('/products/:p/feedback/:f/schedule', ['admin'], removed);
+  r.post('/products/:p/feedback/:f/schedule/rows', ['admin'], removed);
+  r.get('/products/:p/feedback/:f/schedule/comments', ['admin'], removed);
+  r.post('/products/:p/feedback/:f/schedule/comments', ['admin'], removed);
+  r.get('/products/:p/feedback/:f/schedule/history', ['admin'], removed);
+  r.delete('/products/:p/feedback/:f/schedule/history/:op', ['admin'], removed);
 
   // ---------------- Roadmap ----------------
   r.get('/products/:p/roadmaps', ['admin'], async (ctx) => {

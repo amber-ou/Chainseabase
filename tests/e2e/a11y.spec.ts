@@ -27,13 +27,17 @@ for (const section of ['dashboard', 'calendar', 'feedback', 'roadmaps', 'persona
   });
 }
 
-test('axe: admin feedback modal with schedule tab', async ({ page }) => {
+test('axe: the create Feedback dialog and its tag picker (phase 2)', async ({ page }) => {
   await login(page, 'admin', 'lead@e2e.test', '專案負責人');
   await openFirstProduct(page, 'feedback');
   await page.getByRole('button', { name: '新增 Feedback' }).click();
-  await axe(page, 'feedback modal');
-  await page.getByRole('dialog', { name: '新增 Feedback' }).getByRole('tab', { name: /Schedule/ }).click();
-  await axe(page, 'schedule tab');
+  await expect(page.getByRole('dialog', { name: '新增 Feedback' })).toBeVisible();
+  await page.waitForTimeout(400);
+  await axe(page, 'create feedback dialog');
+  await page.getByRole('dialog', { name: '新增 Feedback' }).getByRole('button', { name: /^加入標籤/ }).click();
+  await expect(page.getByRole('dialog', { name: '加入標籤' })).toBeVisible();
+  await page.waitForTimeout(400); // the popover fades in: measure the settled colours
+  await axe(page, 'tag picker');
 });
 
 test('axe: login and portal pages', async ({ page }) => {

@@ -16,7 +16,7 @@
 | --- | --- |
 | [01 產品需求與權限](01-product-requirements.md) | 確認功能、角色、產品範圍與公開資料界線。 |
 | [02 系統架構與資料模型](02-architecture-and-data.md) | 建立模組、資料表、隔離與索引。 |
-| [03 核心互動與一致性規則](03-interaction-rules.md) | 實作 Schedule 指令、單維度 Roadmap 與私人 Personal。 |
+| [03 核心互動與一致性規則](03-interaction-rules.md) | 單維度 Roadmap 與私人 Personal（Schedule 部分已移除，僅供歷史參考）。 |
 | [04 API 契約](04-api-contracts.md) | 對接前後端，統一驗證、錯誤與併發語意。 |
 | [05 Design System 與畫面規格](05-design-system.md) | 依 taste skill 方向實作元件、畫面與完整狀態。 |
 | [06 Google Calendar 與雲端部署](06-calendar-and-deployment.md) | 配置 OAuth、日曆讀寫、寄信、資料庫與雲端交付。 |

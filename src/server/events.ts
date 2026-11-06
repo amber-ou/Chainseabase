@@ -1,7 +1,7 @@
 import type { Db } from './db';
 import { collectJob } from './jobs-context';
 
-export type NotificationReason = 'assigned' | 'comment' | 'schedule_comment';
+export type NotificationReason = 'assigned' | 'comment';
 
 export interface NotificationIntent { recipientId: string; reason: NotificationReason }
 

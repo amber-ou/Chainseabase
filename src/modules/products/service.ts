@@ -2,6 +2,7 @@ import type { Db } from '@/server/db';
 import { AppError, assertRevision } from '@/server/errors';
 import { slugify } from '@/modules/shared/text';
 import { detachDeletedProduct } from '@/modules/identity/invitations';
+import { deleteImagesOfProduct } from '@/modules/feedback/images';
 
 export const DEFAULT_STATUSES = ['新貼文', '進行中', '待討論', '已完成', '延後'] as const;
 export const DEFAULT_ROADMAP_LABELS = ['需求池', '進行中', '待討論', '已完成', '延後'] as const;
@@ -130,11 +131,9 @@ export async function deleteProduct(tx: Db, productId: string, confirmName: stri
   await tx`delete from personal_tags where product_id = ${productId}`;
   // Roadmap boards (columns and ranks cascade)
   await tx`delete from roadmaps where product_id = ${productId}`;
-  // Schedule, comments, votes, then the feedback itself (feedback tags cascade)
-  await tx`delete from schedule_entries where feedback_id in (select id from feedback where product_id = ${productId})`;
-  await tx`delete from schedule_operations where feedback_id in (select id from feedback where product_id = ${productId})`;
-  await tx`delete from schedule_rows where feedback_id in (select id from feedback where product_id = ${productId})`;
-  await tx`delete from schedules where product_id = ${productId}`;
+  // images (rows now, their files by a job after commit), comments, votes, then the feedback itself
+  // (feedback tags cascade)
+  await deleteImagesOfProduct(tx, productId);
   await tx`delete from comment_likes where comment_id in (select id from comments where product_id = ${productId})`;
   await tx`delete from feedback_votes where feedback_id in (select id from feedback where product_id = ${productId})`;
   await tx`delete from comments where product_id = ${productId}`;

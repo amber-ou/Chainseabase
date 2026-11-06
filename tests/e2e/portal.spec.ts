@@ -13,11 +13,22 @@ test('setup: team publishes one item and keeps one internal', async ({ page }) =
   internalTitle = unique('內部需求');
   for (const [title, vis] of [[publicTitle, 'public'], [internalTitle, 'internal']] as const) {
     await page.getByRole('button', { name: '新增 Feedback' }).click();
-    const d = page.getByRole('dialog');
+    const d = page.getByRole('dialog', { name: '新增 Feedback' });
     await d.getByLabel('標題').fill(title);
-    await d.getByLabel('公開範圍').selectOption(vis);
     await d.getByRole('button', { name: '建立' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    // new Feedback is internal (unchanged default); publishing is done in the detail view
+    if (vis === 'public') {
+      await page.getByLabel('搜尋 Feedback').fill(title);
+      await page.getByRole('button', { name: title }).first().click();
+      const detail = page.getByRole('dialog', { name: title });
+      await detail.getByLabel('公開範圍').selectOption('public');
+      await detail.getByRole('button', { name: '儲存' }).click();
+      await expect(detail.getByText('已儲存')).toBeVisible();
+      await detail.getByRole('button', { name: '關閉' }).first().click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await page.getByLabel('搜尋 Feedback').fill('');
+    }
   }
 });
 

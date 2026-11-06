@@ -32,7 +32,7 @@ const TABLES = [
   'notifications', 'outbox_jobs', 'domain_events',
   'personal_feedback_tags', 'personal_feedback_metadata', 'personal_tags', 'personal_placements', 'personal_columns', 'personal_views',
   'roadmap_ranks', 'roadmap_columns', 'roadmaps',
-  'schedule_entries', 'schedule_operations', 'schedule_rows', 'schedules',
+  'feedback_images',
   'comment_likes', 'feedback_votes', 'comments', 'feedback_person_tags', 'feedback_tags', 'feedback',
   'tags', 'tag_groups', 'user_person_tags', 'person_tags', 'categories', 'statuses',
   'product_access', 'invitation_products', 'invitations', 'products', 'product_tombstones', 'bootstrap_team_grants', 'sessions', 'users',
@@ -105,6 +105,26 @@ export function expectOk(r: ApiResult, status?: number) {
     throw new Error(`Expected success${status ? ` ${status}` : ''}, got ${r.status}: ${JSON.stringify(r.body)}`);
   }
   return r.body.data;
+}
+
+/** Upload a pending Feedback image (raw body) as a team member, like the create dialog does. */
+export async function uploadImage(as: TestUser, productId: string, data: Buffer, type = 'image/png') {
+  const res = await handleApiRequest(new Request(`${ADMIN}/api/v1/products/${productId}/feedback-images`, {
+    method: 'POST', body: new Uint8Array(data),
+    headers: { host: new URL(ADMIN).host, origin: ADMIN, cookie: `csb_session=${as.admin}`, 'content-type': type },
+  }));
+  const text = await res.text();
+  return { status: res.status, body: text ? JSON.parse(text) : null, headers: res.headers } as ApiResult;
+}
+
+/** Read an image route as raw bytes (images are not JSON). */
+export async function getBytes(path: string, opts: { as?: TestUser | null; site?: 'admin' | 'portal' } = {}) {
+  const site = opts.site ?? 'admin';
+  const origin = site === 'admin' ? ADMIN : PORTAL;
+  const headers: Record<string, string> = { host: new URL(origin).host };
+  if (opts.as) headers.cookie = `csb_session=${site === 'admin' ? opts.as.admin : opts.as.portal}`;
+  const res = await handleApiRequest(new Request(`${origin}/api/v1${path}`, { headers }));
+  return { status: res.status, headers: res.headers, data: Buffer.from(await res.arrayBuffer()) };
 }
 
 export async function runJobs() {

@@ -12,7 +12,7 @@ import { useProduct } from '@/features/admin/shell';
 import type { Feedback } from '@/features/feedback/types';
 import type { ProductUser } from './users-page';
 
-interface UserComment { id: string; feedback: { id: string; title: string }; stream: 'general' | 'schedule'; kind: string; body: string; createdAt: string }
+interface UserComment { id: string; feedback: { id: string; title: string }; stream: 'general'; kind: string; body: string; createdAt: string }
 
 export function UserProfilePage() {
   const { product } = useProduct();
@@ -57,7 +57,6 @@ export function UserProfilePage() {
             <div className="list">
               {(comments.data ?? []).map((c) => (
                 <Link key={c.id} className="list-row" href={`/products/${product.id}/feedback?item=${c.feedback.id}`}>
-                  <span className="chip">{c.stream === 'schedule' ? (c.kind === 'command' ? 'Schedule 指令' : 'Schedule') : '一般'}</span>
                   <span className="title" style={{ fontWeight: 400 }}>{c.body}</span>
                   <span className="meta"><span>{c.feedback.title}</span><span>{relativeTime(c.createdAt)}</span></span>
                 </Link>

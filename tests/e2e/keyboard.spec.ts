@@ -59,39 +59,39 @@ test.describe('desktop keyboard walkthrough', () => {
     await tabTo(page, /新增 Feedback/);
     await page.keyboard.press('Enter');
     await expect(page.getByRole('dialog', { name: '新增 Feedback' })).toBeVisible();
-    await tabTo(page, /^button Person tag/);
+    await tabTo(page, /^button Person tag：/);
     await page.keyboard.press('Enter');
-    await expect.poll(() => focused(page)).toMatch(/搜尋Person tag/);
+    await expect.poll(() => focused(page)).toMatch(/menuitemcheckbox/);
     await page.keyboard.press('Escape');
-    await expect.poll(() => focused(page)).toMatch(/^button Person tag/);
+    await expect.poll(() => focused(page)).toMatch(/^button Person tag：/);
     await expect(page.getByRole('dialog', { name: '新增 Feedback' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect.poll(() => focused(page)).toMatch(/新增 Feedback/);
   });
 
-  test('schedule by keyboard: tab arrows, cell selection fills the command, Ctrl+Enter applies to the draft', async ({ page }) => {
+  test('create dialog by keyboard: title first, pills open with Enter, Escape with input asks first', async ({ page }) => {
     await login(page, 'admin', 'lead@e2e.test', '專案負責人');
     await openFirstProduct(page, 'feedback');
     await tabTo(page, /新增 Feedback/);
     await page.keyboard.press('Enter');
-    await page.keyboard.type(unique('鍵盤 Schedule'));
-    await tabTo(page, /^button\[tab\] 內容/);
-    await page.keyboard.press('ArrowRight');
-    await expect.poll(() => focused(page)).toMatch(/^button\[tab\] Schedule/);
-    await tabTo(page, /第 2 列，UIUX/);
+    await expect.poll(() => focused(page)).toMatch(/^textarea 標題/);
+    await page.keyboard.type(unique('鍵盤建立'));
+    await tabTo(page, /^button 狀態：/);
     await page.keyboard.press('Enter');
-    await expect.poll(() => focused(page)).toMatch(/^textarea Schedule 留言或指令/);
-    await page.keyboard.type('鍵盤輸入');
-    await expect(page.getByLabel('Schedule 留言或指令')).toHaveValue('/2-2 鍵盤輸入');
-    await page.keyboard.press('Control+Enter');
-    await expect(page.getByText('已套用至草稿：寫入 1 筆').first()).toBeVisible();
-    // leaving with a draft asks first; the safe choice has focus
+    await expect.poll(() => focused(page)).toMatch(/menuitemradio/);
+    // move to a status other than the default (the product's order is not assumed)
+    for (let i = 0; i < 6 && /新貼文/.test(await focused(page)); i++) await page.keyboard.press('ArrowDown');
+    await expect.poll(() => focused(page)).toMatch(/menuitemradio/);
+    await page.keyboard.press('Enter');
+    await expect.poll(() => focused(page)).toMatch(/^button 狀態：(?!新貼文)/);
+    // leaving with input asks first; the safe choice has focus
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog', { name: '捨棄未建立的 Feedback？' })).toBeVisible();
-    await expect.poll(() => focused(page)).toMatch(/取消/);
+    await expect(page.getByRole('alertdialog', { name: '捨棄未建立的 Feedback？' })).toBeVisible();
+    await expect.poll(() => focused(page)).toMatch(/繼續編輯/);
     await page.keyboard.press('Escape');
-    await expect.poll(() => focused(page)).toMatch(/^textarea Schedule 留言或指令/);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: '新增 Feedback' })).toBeVisible();
   });
 
   test('roadmap card menu: Escape returns to the trigger, a move keeps focus on the moved card', async ({ page }) => {

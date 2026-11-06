@@ -43,7 +43,7 @@ OAuth client／consent screen 可能有組織限制、測試使用者、敏感 s
 | recurrence | 基本每日／每週／每月、間隔、結束日期或次數；不能同時輸入互斥的結束條件。 |
 | etag | Google 原值，用於條件更新。 |
 | event ID | series 與 occurrence 使用各自 ID；不可只以畫面日期當識別。 |
-| feedback link | 僅同產品 Feedback；只建立關聯，不改狀態、Tag 或 Schedule。 |
+| feedback link | 僅同產品 Feedback；只建立關聯，不改狀態或 Tag。 |
 
 例如全天 2026-10-27 一天，Google start.date=2026-10-27、end.date=2026-10-28。不要先轉 UTC 午夜再切日期。
 

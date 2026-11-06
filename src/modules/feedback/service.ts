@@ -3,9 +3,9 @@ import { AppError, assertRevision, invalid } from '@/server/errors';
 import { emitNotificationEvent } from '@/server/events';
 import { decodeCursor, encodeCursor, likePattern } from '@/modules/shared/text';
 import { loadFeedbackDto, loadFeedbackDtos, lockFeedback, type FeedbackDto, type Priority } from './repo';
-import { createScheduleForFeedback, replayScheduleDraft, type DraftAction } from '@/modules/schedule/service';
 import { placeFeedbackInRankedRoadmaps, removeFeedbackRanks } from '@/modules/roadmap/ranking';
 import { syncPersonalPlacements } from '@/modules/personal/cleanup';
+import { attachImages, deleteImagesOfFeedback } from './images';
 
 export interface Actor { id: string; displayName: string; avatarPath: string | null; googlePictureUrl: string | null; revision: number }
 
@@ -22,7 +22,8 @@ export interface ClassificationInput {
 export interface CreateFeedbackInput extends ClassificationInput {
   title: string;
   description: string;
-  scheduleDraft?: { actions: DraftAction[] };
+  /** pending images of the actor, attached in this order (phase 2 IM03) */
+  imageIds?: string[];
 }
 
 async function defaultOption(tx: Db, table: 'statuses' | 'categories', productId: string): Promise<string> {
@@ -134,10 +135,7 @@ export async function createFeedback(
   const tagSet = await resolveTagSet(tx, productId, { tagIds: input.tagIds ?? [], versionTagId: input.versionTagId }, []);
   if (tagSet) await applyTagSet(tx, productId, fb.id, tagSet);
   const people = await applyPersonTags(tx, productId, fb.id, input.personTagIds ?? []);
-  await createScheduleForFeedback(tx, productId, fb.id, actor.id);
-  if (input.scheduleDraft?.actions?.length) {
-    await replayScheduleDraft(tx, actor, productId, fb.id, input.scheduleDraft.actions);
-  }
+  await attachImages(tx, actor.id, productId, fb.id, input.imageIds ?? []);
   await placeFeedbackInRankedRoadmaps(tx, productId, fb.id);
   await emitNotificationEvent(tx, {
     productId, actorId: actor.id, feedbackId: fb.id, type: 'feedback.created',
@@ -198,6 +196,8 @@ export async function softDeleteFeedback(tx: Db, actor: Actor, productId: string
   if (!current) throw new AppError('NOT_FOUND');
   assertRevision(current.revision, expectedRevision);
   await tx`update feedback set deleted_at = now(), deleted_by = ${actor.id}, revision = revision + 1 where id = ${feedbackId}`;
+  // the images go with it: nothing can show them any more (rows now, files after commit)
+  await deleteImagesOfFeedback(tx, feedbackId);
   await removeFeedbackRanks(tx, feedbackId);
   await syncPersonalPlacements(tx, productId);
 }

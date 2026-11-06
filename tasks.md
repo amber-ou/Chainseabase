@@ -30,7 +30,7 @@
 
 **B. 核心功能與使用流程（在試用環境以真實帳號走一遍）**
 
-5. 自動化測試已在 Linux 與 CI Windows Server 通過，但尚未在試用環境以真實帳號人工走查。依序確認：邀請、接受與登入（team、tester）；Feedback 建立、編輯、留言與 Tag；Schedule 指令與 clear；Roadmap 拖曳與版本欄位；Personal 負責人切換與自動儲存；站內通知；前台只見受邀產品。對應驗收 A／F／S／R／P／N（[驗收案例](docs/07-delivery-and-acceptance.md)）。
+5. 自動化測試已在 Linux 與 CI Windows Server 通過，但尚未在試用環境以真實帳號人工走查。依序確認：邀請、接受與登入（team、tester）；Feedback 建立（含圖片）、編輯、留言與 Tag；Roadmap 拖曳與版本欄位；Personal 負責人切換與自動儲存；站內通知；前台只見受邀產品。對應驗收 A／F／S／R／P／N（[驗收案例](docs/07-delivery-and-acceptance.md)）。
 6. WIN-04 尚未實機驗證的三項：頭像網址在無痕視窗直接存取、頭像快取標頭、第二個未受邀 Google 帳號（第一次讓他人登入前確認）。
 
 **C. 試用期間的營運注意（不阻擋試用）**
@@ -502,3 +502,41 @@ UI-08 預覽階段已執行（Linux 容器，隔離 e2e 資料庫，Google 與�
   - 舊斷言依新設計更新：側邊欄沒有 Setting 項目、空狀態新文字、帳號連結同名。
 
 尚未執行：完整 `npm test`（本次未改服務層與 API）、`test:ui`、security:scan、正式可及性檢查、實體觸控裝置拖曳（只用 Playwright 滑鼠與 390 寬度模擬）、Windows 主機、真實 Google 與寄信。**完整測試待使用者確認預覽後執行。**
+
+## UI-09：第二階段 UI／UX 調整（2026-11-06）
+
+狀態：**預覽完成，尚未完成完整測試**。範圍：PE01–PE05、FB01–FB09、IM01–IM06、SC01–SC07、PD01–PD04；決定、Figma 參考對應與 Skill 使用見[變更需求](docs/change-requests/sidebar-position.md)「第二階段 UI／UX 調整」。延續 UI-08（`0e97892`），未覆寫第一階段成果。
+
+| 編號 | 狀態 | 說明 |
+| --- | --- | --- |
+| PE01–PE05 | 預覽完成 | 無 icon、無說明文字；shadcn Select 內含頭像／名稱（我）／Person tag；排序改為 icon；新增欄位改用 Dialog（失敗保留名稱、焦點返回） |
+| FB01–FB09 | 預覽完成 | 新增彈窗 `feedback-create-dialog.tsx`（Feedback 與 Roadmap 共用）；三個屬性膠囊，「＋」可搜尋或即時建立標籤；隱藏欄位的預設值不變（內部、P0、無版本，已以 E2E 驗證）；詳情移除 Schedule 分頁並加入圖片 |
+| IM01–IM06 | 預覽完成 | `0006_feedback_images.sql`；先上傳為待用，建立時關聯；前後端都驗證格式、大小與數量；去除中繼資料；每次讀取都檢查權限，回應 `private, no-store`；刪除時由 outbox 工作移除檔案 |
+| SC01–SC07 | 預覽完成（隔離資料庫驗證） | `0005_remove_schedule.sql` 刪除 4 張 Schedule 表與共用表中的 Schedule 紀錄；程式、API（舊網址回 404 並說明）、seed、壓力測試與文件已更新；Calendar 保留。**實際資料庫尚未套用**，套用前必須先備份 |
+| PD01–PD04 | 預覽完成 | 卡片依序為名稱、目前產品、`YYYY / MM / DD`（12px） |
+
+修改檔案（主要）：
+- **Migration**：`db/migrations/0005_remove_schedule.sql`、`0006_feedback_images.sql`（新增）。
+- **服務層**：`src/modules/feedback/images.ts`（新增）、`comments.ts`、`service.ts`、`src/modules/products/service.ts`、`src/modules/notifications/service.ts`、`src/server/adapters/storage.ts`（加入 `remove` 與圖片路徑白名單）、`src/server/jobs.ts`、`src/server/events.ts`、`src/server/api/routes-feedback.ts`、`routes-work.ts`。
+- **UI**：`src/features/feedback/feedback-create-dialog.tsx`（新增）、`feedback-modal.tsx`、`feedback-page.tsx`、`comments.tsx`、`types.ts`、`src/features/personal/personal-page.tsx`、`src/features/dashboard/dashboard.tsx`、`src/features/roadmap/roadmap-page.tsx`、`src/features/users/user-profile.tsx`、`src/features/settings/settings-page.tsx`、`src/features/admin/shell.tsx`、`src/app/globals.css`。
+- **刪除**：`src/modules/schedule/`、`src/features/schedule/`、`tests/unit/schedule.test.ts`、`tests/integration/schedule.test.ts`。
+- **腳本**：`scripts/seed-dev.ts`、`scripts/load-test.ts`。
+- **測試**：新增 `tests/integration/feedback-images.test.ts`、`schedule-removal.test.ts` 與 `tests/e2e/uiux-phase2.spec.ts`；更新 harness、calendar、feedback、personal-notifications、product-delete 等整合測試，以及 admin、keyboard、a11y、responsive、portal、uiux-checklist 等 E2E。
+- **文件**：CLAUDE.md、PRD.md、ui-ux.md、data-permissions.md、architecture.md、README.md、START-DEVELOPMENT.md、specs/README.md、docs/01–08、docs/04 API、docs/windows-native-deployment.md。
+
+預覽階段已執行（Linux 容器，隔離的 test／e2e 資料庫；Google、寄信、儲存為 fake）：
+- typecheck、lint、build、`git diff --check`、security:scan 皆 exit 0。
+- `npm test`：**21 檔 207 passed**。關鍵驗證：
+  - 0005：在獨立 schema 先套用 0001–0004，寫入 Schedule 與其他資料後再套用。結果 Schedule 表與紀錄已刪除、其他資料數量不變、新的 Schedule 留言會被拒絕、重跑不變、全新資料庫沒有 Schedule 表。
+  - 圖片：格式、大小與數量限制；別人或其他產品的待用圖片不能使用；未登入、tester 走後台、其他產品、內部、改回內部、移除受邀資格後一律拒絕；快取標頭；檔案生命週期。
+- 全套 Playwright：**167 passed、4 skipped**（320px 與矮視窗只在 390 project 執行）。過程中修正：
+  - 標籤選項的 ARIA 角色錯誤（axe）。
+  - 新建立的標籤未同步到頁面的 taxonomy。
+  - 彈窗關閉後焦點沒有回到開啟它的按鈕。
+- 尚未執行：
+  - 實際 Windows 資料庫套用 0005／0006（須先備份）。
+  - 真實 filesystem 或 Supabase 儲存上的圖片流程（只用 fake 與既有 filesystem 單元測試）。
+  - 實體手機觸控與實機螢幕閱讀器。
+  - 真實 Google 與寄信。
+
+**完整回歸待使用者確認預覽後執行。**

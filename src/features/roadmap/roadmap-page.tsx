@@ -98,7 +98,7 @@ export function RoadmapPage() {
         <RoadmapSettings roadmapId={selectedId} onClose={() => setSettings(false)} onChanged={() => void roadmaps.reload()} onDeleted={async () => { setSettings(false); await roadmaps.reload(); router.replace(pathname); }} />
       ) : null}
       {creatingFeedback && tax.data ? (
-        <FeedbackModal mode="create" taxonomy={tax.data} onClose={() => setCreatingFeedback(false)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} />
+        <FeedbackModal mode="create" taxonomy={tax.data} onClose={() => setCreatingFeedback(false)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} onTaxonomyChanged={() => void tax.reload()} />
       ) : null}
       {openCard && tax.data ? <FeedbackModal mode="edit" feedbackId={openCard} taxonomy={tax.data} onClose={() => setOpenCard(null)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} /> : null}
     </>

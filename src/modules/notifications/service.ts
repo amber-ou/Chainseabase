@@ -8,7 +8,7 @@ interface Recipient { id: string; role: string; membershipState: string }
 
 /**
  * Create notifications for one event. Recipients are re-checked against current
- * access; schedule content never reaches testers. Idempotent per (event, recipient).
+ * access. Idempotent per (event, recipient).
  */
 export async function fanoutNotificationEvent(tx: Db, eventId: string) {
   const [ev] = await tx<{ id: string; productId: string; actorId: string; payload: { feedbackId: string; intents: { recipientId: string; reason: NotificationReason }[] } }[]>`
@@ -48,7 +48,7 @@ export async function fanoutNotificationEvent(tx: Db, eventId: string) {
 function accessFilter(db: Db, user: { id: string; role: string }) {
   if (user.role === 'team') return db`true`;
   return db`(
-    f.visibility = 'public' and not ('schedule_comment' = any(n.reason_codes))
+    f.visibility = 'public'
     and exists (select 1 from product_access pa where pa.user_id = ${user.id} and pa.product_id = n.product_id)
   )`;
 }

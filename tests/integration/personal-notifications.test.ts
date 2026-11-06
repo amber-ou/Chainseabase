@@ -170,27 +170,23 @@ describe('Notifications', () => {
     expect(expectOk(await notes(w.teamA))).toHaveLength(1);
   });
 
-  it('N03 author gets one notification per comment (general or schedule), never for own comments; worker retries do not duplicate', async () => {
+  it('N03 author gets one notification per comment, never for own comments; worker retries do not duplicate', async () => {
     const f = await createFeedback(w, { title: '我的回饋' }, w.teamB);
     expectOk(await api.post(`${P()}/feedback/${f.id}/comments`, { as: w.teamA, body: { body: '一般留言' } }), 201);
-    expectOk(await api.post(`${P()}/feedback/${f.id}/schedule/comments`, { as: w.teamA, key: true, body: { body: '/2-3 指令留言', expectedRevision: 1 } }), 201);
+    expectOk(await api.post(`${P()}/feedback/${f.id}/comments`, { as: w.teamA, body: { body: '第二則留言' } }), 201);
     expectOk(await api.post(`${P()}/feedback/${f.id}/comments`, { as: w.teamB, body: { body: '自己留言' } }), 201);
     // simulate a crashed worker: force every job back to pending and run again
     await getSql()`update outbox_jobs set state = 'pending', next_attempt_at = now()`;
     await runJobs();
     const n = expectOk(await notes(w.teamB));
-    expect(n.map((x: any) => x.reasons[0]).sort()).toEqual(['comment', 'schedule_comment']);
+    expect(n.map((x: any) => x.reasons[0]).sort()).toEqual(['comment', 'comment']);
     const [{ c }] = await getSql()`select count(*)::int as c from notifications where recipient_id = ${w.teamB.id}`;
     expect(c).toBe(2);
   });
 
-  it('N04 a tester author never receives schedule notifications or content', async () => {
+  it('N04 a tester author gets general comment notifications without the content', async () => {
     const f = expectOk(await api.post(`/portal/products/${w.productA.id}/feedback`, { site: 'portal', as: w.tester, key: true, body: { title: '測試者的' } }), 201);
-    expectOk(await api.post(`${P()}/feedback/${f.id}/schedule/comments`, { as: w.teamA, key: true, body: { body: '內部機密排程', expectedRevision: 1 } }), 201);
-    await runJobs();
-    const n = expectOk(await notes(w.tester, 'portal'));
-    expect(n).toHaveLength(0);
-    expect(JSON.stringify(await getSql()`select * from notifications`)).not.toContain('內部機密排程');
+    expect(expectOk(await notes(w.tester, 'portal'))).toHaveLength(0);
     expectOk(await api.post(`${P()}/feedback/${f.id}/comments`, { as: w.teamA, body: { body: '公開回覆' } }), 201);
     await runJobs();
     const n2 = expectOk(await notes(w.tester, 'portal'));
