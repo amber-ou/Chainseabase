@@ -116,6 +116,18 @@ npm run test:e2e
 
 產品刪除與空清單新增 `alert-dialog.tsx`、`empty.tsx`，同樣取自官方 `4aaea19` 的 `apps/v4/registry/new-york-v4/ui/`。`empty.tsx` 與官方相同；`alert-dialog.tsx` 只有與 Dialog 相同的已記錄調整：Button 匯入路徑、`z-(--z-ui-overlay)` 堆疊 token、內容最大高度 `calc(100dvh-2rem)` 並可捲動（矮視窗不裁切按鈕）。未新增依賴（`radix-ui` 已含 AlertDialog）。
 
+## UI／UX 調整清單新增元件（2026-11-06）
+
+依清單 F05、R07、R11 與 R15，新增 `input-group.tsx`、`popover.tsx`、`switch.tsx` 與 `textarea.tsx`，同樣取自官方 `4aaea19` 的 `apps/v4/registry/new-york-v4/ui/`：
+- `textarea.tsx` 只因 `input-group.tsx` 需要而加入（官方 Input Group 會匯入它）。
+- 匯入路徑由 `@/registry/new-york-v4/ui/...` 改為 `@/components/ui/...`。
+- `popover.tsx` 的 `z-50` 改為 `z-(--z-ui-popup)`，與 DropdownMenu、Select 的堆疊 token 一致。
+- 其他內容與官方相同。未新增依賴：`radix-ui` 已含 Popover 與 Switch。
+
+拖曳排序（R15、R16）：shadcn/ui 官方 registry 沒有 sortable／drag-and-drop 元件。`src/components/sortable-list.tsx` 是本專案自製的模式，以 shadcn Popover 與 Lucide 圖示組成，不是官方元件，也沒有新增第三方套件。
+
+共用的清單工具列 `src/components/list-controls.tsx`（SearchBox、FilterPopover 等）以官方 Input Group、Popover、Tooltip 與 Button 組合而成。
+
 ## 修改檔案索引
 
 - 相依／設定：`package.json`、`package-lock.json`、`components.json`、`postcss.config.mjs`、`tsconfig.json`。

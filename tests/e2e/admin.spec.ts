@@ -8,7 +8,9 @@ test('A: bootstrap email becomes team; sidebar keeps the fixed order', async ({ 
   await openFirstProduct(page);
   const nav = page.getByRole('navigation', { name: '後台導覽' }).first();
   const labels = await nav.locator('.nav-item').allInnerTexts();
-  expect(labels.map((l) => l.replace(/\d+/g, '').trim())).toEqual(['Product', 'Calendar', 'Feedback', 'Roadmap', 'User', 'Live Portal', 'Personal', 'Notification', 'Setting']);
+  expect(labels.map((l) => l.replace(/\d+/g, '').trim())).toEqual(['Product', 'Calendar', 'Feedback', 'Roadmap', 'User', 'Live Portal', 'Personal', 'Notification']);
+  // Setting opens from the account area (checklist A01/A02)
+  await expect(page.locator('.sidebar-foot').first().getByRole('link', { name: /開啟 Setting/ })).toHaveAttribute('href', /\/settings$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Product');
   await expect(page.getByRole('list', { name: '產品' }).getByRole('link', { name: /^產品1/ })).toHaveAttribute('aria-current', 'true');
 });
@@ -76,7 +78,7 @@ test('S11: cancelling a create draft with schedule actions stores nothing', asyn
   await confirm.getByRole('button', { name: '捨棄' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByLabel('搜尋 Feedback').fill(title);
-  await expect(page.getByText('沒有符合條件的 Feedback')).toBeVisible();
+  await expect(page.getByText('沒有符合目前搜尋或篩選條件的 Feedback', { exact: false })).toBeVisible(); // F07 wording
 });
 
 test('S02–S05/S17: live schedule commands, clear and history removal', async ({ page }) => {

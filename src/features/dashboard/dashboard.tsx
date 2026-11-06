@@ -102,12 +102,12 @@ export function ProductListPage() {
   );
 
   return (
-    // the shared page header; the list uses the content width, its columns carrying the product data
+    // the shared page header, then the product cards
     <div className="flex flex-col">
       <div className="page-head">
         <div>
           <h1 ref={headingRef} tabIndex={-1} className="outline-none">Product</h1>
-          <p className="sub">{products.length ? `${products.length} 個產品。選取一列即切換目前產品，其他頁面會顯示該產品的資料。` : '尚未建立產品。'}</p>
+          <p className="sub">{products.length ? `${products.length} 個產品。點選卡片即切換目前產品，其他頁面會顯示該產品的資料。` : '尚未建立產品。'}</p>
         </div>
         {products.length ? create : null}
       </div>
@@ -120,51 +120,51 @@ export function ProductListPage() {
           <EmptyContent>{create}</EmptyContent>
         </Empty>
       ) : (
-        <Card className="gap-0 overflow-hidden rounded-lg py-0">
+        // P01: one shadcn Card per product, as many columns as the width allows (one column on phones)
+        <div className="flex flex-col gap-3">
           {!product ? (
-            <p role="status" className="border-b border-border px-4 py-3 text-sm text-muted-foreground">尚未選取產品。請從清單選取產品，或新增產品。</p>
+            <p role="status" className="m-0 text-sm text-muted-foreground">尚未選取產品。請從清單選取產品，或新增產品。</p>
           ) : null}
-          {/* column labels for the wide layout (the rows below carry the same order) */}
-          <div aria-hidden="true" className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1fr)_2.5rem] gap-4 border-b border-border bg-[var(--sunken)] px-4 py-2 text-xs text-muted-foreground md:grid">
-            <span>名稱</span><span>前台網址</span><span>建立日期</span><span />
-          </div>
-          <ul aria-label="產品" className="m-0 flex list-none flex-col divide-y divide-border p-0">
+          <ul aria-label="產品" className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-[repeat(auto-fill,minmax(17rem,1fr))]">
             {products.map((p) => {
               const current = p.id === productId;
               return (
-                <li key={p.id} className={`group flex items-center gap-2 pr-3 ${current ? 'bg-muted' : 'hover:bg-[var(--sunken)]'}`}>
-                  <Link ref={(el) => { if (el) rowRefs.current.set(p.id, el); else rowRefs.current.delete(p.id); }}
-                    href={`/products/${p.id}/dashboard`} aria-current={current ? 'true' : undefined}
-                    onClick={() => { if (!current) focusRowAfterSwitch = p.id; }}
-                    className="flex min-h-14 min-w-0 flex-1 flex-col justify-center gap-0.5 rounded-md px-4 py-2.5 text-foreground no-underline outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1fr)] md:items-center md:gap-4">
-                    <span className="flex min-w-0 items-center gap-2">
+                <li key={p.id} className="min-w-0">
+                  <Card className={`group relative h-full gap-0 rounded-lg py-0 shadow-none transition-colors ${current ? 'border-[var(--primary)] bg-[var(--active)]/40' : 'hover:border-[var(--border-strong)] hover:bg-[var(--sunken)]'}`}>
+                    {/* P04: the main area switches the product; the menu button is its sibling, never inside it */}
+                    <Link ref={(el) => { if (el) rowRefs.current.set(p.id, el); else rowRefs.current.delete(p.id); }}
+                      href={`/products/${p.id}/dashboard`} aria-current={current ? 'true' : undefined}
+                      onClick={() => { if (!current) focusRowAfterSwitch = p.id; }}
+                      className="flex min-h-24 min-w-0 flex-1 flex-col justify-between gap-3 rounded-lg py-4 pr-14 pl-4 text-foreground no-underline outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
                       <span className="min-w-0 truncate font-medium group-hover:underline">{p.name}</span>
-                      {current ? <Badge variant="outline" className="shrink-0 bg-background">目前產品</Badge> : null}
-                    </span>
-                    {/* phones: one grey line under the name; wide screens: their own columns */}
-                    <span className="truncate text-xs text-muted-foreground md:hidden">前台 /p/{p.slug} · 建立於 {ymd(p.createdAt)}</span>
-                    <span className="hidden truncate text-sm text-muted-foreground md:block">/p/{p.slug}</span>
-                    <span className="hidden text-sm text-muted-foreground tabular-nums md:block">{ymd(p.createdAt)}</span>
-                  </Link>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button ref={(el) => { if (el) actionRefs.current.set(p.id, el); else actionRefs.current.delete(p.id); }}
-                        variant="ghost" size="icon-sm" className="shrink-0 text-muted-foreground hover:text-foreground max-sm:size-11" aria-label={`${p.name} 的操作`}>
-                        <EllipsisIcon />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    {/* closing the menu returns focus to its button, unless a dialog is taking it */}
-                    <DropdownMenuContent align="end" className="min-w-40" onCloseAutoFocus={(e) => { if (toDialog.current) { toDialog.current = false; e.preventDefault(); } }}>
-                      <DropdownMenuItem onSelect={() => { toDialog.current = true; setRename({ id: p.id, open: true }); }}><PencilIcon />重新命名</DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem variant="destructive" onSelect={() => { toDialog.current = true; setRemove((r) => ({ target: p, open: true, n: (r?.n ?? 0) + 1 })); }}><Trash2Icon />刪除產品</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                      {/* P02: name, creation date and the current marker; the portal address is not shown */}
+                      <span className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="text-sm text-muted-foreground">建立於 <span className="tabular-nums">{ymd(p.createdAt)}</span></span>
+                        {current ? <Badge variant="outline" className="shrink-0 bg-background">目前產品</Badge> : null}
+                      </span>
+                    </Link>
+                    <div className="absolute top-3 right-3">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button ref={(el) => { if (el) actionRefs.current.set(p.id, el); else actionRefs.current.delete(p.id); }}
+                            variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground max-sm:size-11" aria-label={`${p.name} 的操作`}>
+                            <EllipsisIcon />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        {/* closing the menu returns focus to its button, unless a dialog is taking it */}
+                        <DropdownMenuContent align="end" className="min-w-40" onCloseAutoFocus={(e) => { if (toDialog.current) { toDialog.current = false; e.preventDefault(); } }}>
+                          <DropdownMenuItem onSelect={() => { toDialog.current = true; setRename({ id: p.id, open: true }); }}><PencilIcon />重新命名</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem variant="destructive" onSelect={() => { toDialog.current = true; setRemove((r) => ({ target: p, open: true, n: (r?.n ?? 0) + 1 })); }}><Trash2Icon />刪除產品</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </Card>
                 </li>
               );
             })}
           </ul>
-        </Card>
+        </div>
       )}
       {rename && target ? (
         <NameDialog key={target.id} open={rename.open} onOpenChange={(o) => setRename({ id: target.id, open: o })}

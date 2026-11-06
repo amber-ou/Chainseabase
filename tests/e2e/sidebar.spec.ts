@@ -7,7 +7,8 @@ import { login, openFirstProduct } from './helpers';
  * 768 / 390 (phone menu sheet), each at the project height and in a short window.
  */
 const TOP = ['Product', 'Calendar', 'Feedback', 'Roadmap', 'User', 'Live Portal'];
-const BOTTOM = ['Personal', 'Notification', 'Setting'];
+// checklist A02: Setting is no longer a separate item; the account area below opens it
+const BOTTOM = ['Personal', 'Notification'];
 const SHORT = { 'desktop-1440': { width: 1440, height: 560 }, 'tablet-768': { width: 768, height: 500 }, 'mobile-390': { width: 390, height: 560 } } as Record<string, { width: number; height: number }>;
 
 async function openNav(page: Page) {
@@ -52,7 +53,7 @@ for (const short of [false, true]) {
       expect(Math.abs(b.icon.x - boxes[0].icon.x)).toBeLessThanOrEqual(1);
     }
 
-    // the bottom three are evenly spaced, with the same step as the top group
+    // the bottom items are evenly spaced, with the same step as the top group
     const step = (i: number) => boxes[i + 1].item.y - boxes[i].item.y;
     const topStep = step(0);
     for (let i = TOP.length; i < boxes.length - 1; i++) expect(Math.abs(step(i) - topStep)).toBeLessThanOrEqual(1);
@@ -60,36 +61,45 @@ for (const short of [false, true]) {
     const gap = step(TOP.length - 1);
     expect(gap).toBeGreaterThanOrEqual(topStep + 12 - 1);
 
-    // the bottom group sits on the account area: Setting, then the account row and logout right below
+    // the bottom group sits on the account area: the account entry (A01) right below the last item
     const account = container.locator('.sidebar-foot');
-    const logout = container.getByRole('button', { name: '登出' });
-    await logout.scrollIntoViewIfNeeded();
+    const entry = account.getByRole('link', { name: /專案負責人.*開啟 Setting/ });
+    await entry.scrollIntoViewIfNeeded();
     const accountBox = await box(account);
-    const setting = await box(items.nth(boxes.length - 1));
-    expect(accountBox.y).toBeGreaterThanOrEqual(setting.y + setting.height);
-    expect(accountBox.y - (setting.y + setting.height)).toBeLessThanOrEqual(24);
+    const last = await box(items.nth(boxes.length - 1));
+    expect(accountBox.y).toBeGreaterThanOrEqual(last.y + last.height);
+    expect(accountBox.y - (last.y + last.height)).toBeLessThanOrEqual(24);
     // in a window tall enough, the free space is between the groups, not under the account area
     if (!short && !phone) {
       const aside = await box(container);
       expect(aside.y + aside.height - (accountBox.y + accountBox.height)).toBeLessThanOrEqual(24);
       expect(gap).toBeGreaterThan(topStep + 40);
     }
+    // A03: no logout in the sidebar any more (it is on the Setting page)
+    await expect(container.getByRole('button', { name: '登出' })).toHaveCount(0);
 
-    // account and logout are reachable, visible and not covered by navigation items
-    await expect(logout).toBeVisible();
-    const logoutBox = await box(logout);
-    for (let i = 0; i < boxes.length; i++) expect(overlaps(await box(items.nth(i)), logoutBox)).toBe(false);
-    const hit = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('button')?.textContent ?? '', { x: logoutBox.x + logoutBox.width / 2, y: logoutBox.y + logoutBox.height / 2 });
-    expect(hit).toContain('登出');
+    // the whole account area (avatar, name and e-mail) is one target, not covered by navigation items
+    await expect(entry).toBeVisible();
+    const entryBox = await box(entry);
+    for (const part of [entry.locator('.avatar, img, [class*="avatar"]').first(), entry.getByText('lead@e2e.test')]) {
+      if (await part.count()) {
+        const b = await box(part);
+        expect(b.x >= entryBox.x - 1 && b.x + b.width <= entryBox.x + entryBox.width + 1).toBe(true);
+      }
+    }
+    for (let i = 0; i < boxes.length; i++) expect(overlaps(await box(items.nth(i)), entryBox)).toBe(false);
+    const hit = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('a')?.getAttribute('href') ?? '', { x: entryBox.x + entryBox.width / 2, y: entryBox.y + entryBox.height / 2 });
+    expect(hit).toMatch(/\/settings$/);
 
-    // keyboard: from the product switcher, Tab visits the items in the visual order, then logout
+    // keyboard: from the product switcher, Tab visits the items in the visual order, then the account entry
     await container.locator('#product-switch').focus();
     const visited: string[] = [];
     for (let i = 0; i < TOP.length + BOTTOM.length + 1; i++) {
       await page.keyboard.press('Tab');
       visited.push(label(await page.evaluate(() => (document.activeElement as HTMLElement | null)?.innerText ?? '')));
     }
-    expect(visited).toEqual([...TOP, ...BOTTOM, '登出']);
+    expect(visited.slice(0, -1)).toEqual([...TOP, ...BOTTOM]);
+    expect(visited.at(-1)).toContain('專案負責人');
 
     await page.screenshot({ path: info.outputPath(`sidebar-${page.viewportSize()!.width}x${page.viewportSize()!.height}.png`) });
   });

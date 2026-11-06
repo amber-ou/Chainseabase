@@ -5,9 +5,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError, errorMessage } from '@/client/api';
 import { useDebounced, useResource } from '@/client/hooks';
 import { relativeTime, PRIORITY_LABEL } from '@/client/format';
-import { Avatar, Button, EmptyState, ErrorState, LoadingState, Spinner } from '@/components/ui';
-import { MultiSelect } from '@/components/multiselect';
-import { IconGlobe, IconPlus, IconSearch } from '@/components/icons';
+import { Avatar, Button, ErrorState, LoadingState, Spinner } from '@/components/ui';
+import { CheckChoices, FilterPopover, FilterSection, QuietEmpty, RadioChoices, SearchBox } from '@/components/list-controls';
+import { IconGlobe, IconPlus } from '@/components/icons';
 import { useProduct } from '@/features/admin/shell';
 import { FeedbackModal } from './feedback-modal';
 import { tagOptions, type Feedback, type Taxonomy } from './types';
@@ -81,34 +81,31 @@ export function FeedbackPage() {
           <h1>Feedback</h1>
           <p className="sub">哪些需求需要處理？依狀態分類，搜尋目前產品的標題與描述。</p>
         </div>
-        <Button variant="primary" onClick={() => setCreating(true)} disabled={!tax.data}><IconPlus />新增 Feedback</Button>
       </div>
-      <div className="toolbar toolbar-panel" role="search">
-        <div style={{ position: 'relative', flex: '1 1 260px', maxWidth: 420 }}>
-          <label htmlFor="fb-search" className="sr-only">搜尋 Feedback</label>
-          <span style={{ position: 'absolute', left: 10, top: 9, color: 'var(--muted)' }}><IconSearch /></span>
-          <input id="fb-search" className="input" style={{ paddingLeft: 32 }} placeholder="搜尋標題或描述…" maxLength={200} value={q} onChange={(e) => setQ(e.target.value)} />
+      {/* F01/F06/F09: one toolbar on the page background; create on the left, Filter and search on the right */}
+      <div className="list-toolbar">
+        <Button variant="primary" onClick={() => setCreating(true)} disabled={!tax.data}><IconPlus />新增 Feedback</Button>
+        <div className="list-toolbar-end" role="search" aria-label="搜尋與篩選 Feedback">
+          {list.refreshing ? <Spinner label="更新中" /> : null}
+          <FilterPopover active={Boolean(categoryId || tagIds.length)} onClear={() => { setCategoryId(''); setTagIds([]); }}>
+            <FilterSection title="類別">
+              <RadioChoices name="fb-category" allLabel="全部類別" value={categoryId} onChange={setCategoryId}
+                options={tax.data?.categories.map((c) => ({ id: c.id, label: c.name })) ?? []} />
+            </FilterSection>
+            <FilterSection title="標籤">
+              <CheckChoices value={tagIds} onChange={setTagIds} options={tax.data ? tagOptions(tax.data).map((o) => ({ id: o.id, label: o.label, group: o.group })) : []} emptyLabel="這個產品尚無標籤" />
+            </FilterSection>
+          </FilterPopover>
+          <SearchBox id="fb-search" label="搜尋 Feedback" value={q} onChange={setQ} className="list-toolbar-search" />
         </div>
-        <label className="sr-only" htmlFor="fb-category">類別</label>
-        <select id="fb-category" className="select" style={{ width: 180 }} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-          <option value="">全部類別</option>
-          {tax.data?.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <div style={{ width: 240 }}>
-          {tax.data ? <MultiSelect label="篩選標籤" options={tagOptions(tax.data).map((o) => ({ ...o, single: false }))} value={tagIds} onChange={setTagIds} placeholder="篩選標籤" /> : null}
-        </div>
-        {list.refreshing ? <Spinner label="更新中" /> : null}
-        <span className="muted small num" aria-live="polite">{list.data ? `共 ${list.meta.total ?? 0} 筆` : ''}</span>
       </div>
 
       {tax.error ? <ErrorState message={tax.error.message} onRetry={tax.reload} /> : null}
       {list.loading || tax.loading ? <LoadingState /> : list.error ? (
         <ErrorState message={list.error.message} onRetry={list.reload} />
       ) : items.length === 0 ? (
-        <EmptyState
-          title={debouncedQ || categoryId || tagIds.length ? '沒有符合條件的 Feedback' : '這個產品還沒有 Feedback'}
-          action={debouncedQ || categoryId || tagIds.length ? <Button size="sm" onClick={() => { setQ(''); setCategoryId(''); setTagIds([]); }}>清除篩選</Button> : <Button size="sm" variant="primary" onClick={() => setCreating(true)}>新增第一筆</Button>}
-        />
+        // F07: grey text only; "no results" (with search or filters) and "nothing yet" read differently
+        <QuietEmpty>{debouncedQ || categoryId || tagIds.length ? '沒有符合目前搜尋或篩選條件的 Feedback，可調整關鍵字或清除篩選。' : '這個產品還沒有 Feedback。'}</QuietEmpty>
       ) : (
         <GroupedList items={items} tax={tax.data!} counts={list.meta.statusCounts ?? {}} onOpen={openItem} />
       )}

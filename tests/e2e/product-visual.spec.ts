@@ -28,7 +28,10 @@ test('Product states for the visual review', async ({ page }) => {
   await expectNoPageOverflow(page);
   // the page is built from the installed shadcn/ui components, and no legacy rule overrides them
   const main = page.getByRole('main');
-  await expect(main.locator('[data-slot="card"] ul[aria-label="產品"]')).toHaveCount(1);
+  // checklist P01: one shadcn Card per product, inside the list
+  await expect(main.locator('ul[aria-label="產品"] > li > [data-slot="card"]')).toHaveCount(await list.getByRole('listitem').count());
+  // P02: the portal address is not shown
+  await expect(list.getByText(/\/p\//)).toHaveCount(0);
   // shadcn Button rendered through DialogTrigger asChild (the trigger's data-slot wins), with the Button classes
   await expect(main.getByRole('button', { name: '新增產品', exact: true })).toHaveAttribute('data-slot', 'dialog-trigger');
   await expect(main.getByRole('button', { name: '新增產品', exact: true })).toHaveClass(/bg-primary/);
@@ -38,12 +41,12 @@ test('Product states for the visual review', async ({ page }) => {
     const css = (sel: string) => getComputedStyle(document.querySelector(sel)!);
     const h1 = css('main h1');
     const add = [...document.querySelectorAll('main button')].find((b) => b.textContent?.includes('新增產品'))!;
-    const card = document.querySelector('main [data-slot="card"]')!;
+    const card = document.querySelector('main ul[aria-label="產品"] [data-slot="card"]')!;
     return {
       h1: [h1.fontSize, h1.fontWeight], addHeight: add.getBoundingClientRect().height, addBg: getComputedStyle(add).backgroundColor,
-      cardShadow: getComputedStyle(card).boxShadow, cardWidth: card.getBoundingClientRect().width,
-      // the main column's content width (its padding removed, capped at --content-max)
-      contentWidth: (() => { const m = document.querySelector('main')!; const cs = getComputedStyle(m); return Math.min(m.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--content-max'))); })(),
+      cardShadow: getComputedStyle(card).boxShadow,
+      // the cards' left edges: how many columns the grid uses
+      columns: new Set([...document.querySelectorAll('main ul[aria-label="產品"] > li')].map((li) => Math.round(li.getBoundingClientRect().left))).size,
       rowHeight: (document.querySelector('main ul[aria-label="產品"] > li') as HTMLElement).getBoundingClientRect().height,
     };
   });
@@ -53,8 +56,9 @@ test('Product states for the visual review', async ({ page }) => {
   expect(style.addBg).toBe('rgb(11, 46, 131)'); // --primary, the Chainsea navy (site-wide UI/UX pass)
   // a border or a shadow, never both: every shadow layer Tailwind composes is transparent
   expect(style.cardShadow === 'none' || /^(rgba\(0, 0, 0, 0\) 0px 0px 0px 0px(, )?)+$/.test(style.cardShadow)).toBe(true);
-  // site-wide pass: the list uses the content width (columns carry the product data on wide screens)
-  expect(Math.abs(style.cardWidth - style.contentWidth)).toBeLessThanOrEqual(1);
+  // P01: one column on phones, more where there is room
+  if (width < 640) expect(style.columns).toBe(1);
+  else expect(style.columns).toBeGreaterThan(1);
   expect(style.rowHeight).toBeGreaterThanOrEqual(56);
   await shot(page, 'product-list');
 

@@ -11,7 +11,7 @@ export interface BoardColumn { id: string; label: ReactNode; title: string; coun
  * Shared kanban (Roadmap = blue mark, Personal = teal mark). Native drag and
  * drop plus a per-card menu (move to column / up / down) for keyboard & touch.
  */
-export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, cardExtra }: {
+export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, cardExtra, plain, hideUnloaded }: {
   columns: BoardColumn[];
   accent: 'roadmap' | 'personal';
   onMove?: (cardId: string, targetColumnId: string, beforeId: string | null, afterId: string | null) => void;
@@ -19,6 +19,10 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
   readOnly?: boolean;
   onOpen?: (cardId: string) => void;
   cardExtra?: (card: BoardCard) => ReactNode;
+  /** columns without their own background, border or rounded box (Roadmap, checklist R17): only cards are boxed */
+  plain?: boolean;
+  /** while the caller filters the cards, the "N more not shown" note is left out */
+  hideUnloaded?: boolean;
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ col: string; index: number } | null>(null);
@@ -73,7 +77,7 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
       {readOnly ? null : <p className="board-swipe-hint small muted" aria-hidden="true">左右滑動查看其他欄位（共 {columns.length} 欄）</p>}
       {/* focusable so keyboard users can scroll the columns horizontally (WCAG 2.1.1) */}
       <div ref={rootRef} className={`board-scroll${readOnly ? ' board-stack-mobile' : ''}`} tabIndex={0} role="region" aria-label="看板，可左右捲動">
-        <div className="board" role="list" aria-label="看板欄位">
+        <div className={`board${plain ? ' board-plain' : ''}`} role="list" aria-label="看板欄位">
           {columns.map((col) => (
             <section key={col.id} className="column" role="listitem" aria-label={`${col.title}，${col.count} 筆`} data-drop={drop?.col === col.id || undefined}
               onDragOver={(e) => {
@@ -119,8 +123,8 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
                   </div>
                 ))}
                 {drop?.col === col.id && drop.index >= col.cards.length && col.cards.length > 0 ? <div className="drop-line" aria-hidden="true" /> : null}
-                {col.cards.length === 0 ? <p className="small muted" style={{ padding: '8px 4px' }}>{readOnly ? '沒有卡片' : '拖曳卡片到這裡'}</p> : null}
-                {col.count > col.cards.length ? <p className="small muted" style={{ padding: '0 4px' }}>另有 {col.count - col.cards.length} 筆未顯示</p> : null}
+                {col.cards.length === 0 ? <p className={`small muted${plain ? ' column-empty' : ''}`} style={{ padding: '8px 4px' }}>{readOnly ? '沒有卡片' : hideUnloaded ? '沒有符合的卡片' : '拖曳卡片到這裡'}</p> : null}
+                {!hideUnloaded && col.count > col.cards.length ? <p className="small muted" style={{ padding: '0 4px' }}>另有 {col.count - col.cards.length} 筆未顯示</p> : null}
               </div>
             </section>
           ))}

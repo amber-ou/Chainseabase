@@ -114,9 +114,11 @@ test('delete the selected product: selection cleared, back to Product, old URLs 
   const nav = page.viewportSize()!.width <= 1024 ? (await page.getByRole('button', { name: '開啟選單' }).click(), page.getByRole('dialog', { name: '選單' })) : page.locator('aside.sidebar');
   const navigation = nav.getByRole('navigation', { name: '後台導覽' });
   await expect(navigation.getByText('請先從 Product 選取產品')).toBeVisible();
-  for (const label of ['Calendar', 'Feedback', 'Roadmap', 'User', 'Live Portal', 'Personal', 'Notification', 'Setting']) {
+  for (const label of ['Calendar', 'Feedback', 'Roadmap', 'User', 'Live Portal', 'Personal', 'Notification']) {
     await expect(navigation.getByText(label, { exact: true })).toHaveAttribute('aria-disabled', 'true');
   }
+  // Setting is the account entry below the navigation and stays open without a product (checklist A04)
+  await expect(nav.locator('.sidebar-foot').getByRole('link', { name: /開啟 Setting/ })).toHaveAttribute('href', '/products/settings');
   await expect(navigation.getByRole('link')).toHaveText(['Product']);
   await expect(nav.locator('#product-switch')).toHaveValue('');
   await expectNoPageOverflow(page);

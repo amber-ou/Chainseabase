@@ -55,7 +55,7 @@ test('every main page renders for the preview', async ({ page }) => {
   await shot(page, 'feedback-detail');
   await page.keyboard.press('Escape');
   await page.goto(`${base}/users`);
-  await page.getByRole('link', { name: '專案負責人' }).first().click();
+  await page.getByRole('main').getByRole('link', { name: '專案負責人' }).first().click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('專案負責人');
   await shot(page, 'user-profile');
   // the notification panel

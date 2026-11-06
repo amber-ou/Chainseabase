@@ -1,16 +1,22 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Settings2Icon } from 'lucide-react';
 import { api, ApiError, errorMessage, newKey } from '@/client/api';
-import { useResource } from '@/client/hooks';
-import { Button, EmptyState, ErrorState, Field, LoadingState, Spinner, Switch, useAnnouncer } from '@/components/ui';
+import { useDebounced, useResource } from '@/client/hooks';
+import { Button, ErrorState, Field, LoadingState, Spinner, useAnnouncer } from '@/components/ui';
+import { Button as UiButton } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch as UiSwitch } from '@/components/ui/switch';
+import { CheckChoices, FilterPopover, IconTip, FilterSection, QuietEmpty, RadioChoices, SearchBox } from '@/components/list-controls';
+import { SortableList } from '@/components/sortable-list';
 import { ConfirmModal, Modal } from '@/components/modal';
-import { IconPlus, IconSettings } from '@/components/icons';
+import { IconPlus } from '@/components/icons';
 import { useToast } from '@/components/toast';
 import { useProduct } from '@/features/admin/shell';
 import { FeedbackModal } from '@/features/feedback/feedback-modal';
-import type { Feedback, Taxonomy } from '@/features/feedback/types';
+import { tagOptions, type Feedback, type Taxonomy } from '@/features/feedback/types';
 import { Board, type BoardColumn } from './board';
 
 interface Roadmap { id: string; name: string; description: string; dimension: 'status' | 'category' | 'tag_group'; tagGroupId: string | null; tagGroupName: string | null; sortMode: 'create_time' | 'freedom'; isDefault: boolean; portalPublished: boolean; revision: number }
@@ -28,62 +34,93 @@ export function RoadmapPage() {
   const tax = useResource<Taxonomy>(`/products/${product.id}/taxonomy`);
   const selectedId = params.get('board') ?? roadmaps.data?.[0]?.id ?? null;
   const [creating, setCreating] = useState(false);
+  const [creatingFeedback, setCreatingFeedback] = useState(false);
   const [settings, setSettings] = useState(false);
   const [openCard, setOpenCard] = useState<string | null>(null);
   const select = (id: string) => router.replace(`${pathname}?board=${id}`, { scroll: false });
 
+  // R03/R05: keep the selected tab in view inside the scrolling tab row
+  const tabRowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // scrollLeft, not scrollIntoView: that would also move the browser's Tab starting point to the tab
+    const row = tabRowRef.current;
+    const tab = row?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (!row || !tab) return;
+    const left = tab.offsetLeft - row.offsetLeft, right = left + tab.offsetWidth;
+    if (left < row.scrollLeft) row.scrollLeft = left;
+    else if (right > row.scrollLeft + row.clientWidth) row.scrollLeft = right - row.clientWidth;
+  }, [selectedId, roadmaps.data]);
+  const list = roadmaps.data ?? [];
+  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
+    const j = e.key === 'ArrowRight' ? (i + 1) % list.length : e.key === 'ArrowLeft' ? (i - 1 + list.length) % list.length : e.key === 'Home' ? 0 : e.key === 'End' ? list.length - 1 : null;
+    if (j === null) return;
+    e.preventDefault();
+    select(list[j].id);
+    tabRowRef.current?.querySelectorAll<HTMLElement>('[role="tab"]')[j]?.focus();
+  };
+
   return (
     <>
+      {/* R01: the title has no icon; the status columns keep their colour marks */}
       <div className="page-head">
         <div>
-          <h1 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span className="mark mark-roadmap" aria-hidden="true" />Roadmap</h1>
+          <h1>Roadmap</h1>
           <p className="sub">每張看板只依一個維度分欄；拖曳只修改該維度，每筆 Feedback 恰好出現在一欄。</p>
         </div>
       </div>
+      {/* R02: the existing create-Feedback flow, below the description and above the tabs */}
+      <div className="roadmap-create">
+        <Button variant="primary" onClick={() => setCreatingFeedback(true)} disabled={!tax.data}><IconPlus />新增 Feedback</Button>
+      </div>
       {roadmaps.loading ? <LoadingState /> : roadmaps.error ? <ErrorState message={roadmaps.error.message} onRetry={roadmaps.reload} /> : (
         <>
-          <div className="board-tabs">
+          {/* R03-R05: the tabs and, right after the last one, 新增 Roadmap; the row scrolls sideways on its own */}
+          <div ref={tabRowRef} className="board-tabs">
             <div className="tabs" role="tablist" aria-label="看板">
-              {(roadmaps.data ?? []).map((r) => (
-                <button key={r.id} type="button" role="tab" className="tab" aria-selected={r.id === selectedId} onClick={() => select(r.id)}>
+              {list.map((r, i) => (
+                <button key={r.id} type="button" role="tab" className="tab" aria-selected={r.id === selectedId} tabIndex={r.id === selectedId ? 0 : -1}
+                  onClick={() => select(r.id)} onKeyDown={(e) => onTabKey(e, i)}>
                   {r.name}<span className="small muted">（{r.dimension === 'tag_group' ? r.tagGroupName : DIMENSION_LABEL[r.dimension]}）</span>
                 </button>
               ))}
             </div>
-            <Button variant="ghost" icon aria-label="新增看板" onClick={() => setCreating(true)}><IconPlus /></Button>
+            <Button variant="ghost" size="sm" className="board-tabs-add" onClick={() => setCreating(true)}><IconPlus />新增 Roadmap</Button>
           </div>
           {selectedId ? (
-            <RoadmapBoard key={selectedId} roadmapId={selectedId} onOpen={setOpenCard} onSettings={() => setSettings(true)} onRoadmapsChanged={() => void roadmaps.reload()} />
-          ) : <EmptyState title="沒有看板" action={<Button onClick={() => setCreating(true)}>新增看板</Button>} />}
+            <RoadmapBoard key={selectedId} roadmapId={selectedId} taxonomy={tax.data ?? null} onOpen={setOpenCard} onSettings={() => setSettings(true)} onRoadmapsChanged={() => void roadmaps.reload()} />
+          ) : <QuietEmpty>尚無看板，可從「新增 Roadmap」建立。</QuietEmpty>}
         </>
       )}
       {creating && tax.data ? (
         <CreateRoadmapModal taxonomy={tax.data} onClose={() => setCreating(false)} onCreated={async (id) => { setCreating(false); await roadmaps.reload(); select(id); }} />
       ) : null}
       {settings && selectedId ? (
-        <RoadmapSettings roadmapId={selectedId} onClose={() => setSettings(false)} onChanged={() => void roadmaps.reload()} onDeleted={async () => { setSettings(false); await roadmaps.reload(); router.replace(pathname); }}
-          onMoveTab={async (dir) => {
-            const ids = (roadmaps.data ?? []).map((r) => r.id);
-            const i = ids.indexOf(selectedId);
-            const j = i + dir;
-            if (i < 0 || j < 0 || j >= ids.length) return;
-            [ids[i], ids[j]] = [ids[j], ids[i]];
-            await api.put(`/products/${product.id}/roadmaps/order`, { body: { roadmapIds: ids, expectedRevision: roadmaps.meta.productRevision } });
-            await roadmaps.reload();
-          }} />
+        <RoadmapSettings roadmapId={selectedId} onClose={() => setSettings(false)} onChanged={() => void roadmaps.reload()} onDeleted={async () => { setSettings(false); await roadmaps.reload(); router.replace(pathname); }} />
+      ) : null}
+      {creatingFeedback && tax.data ? (
+        <FeedbackModal mode="create" taxonomy={tax.data} onClose={() => setCreatingFeedback(false)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} />
       ) : null}
       {openCard && tax.data ? <FeedbackModal mode="edit" feedbackId={openCard} taxonomy={tax.data} onClose={() => setOpenCard(null)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} /> : null}
     </>
   );
 }
 
-function RoadmapBoard({ roadmapId, onOpen, onSettings, onRoadmapsChanged }: { roadmapId: string; onOpen: (id: string) => void; onSettings: () => void; onRoadmapsChanged: () => void }) {
+function RoadmapBoard({ roadmapId, taxonomy, onOpen, onSettings, onRoadmapsChanged }: { roadmapId: string; taxonomy: Taxonomy | null; onOpen: (id: string) => void; onSettings: () => void; onRoadmapsChanged: () => void }) {
   const { product } = useProduct();
   const board = useResource<BoardData>(`/products/${product.id}/roadmaps/${roadmapId}/board?limit=50`);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { announce, region } = useAnnouncer();
   const toast = useToast();
+  // R10/R11: search and filters only change what this board shows (the loaded cards); nothing is saved
+  const [q, setQ] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [tagIds, setTagIds] = useState<string[]>([]);
+  const debouncedQ = useDebounced(q, 200);
+  // R07/R08: the publish switch saves at once; while saving it shows the requested state and cannot be
+  // toggled again; on failure it returns to the saved state and the reason is shown
+  const [publishing, setPublishing] = useState<boolean | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
   useEffect(() => {
     const h = () => void board.reload();
     window.addEventListener('csb:board-refresh', h);
@@ -145,31 +182,85 @@ function RoadmapBoard({ roadmapId, onOpen, onSettings, onRoadmapsChanged }: { ro
       onRoadmapsChanged();
     } catch (e) { setError(errorMessage(e)); void board.reload(); }
   };
-  const columns: BoardColumn[] = data.columns.map((c) => ({ id: c.id, label: c.label, title: c.label, count: c.count, cards: c.cards }));
+  const publish = async (v: boolean) => {
+    if (publishing !== null) return;
+    setPublishing(v);
+    setPublishError(null);
+    try {
+      await api.patch(`/products/${product.id}/roadmaps/${rm.id}`, { body: { portalPublished: v, expectedRevision: rm.revision } });
+      await board.reload();
+      onRoadmapsChanged();
+      announce(v ? '已發佈到前台' : '已停止發佈到前台');
+    } catch (e) {
+      const msg = e instanceof ApiError && e.status === 409 ? '看板剛被其他人修改，已重新載入，請再切換一次。' : errorMessage(e);
+      setPublishError(`發佈狀態未變更：${msg}`);
+      void board.reload();
+    } finally { setPublishing(null); }
+  };
+
+  const needle = debouncedQ.trim().toLowerCase();
+  const filtering = Boolean(needle || categoryId || tagIds.length);
+  const matches = (card: BoardCard) => (!needle || card.title.toLowerCase().includes(needle) || (card.description ?? '').toLowerCase().includes(needle))
+    && (!categoryId || card.category?.id === categoryId)
+    && tagIds.every((t) => card.tags?.some((x) => x.id === t));
+  const columns: BoardColumn[] = data.columns.map((c) => {
+    const cards = filtering ? c.cards.filter(matches) : c.cards;
+    // while filtering, a column counts what it shows (the loaded cards that match)
+    return { id: c.id, label: c.label, title: c.label, count: filtering ? cards.length : c.count, cards };
+  });
+  const partlyLoaded = data.columns.some((c) => c.count > c.cards.length);
+  const canPublish = rm.dimension === 'status';
+  const published = publishing ?? rm.portalPublished;
 
   return (
     <div>
       {region}
-      <div className="toolbar">
-        <span className="muted">{rm.description}</span>
-        <span style={{ marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', minWidth: 0 }}>
+      {/* R06: publish switch, its text and the settings icon on the left; Filter and search on the right */}
+      <div className="list-toolbar">
+        <div className="list-toolbar-start">
+          <span className="publish-toggle">
+            <UiSwitch id="rm-publish" checked={published} disabled={!canPublish || publishing !== null} aria-busy={publishing !== null || undefined}
+              aria-describedby={canPublish ? undefined : 'rm-publish-note'} onCheckedChange={publish} />
+            <label htmlFor="rm-publish" className={canPublish ? '' : 'muted'}>發佈到前台</label>
+            {canPublish ? null : <span id="rm-publish-note" className="small muted">（僅狀態看板）</span>}
+            {publishing !== null ? <Spinner label="儲存中" /> : null}
+          </span>
+          <IconTip label="看板設定">
+            <UiButton variant="ghost" size="icon" aria-label="看板設定" onClick={onSettings}><Settings2Icon aria-hidden="true" /></UiButton>
+          </IconTip>
+        </div>
+        <div className="list-toolbar-end" role="search" aria-label="搜尋與篩選看板 Feedback">
           {board.refreshing ? <Spinner label="更新中" /> : null}
-          {rm.portalPublished ? <span className="chip chip-positive">已發布到前台</span> : null}
-          <label className="sr-only" htmlFor="sort-mode">排序方式</label>
-          <select id="sort-mode" className="select" style={{ width: 180 }} value={rm.sortMode} onChange={(e) => setSort(e.target.value as Roadmap['sortMode'])}>
-            <option value="create_time">建立時間（新到舊）</option>
-            <option value="freedom">自由排序</option>
-          </select>
-          <Button onClick={onSettings}><IconSettings />看板設定</Button>
-        </span>
+          <FilterPopover active={Boolean(categoryId || tagIds.length)} onClear={() => { setCategoryId(''); setTagIds([]); }}>
+            <FilterSection title="類別">
+              <RadioChoices name={`rm-category-${rm.id}`} allLabel="全部類別" value={categoryId} onChange={setCategoryId}
+                options={taxonomy?.categories.map((c) => ({ id: c.id, label: c.name })) ?? []} />
+            </FilterSection>
+            <FilterSection title="標籤">
+              <CheckChoices value={tagIds} onChange={setTagIds} options={taxonomy ? tagOptions(taxonomy).map((o) => ({ id: o.id, label: o.label, group: o.group })) : []} emptyLabel="這個產品尚無標籤" />
+            </FilterSection>
+            {/* the board's existing sort setting (saved on the board, as before) */}
+            <FilterSection title="排序">
+              <RadioChoices name={`rm-sort-${rm.id}`} value={rm.sortMode} onChange={(v) => void setSort(v as Roadmap['sortMode'])}
+                options={[{ id: 'freedom', label: '自由排序' }, { id: 'create_time', label: '建立時間（新到舊）' }]} />
+            </FilterSection>
+          </FilterPopover>
+          <SearchBox id={`rm-search-${rm.id}`} label="搜尋看板 Feedback" value={q} onChange={setQ} className="list-toolbar-search" />
+        </div>
       </div>
+      {publishError ? <div className="banner banner-error" role="alert" style={{ marginBottom: 12 }}>{publishError}</div> : null}
       {error ? <div className="banner banner-error" role="alert" style={{ marginBottom: 12 }}>{error}</div> : null}
-      <Board columns={columns} accent="roadmap" onMove={move} pendingId={pendingId} onOpen={onOpen}
-        cardExtra={(card) => {
-          const f = card as unknown as Feedback;
-          const tags = [f.category?.name, f.version ? `版本 ${f.version.name}` : null].filter(Boolean);
-          return tags.length ? <div className="chips">{tags.slice(0, 2).map((t) => <span key={t} className="chip">{t}</span>)}</div> : null;
-        }} />
+      {filtering && partlyLoaded ? <p className="small muted" style={{ margin: '0 0 8px' }}>搜尋與篩選只套用於目前已載入的卡片。</p> : null}
+      {filtering && columns.every((c) => c.cards.length === 0) ? (
+        <QuietEmpty>沒有符合目前搜尋或篩選條件的 Feedback，可調整關鍵字或清除篩選。</QuietEmpty>
+      ) : (
+        <Board columns={columns} accent="roadmap" plain onMove={move} pendingId={pendingId} onOpen={onOpen} hideUnloaded={filtering}
+          cardExtra={(card) => {
+            const f = card as unknown as Feedback;
+            const tags = [f.category?.name, f.version ? `版本 ${f.version.name}` : null].filter(Boolean);
+            return tags.length ? <div className="chips">{tags.slice(0, 2).map((t) => <span key={t} className="chip">{t}</span>)}</div> : null;
+          }} />
+      )}
     </div>
   );
 }
@@ -179,7 +270,6 @@ function CreateRoadmapModal({ taxonomy, onClose, onCreated }: { taxonomy: Taxono
   const singleGroups = taxonomy.tagGroups.filter((g) => g.selectionMode === 'single');
   const multiGroups = taxonomy.tagGroups.filter((g) => g.selectionMode === 'multiple');
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [dimension, setDimension] = useState<'status' | 'category' | 'tag_group'>('status');
   const [groupId, setGroupId] = useState(singleGroups[0]?.id ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -188,7 +278,7 @@ function CreateRoadmapModal({ taxonomy, onClose, onCreated }: { taxonomy: Taxono
     setPending(true);
     setErrors({});
     try {
-      const r = await api.post(`/products/${product.id}/roadmaps`, { body: { name, description, dimension, tagGroupId: dimension === 'tag_group' ? groupId : null } });
+      const r = await api.post(`/products/${product.id}/roadmaps`, { body: { name, dimension, tagGroupId: dimension === 'tag_group' ? groupId : null } });
       onCreated(r.data.id);
     } catch (e) {
       setErrors(e instanceof ApiError ? { ...e.body.fieldErrors, _: e.message } : { _: errorMessage(e) });
@@ -210,92 +300,74 @@ function CreateRoadmapModal({ taxonomy, onClose, onCreated }: { taxonomy: Taxono
           </select>
         )}</Field>
       ) : null}
-      <Field label="看板名稱" required error={errors.name}>{(p) => <input {...p} className="input" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} data-autofocus />}</Field>
-      <Field label="描述" error={errors.description}>{(p) => <input {...p} className="input" maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} />}</Field>
+      <Field label="看板名稱" required error={errors.name}>{(p) => <Input {...p} maxLength={60} value={name} onChange={(e) => setName(e.target.value)} data-autofocus />}</Field>
       <p className="small muted">每個選項自動成為一欄{dimension === 'tag_group' ? '，另有固定的「未歸類」欄' : ''}；不提供 AND／OR 或自訂條件。</p>
     </Modal>
   );
 }
 
-function RoadmapSettings({ roadmapId, onClose, onChanged, onDeleted, onMoveTab }: { roadmapId: string; onClose: () => void; onChanged: () => void; onDeleted: () => void; onMoveTab: (dir: -1 | 1) => Promise<void> }) {
+function RoadmapSettings({ roadmapId, onClose, onChanged, onDeleted }: { roadmapId: string; onClose: () => void; onChanged: () => void; onDeleted: () => void }) {
   const { product } = useProduct();
   const board = useResource<BoardData>(`/products/${product.id}/roadmaps/${roadmapId}/board?limit=1`);
   const [name, setName] = useState<string | null>(null);
-  const [description, setDescription] = useState<string | null>(null);
   const [labels, setLabels] = useState<Record<string, string>>({});
+  // R15: the column order is changed here and saved with 儲存, like the names (取消 discards it)
+  const [order, setOrder] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   if (!board.data) return <Modal title="看板設定" onClose={onClose}>{board.error ? <ErrorState message={board.error.message} onRetry={board.reload} /> : <LoadingState />}</Modal>;
   const rm = board.data.roadmap;
+  const savedOrder = board.data.columns.map((c) => c.id);
+  const currentOrder = order ?? savedOrder;
+  const nameValue = name ?? rm.name;
+  const nameError = name !== null && !name.trim() ? '請輸入看板名稱' : null;
   const save = async () => {
+    if (nameError) return;
     setPending(true);
     setError(null);
     try {
       let rev = rm.revision;
-      if ((name ?? rm.name) !== rm.name || (description ?? rm.description) !== rm.description) {
-        rev = (await api.patch(`/products/${product.id}/roadmaps/${rm.id}`, { body: { name: name ?? rm.name, description: description ?? rm.description, expectedRevision: rev } })).data.revision;
+      if (nameValue !== rm.name) {
+        rev = (await api.patch(`/products/${product.id}/roadmaps/${rm.id}`, { body: { name: nameValue, expectedRevision: rev } })).data.revision;
       }
       for (const [colId, label] of Object.entries(labels)) {
         const col = board.data!.columns.find((c) => c.id === colId)!;
         if (label.trim() && label !== col.label) rev = (await api.patch(`/products/${product.id}/roadmaps/${rm.id}/columns/${colId}`, { body: { label, expectedRevision: rev } })).data.roadmapRevision;
       }
+      if (currentOrder.join() !== savedOrder.join()) {
+        await api.put(`/products/${product.id}/roadmaps/${rm.id}/columns/order`, { body: { columnIds: currentOrder, expectedRevision: rev } });
+      }
       onChanged();
       window.dispatchEvent(new Event('csb:board-refresh'));
       onClose();
     } catch (e) {
-      setError(errorMessage(e));
+      setError(e instanceof ApiError && e.status === 409 ? '看板剛被其他人修改，已重新載入；請確認後再儲存。' : errorMessage(e));
+      setOrder(null);
       void board.reload();
     } finally { setPending(false); }
-  };
-  const moveColumn = async (index: number, dir: -1 | 1) => {
-    const ids = board.data!.columns.map((c) => c.id);
-    const j = index + dir;
-    if (j < 0 || j >= ids.length) return;
-    [ids[index], ids[j]] = [ids[j], ids[index]];
-    try {
-      await api.put(`/products/${product.id}/roadmaps/${rm.id}/columns/order`, { body: { columnIds: ids, expectedRevision: rm.revision } });
-      await board.reload();
-      window.dispatchEvent(new Event('csb:board-refresh'));
-    } catch (e) { setError(errorMessage(e)); void board.reload(); }
-  };
-  const publish = async (v: boolean) => {
-    try {
-      await api.patch(`/products/${product.id}/roadmaps/${rm.id}`, { body: { portalPublished: v, expectedRevision: rm.revision } });
-      await board.reload();
-      onChanged();
-      window.dispatchEvent(new Event('csb:board-refresh'));
-    } catch (e) { setError(errorMessage(e)); }
   };
   return (
     <Modal title="看板設定" onClose={onClose} footer={<>
       {!rm.isDefault ? <span className="spacer"><Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>刪除看板</Button></span> : <span className="spacer small muted">預設看板不可刪除</span>}
-      <Button onClick={onClose}>取消</Button><Button variant="primary" pending={pending} onClick={save}>儲存</Button>
+      <Button onClick={onClose}>取消</Button><Button variant="primary" pending={pending} disabled={Boolean(nameError)} onClick={save}>儲存</Button>
     </>}>
       {error ? <div className="banner banner-error" role="alert">{error}</div> : null}
-      <p className="small muted">分欄維度：{rm.dimension === 'tag_group' ? `Tag 群組「${rm.tagGroupName}」` : DIMENSION_LABEL[rm.dimension]}（不可修改；要換維度請另建看板）</p>
-      <Field label="名稱">{(p) => <input {...p} className="input" maxLength={60} value={name ?? rm.name} onChange={(e) => setName(e.target.value)} />}</Field>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span className="field-label">Tab 順序</span>
-        <Button size="sm" onClick={() => onMoveTab(-1).catch((e) => setError(errorMessage(e)))}>往前移</Button>
-        <Button size="sm" onClick={() => onMoveTab(1).catch((e) => setError(errorMessage(e)))}>往後移</Button>
-      </div>
-      <Field label="描述">{(p) => <input {...p} className="input" maxLength={500} value={description ?? rm.description} onChange={(e) => setDescription(e.target.value)} />}</Field>
-      {rm.dimension === 'status' ? (
-        <Switch checked={rm.portalPublished} onChange={publish} label="發布到前台（只顯示公開卡片，不可拖曳）" />
-      ) : <p className="small muted">第一版只有狀態看板可以發布到前台。</p>}
+      {/* R12-R14: name and column names only, in shadcn Input; the description, the dimension note, tab order and the Setting note are gone */}
+      <Field label="名稱" required error={nameError}>{(p) => <Input {...p} maxLength={60} value={nameValue} onChange={(e) => setName(e.target.value)} />}</Field>
       <div>
-        <div className="field-label" style={{ marginBottom: 6 }}>欄位顯示名稱與順序</div>
-        {board.data.columns.map((c, i) => (
-          <div key={c.id} className="option-row">
-            <label className="sr-only" htmlFor={`col-${c.id}`}>欄位名稱</label>
-            <input id={`col-${c.id}`} className="input name" maxLength={50} value={labels[c.id] ?? c.label} onChange={(e) => setLabels((l) => ({ ...l, [c.id]: e.target.value }))} />
-            {c.isUnclassified ? <span className="chip">未歸類</span> : null}
-            <Button size="sm" variant="ghost" aria-label={`上移「${c.label}」`} disabled={i === 0} onClick={() => moveColumn(i, -1)}>↑</Button>
-            <Button size="sm" variant="ghost" aria-label={`下移「${c.label}」`} disabled={i === board.data!.columns.length - 1} onClick={() => moveColumn(i, 1)}>↓</Button>
-          </div>
-        ))}
-        <p className="small muted" style={{ marginTop: 6 }}>欄位對應的選項由 Setting 管理；移除選項需先處理引用。</p>
+        <div className="field-label" id="rm-columns-label" style={{ marginBottom: 6 }}>欄位顯示名稱與順序</div>
+        <SortableList label="欄位顯示名稱與順序" order={currentOrder} onChange={setOrder}
+          items={board.data.columns.map((c) => ({
+            id: c.id, name: labels[c.id] ?? c.label,
+            content: (
+              <>
+                <Input id={`col-${c.id}`} aria-label={`「${c.label}」欄位名稱`} maxLength={50} className="min-w-0 flex-1" value={labels[c.id] ?? c.label}
+                  onChange={(e) => setLabels((l) => ({ ...l, [c.id]: e.target.value }))} />
+                {c.isUnclassified ? <span className="chip">未歸類</span> : null}
+              </>
+            ),
+          }))} />
       </div>
       {confirmDelete ? (
         <ConfirmModal title={`刪除看板「${rm.name}」？`} confirmLabel="刪除看板" danger onCancel={() => setConfirmDelete(false)} onConfirm={async () => {

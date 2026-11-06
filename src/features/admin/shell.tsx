@@ -64,7 +64,7 @@ export function useUnsaved(key: string, dirty: boolean) {
 }
 
 // sidebar groups (docs/change-requests/sidebar-position.md): the top group, then Live Portal;
-// the bottom group (Personal, Notification, Setting) sits just above the account area
+// the bottom group (Personal, Notification) sits just above the account area, which opens Setting
 const SECTIONS = [
   { key: 'dashboard', label: 'Product', icon: IconProduct },
   { key: 'calendar', label: 'Calendar', icon: IconCalendar },
@@ -147,7 +147,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     // an old link or another tab of a deleted product: nothing of it is requested or shown
     return <main id="main" tabIndex={-1} className="main"><ErrorState title="找不到產品" message="此產品不存在，可能已被刪除。" next={<Link className="btn" href="/products">返回 Product</Link>} /></main>;
   }
-  const section = product ? pathname.split('/')[3] ?? 'dashboard' : 'dashboard';
+  const section = product ? pathname.split('/')[3] ?? 'dashboard' : pathname === '/products/settings' ? 'settings' : 'dashboard';
   const go = (href: string) => {
     if (dirty.current.size > 0) setPendingNav(href);
     else router.push(href);
@@ -155,18 +155,20 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const switchProduct = (id: string) => go(`/products/${id}/${['dashboard', 'calendar', 'feedback', 'roadmaps', 'personal', 'users', 'settings'].includes(section) ? section : 'dashboard'}`);
   const current = [...SECTIONS, ...SECTIONS_BOTTOM, { key: 'settings', label: 'Setting' }].find((s) => s.key === section)?.label ?? 'Product';
 
+  // A01: the whole account area is the entry to Setting (no menu in between); A03: logout lives in Setting
+  const settingsHref = product ? `/products/${product.id}/settings` : '/products/settings';
+  const onSettings = section === 'settings';
   const foot = (
     <div className="sidebar-foot">
-      <div className="user-row">
+      <NavLink href={settingsHref} active={onSettings} onNavigate={go} className="user-row account-entry">
         <Avatar name={me.displayName} url={me.avatarUrl} id={me.id} size={28} />
-        <div style={{ minWidth: 0 }}>
-          <div className="name">{me.displayName}</div>
-          <div className="name small muted">{me.email}</div>
-        </div>
-      </div>
-      {/* full navigation after logout drops all client state of the old session */}
-      {/* eslint-disable-next-line @next/next/no-location-assign-relative-destination */}
-      <Button size="sm" variant="ghost" onClick={async () => { await api.post('/auth/logout'); window.location.assign('/login'); }}>登出</Button>
+        <span className="account-text">
+          <span className="name">{me.displayName}</span>
+          <span className="name small muted">{me.email}</span>
+        </span>
+        <span className="sr-only">（開啟 Setting）</span>
+        <IconSettings />
+      </NavLink>
     </div>
   );
   // with no product selected, the product sections are shown but cannot open (no request is made for them)
@@ -195,7 +197,6 @@ export function AdminShell({ children }: { children: ReactNode }) {
             <NavLink key={s.key} href={`/products/${product.id}/${s.key}`} active={section === s.key} onNavigate={go} icon={<s.icon />}>{s.label}</NavLink>
           ))}
           <NotificationsButton productId={product.id} onOpenFeedback={(id) => go(`/products/${product.id}/feedback?item=${id}`)} />
-          <NavLink href={`/products/${product.id}/settings`} active={section === 'settings'} onNavigate={go} icon={<IconSettings />}>Setting</NavLink>
         </div>
       </nav>
       {foot}
@@ -213,14 +214,13 @@ export function AdminShell({ children }: { children: ReactNode }) {
       <nav className="nav" aria-label="後台導覽">
         <p id="nav-need-product" className="small muted" style={{ margin: '0 10px 6px' }}>{needProduct}</p>
         <div className="nav-group">
-          <NavLink href="/products" active onNavigate={go} icon={<IconProduct />}>Product</NavLink>
+          <NavLink href="/products" active={!onSettings} onNavigate={go} icon={<IconProduct />}>Product</NavLink>
           {SECTIONS.filter((s) => s.key !== 'dashboard').map((s) => off(s.label, <s.icon />))}
           {off('Live Portal', <IconPortal />)}
         </div>
         <div className="nav-group nav-group-bottom">
           {SECTIONS_BOTTOM.map((s) => off(s.label, <s.icon />))}
           {off('Notification', <IconBell />)}
-          {off('Setting', <IconSettings />)}
         </div>
       </nav>
       {foot}
@@ -233,7 +233,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <aside className="sidebar">{nav}</aside>
         <header className="topbar">
           <Button ref={menuBtnRef} variant="ghost" icon aria-label="開啟選單" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><IconMenu /></Button>
-          <span className="screen-name">{product ? `${current} · ${product.name}` : 'Product'}</span>
+          <span className="screen-name">{product ? `${current} · ${product.name}` : onSettings ? 'Setting' : 'Product'}</span>
         </header>
         <div ref={sheetRef} className="mobile-sheet" data-open={menuOpen} role="dialog" aria-modal="true" aria-label="選單" hidden={!menuOpen}>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}><Button variant="ghost" icon aria-label="關閉選單" onClick={() => setMenuOpen(false)}><IconX /></Button></div>
@@ -259,9 +259,9 @@ function ToLogin() {
   return <LoadingState label="正在前往登入頁…" />;
 }
 
-function NavLink({ href, active, children, icon, onNavigate }: { href: string; active: boolean; children: ReactNode; icon: ReactNode; onNavigate: (href: string) => void }) {
+function NavLink({ href, active, children, icon, onNavigate, className = 'nav-item', label }: { href: string; active: boolean; children: ReactNode; icon?: ReactNode; onNavigate: (href: string) => void; className?: string; label?: string }) {
   return (
-    <a className="nav-item" href={href} aria-current={active ? 'page' : undefined} onClick={(e) => {
+    <a className={className} href={href} aria-label={label} aria-current={active ? 'page' : undefined} onClick={(e) => {
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
       e.preventDefault();
       onNavigate(href);

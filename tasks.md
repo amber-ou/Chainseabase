@@ -463,3 +463,42 @@ E2E 新增邀請頁兩案（1440／768／390）：開啟即顯示「邀請已失
 - 前一次推送（`17efee9`）前的本機完整 `test:e2e`：140 passed。
 
 尚未執行：本次變更後的完整 `npm test`、`test:ui`、全套 `test:e2e`、security:scan、正式可及性檢查、Windows 主機、真實 Google 與寄信。
+
+## UI-08：UI／UX 調整清單（2026-11-06）
+
+狀態：**預覽完成，尚未完成完整測試**。範圍：A01–A04、P01–P04、F01–F09、R01–R17；決定與 Skill 對應見[變更需求](docs/change-requests/sidebar-position.md)「UI／UX 調整清單」。延續 `72c0e7b`（UI-07 第二次預覽），未覆寫先前成果。完整回歸與全套 E2E 待使用者確認預覽後執行。
+
+| 編號 | 狀態 | 說明 |
+| --- | --- | --- |
+| A01–A03 | 預覽完成 | 帳號區整列連到 Setting；側邊欄移除 Setting 項目與登出；登出移到 Setting「帳號」區塊 |
+| A04 | 預覽完成 | 新增 `/products/settings`：未選產品時只顯示個人設定與登出 |
+| P01–P04 | 預覽完成 | 每個產品一張 shadcn Card（grid 自動排欄，手機單欄）；不顯示前台網址；選單與切換分開 |
+| F01–F09 | 預覽完成 | 無面板工具列；Filter 浮層（類別、標籤）；Input Group 搜尋；灰字空狀態兩種文字；移除筆數 |
+| R01–R05 | 預覽完成 | 標題無 icon；新增 Feedback；Tab 後緊接新增 Roadmap；Tab 列修正 1px 溢出並可水平捲動；方向鍵切換 Tab |
+| R06–R09 | 預覽完成 | 工具列 Switch（立即儲存、儲存中停用、失敗還原並說明）；設定 icon 加提示；設定視窗移除發佈開關 |
+| R10–R11 | 預覽完成 | Filter 含類別、標籤、排序；搜尋與篩選只在前端過濾已載入的卡片（每欄前 50 張，畫面有提示） |
+| R12–R14 | 預覽完成 | 移除描述（主畫面、設定、新增看板視窗）與指定說明；設定輸入框改為 shadcn Input |
+| R15–R16 | 預覽完成 | 自製 `SortableList`：把手拖曳、方向鍵、點擊開啟移動選單；順序在儲存時送出。shadcn 無官方方案，未加依賴 |
+| R17 | 預覽完成 | Roadmap 欄位無底色、外框與圓角，只有卡片有外框（Personal 與前台不變） |
+
+待使用者確認：新增看板視窗是否一併移除描述欄位（目前已移除）；前台是否自動導向 Login（維持原行為）。
+
+修改檔案：`src/features/admin/shell.tsx`、`src/features/settings/settings-page.tsx`、`src/app/products/settings/page.tsx`（新增）、`src/features/dashboard/dashboard.tsx`、`src/features/feedback/feedback-page.tsx`、`src/features/roadmap/roadmap-page.tsx`、`src/features/roadmap/board.tsx`、`src/components/list-controls.tsx`（新增）、`src/components/sortable-list.tsx`（新增）、`src/components/ui/{input-group,popover,switch,textarea}.tsx`（官方 4aaea19）、`src/app/globals.css`。測試：新增 `tests/e2e/uiux-checklist.spec.ts`；依新設計更新 `sidebar`、`admin`、`product-visual` 的斷言；`playwright.config.ts` 讓平板與手機納入新 spec。
+
+UI-08 預覽階段已執行（Linux 容器，隔離 e2e 資料庫，Google 與寄信為 fake）：
+- typecheck、lint、build（E2E 啟動時建置）、`git diff --check` 皆 exit 0。
+- `uiux-checklist`（1440／768／390）涵蓋以下情境：
+  - 帳號入口在有產品與未選產品兩種情況都能開啟 Setting；登出後再開後台會回到 Login。
+  - 卡片選單與切換產品分開。
+  - Feedback 工具列的位置、Filter 浮層、提示、焦點返回、兩種空狀態與灰字色值。
+  - Roadmap：
+    - Tab 列沒有垂直捲動，並在列內水平捲動；新增 Roadmap 緊接最後一個 Tab；方向鍵切換 Tab。
+    - 發佈開關可成功切換。失敗以 mock 500 模擬：儲存中為停用，失敗後回復原狀並顯示原因。類別看板的開關為停用。
+    - 篩選與排序、搜尋標題與描述、欄位無外框。
+    - 設定視窗：移除項目已不存在；方向鍵、滑鼠拖曳與點擊選單三種排序方式都可用；取消不儲存，儲存後順序正確。
+- 因 `empty-last` project 依賴三種尺寸，最後一次執行實際跑完整套 Playwright：**153 passed**。過程中修正：
+  - Tooltip 缺少 Provider，導致頁面崩潰。
+  - Tab 自動捲動改變 Tab 起點，導致跳到主要內容連結失效。
+  - 舊斷言依新設計更新：側邊欄沒有 Setting 項目、空狀態新文字、帳號連結同名。
+
+尚未執行：完整 `npm test`（本次未改服務層與 API）、`test:ui`、security:scan、正式可及性檢查、實體觸控裝置拖曳（只用 Playwright 滑鼠與 390 寬度模擬）、Windows 主機、真實 Google 與寄信。**完整測試待使用者確認預覽後執行。**

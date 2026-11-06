@@ -5,22 +5,27 @@ import { api, ApiError, errorMessage } from '@/client/api';
 import { useResource } from '@/client/hooks';
 import { useSite } from '@/client/site';
 import { Avatar, Button, ErrorState, Field, LoadingState } from '@/components/ui';
+import { LogOut } from 'lucide-react';
 import { Modal } from '@/components/modal';
 import { Tabs } from '@/components/tabs';
 import { MultiSelect } from '@/components/multiselect';
 import { useToast } from '@/components/toast';
-import { useProduct } from '@/features/admin/shell';
+import { useProduct, useProductList } from '@/features/admin/shell';
 import type { Taxonomy } from '@/features/feedback/types';
 
 export function SettingsPage() {
   const [tab, setTab] = useState('me');
+  // A04: reachable from the account entry with no product selected; tags and Person tags still need one
+  const { product } = useProductList();
   return (
     // forms keep a reading width instead of stretching across the screen
     <div className="page-narrow">
-      <div className="page-head"><div><h1>Setting</h1><p className="sub">管理個人資料、分類標籤與工作職掌。</p></div></div>
-      <Tabs label="設定" value={tab} onChange={setTab} tabs={[{ id: 'me', label: '個人設定' }, { id: 'tags', label: '管理標籤' }, { id: 'people', label: '管理 Person tag' }]}>
-        {tab === 'me' ? <PersonalSettings /> : tab === 'tags' ? <TagSettings /> : <PersonTagSettings />}
-      </Tabs>
+      <div className="page-head"><div><h1>Setting</h1><p className="sub">{product ? '管理個人資料、分類標籤與工作職掌。' : '管理個人資料。選取產品後可管理該產品的標籤與 Person tag。'}</p></div></div>
+      {product ? (
+        <Tabs label="設定" value={tab} onChange={setTab} tabs={[{ id: 'me', label: '個人設定' }, { id: 'tags', label: '管理標籤' }, { id: 'people', label: '管理 Person tag' }]}>
+          {tab === 'me' ? <PersonalSettings /> : tab === 'tags' ? <TagSettings /> : <PersonTagSettings />}
+        </Tabs>
+      ) : <PersonalSettings />}
     </div>
   );
 }
@@ -36,16 +41,18 @@ function Section({ title, description, children }: { title: string; description:
 
 function PersonalSettings() {
   const { me, reloadMe, site } = useSite();
-  const { product } = useProduct();
+  const { product } = useProductList();
   const toast = useToast();
   const [name, setName] = useState(me?.displayName ?? '');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [avatarState, setAvatarState] = useState<{ pending: boolean; error: string | null }>({ pending: false, error: null });
-  const tax = useResource<Taxonomy>(`/products/${product.id}/taxonomy`);
-  const users = useResource<{ id: string; personTags: { id: string }[] }[]>(`/products/${product.id}/users`);
+  const tax = useResource<Taxonomy>(product ? `/products/${product.id}/taxonomy` : null);
+  const users = useResource<{ id: string; personTags: { id: string }[] }[]>(product ? `/products/${product.id}/users` : null);
   const mine = users.data?.find((u) => u.id === me?.id)?.personTags.map((t) => t.id) ?? [];
   const [tagError, setTagError] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   if (!me) return <LoadingState />;
   return (
     <>
@@ -79,18 +86,39 @@ function PersonalSettings() {
         </div>
         {avatarState.error ? <div className="field-error" role="alert">{avatarState.error}</div> : null}
       </Section>
+      {product ? (
       <Section title={`我在「${product.name}」的 Person tag`} description="決定 Personal 的負責清單與指派通知。選「未安排」代表沒有實際職掌。">
         {tax.data && users.data ? (
           <MultiSelect label="我的 Person tag" noneLabel="未安排" options={tax.data.personTags.map((t) => ({ id: t.id, label: t.name }))} value={mine} onChange={async (ids) => {
             setTagError(null);
             try {
-              await api.put(`/products/${product.id}/users/${me.id}/person-tags`, { body: { personTagIds: ids, expectedRevision: tax.data!.productRevision } });
+              await api.put(`/products/${product!.id}/users/${me.id}/person-tags`, { body: { personTagIds: ids, expectedRevision: tax.data!.productRevision } });
               await Promise.all([tax.reload(), users.reload()]);
             } catch (e) { setTagError(e instanceof ApiError && e.status === 409 ? '設定已被其他人更新，已重新載入。' : errorMessage(e)); await tax.reload(); }
           }} />
         ) : <LoadingState />}
         {tagError ? <div className="field-error" role="alert">{tagError}</div> : null}
       </Section>
+      ) : null}
+      {/* A03: logout, apart from the save actions above */}
+      <section className="settings-section settings-account" aria-label="帳號">
+        <div><h2>帳號</h2><p className="muted" style={{ marginTop: 6 }}>目前以 {me.email} 登入。登出後需重新以 Google 登入。</p></div>
+        <div className="settings-panel">
+          <div>
+            {/* full navigation after logout drops all client state of the old session (unchanged behaviour) */}
+            <Button pending={loggingOut} onClick={async () => {
+              setLoggingOut(true);
+              setLogoutError(null);
+              try {
+                await api.post('/auth/logout');
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                window.location.assign('/login');
+              } catch (e) { setLogoutError(errorMessage(e)); setLoggingOut(false); }
+            }}><LogOut aria-hidden="true" size={16} />登出</Button>
+          </div>
+          {logoutError ? <div className="field-error" role="alert">{logoutError}</div> : null}
+        </div>
+      </section>
     </>
   );
 }
