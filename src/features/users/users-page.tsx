@@ -53,7 +53,6 @@ export function UsersPage() {
       <div className="page-head">
         <div>
           <h1>User</h1>
-          <p className="sub">哪些成員能使用「{product.name}」、負責什麼？列出所有團隊成員與此產品受邀的測試成員。</p>
         </div>
         <Button variant="primary" onClick={() => setInviting(true)}>Email 邀請</Button>
       </div>

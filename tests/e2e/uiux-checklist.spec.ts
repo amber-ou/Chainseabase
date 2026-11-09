@@ -182,10 +182,10 @@ test('R01–R17: Roadmap tabs, toolbar, publish switch, filters and settings', a
   await expect(main.getByRole('tab').first()).toBeVisible();
   // R01: no icon in the title
   await expect(main.getByRole('heading', { level: 1 }).locator('.mark')).toHaveCount(0);
-  // R02: 新增 Feedback above the tabs, on the left
-  const create = main.getByRole('button', { name: '新增 Feedback' });
+  // R02 replaced by RM-01/02 (2026-11-09): no 新增 Feedback above the tabs; each column header has its own ＋
+  await expect(main.getByRole('button', { name: '新增 Feedback', exact: true })).toHaveCount(0);
+  await expect(main.getByRole('button', { name: /^新增 Feedback 至〔/ }).first()).toBeVisible();
   const tabsRow = main.locator('.board-tabs');
-  expect((await create.boundingBox())!.y).toBeLessThan((await tabsRow.boundingBox())!.y);
   // R03: 新增 Roadmap is the last thing in the tab row, right after the last tab
   const add = tabsRow.getByRole('button', { name: '新增 Roadmap' });
   expect(await tabsRow.evaluate((row) => row.lastElementChild?.textContent)).toContain('新增 Roadmap');

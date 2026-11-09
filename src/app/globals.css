@@ -55,7 +55,10 @@
    those elements; old forms/tables remain under the original legacy rules. */
 @layer base {
   [data-slot] { border: 0 solid var(--border); margin: 0; }
-  button[data-slot], input[data-slot] { font: inherit; background: transparent; }
+  /* shadcn components assume Tailwind Preflight, which this project does not load: without it a <button>
+     keeps the browser's own padding (1px 6px). That pushed the Switch thumb 6px out of its track (SW-03),
+     so every shadcn button starts from zero padding, as Preflight would; components set their own. */
+  button[data-slot], input[data-slot] { font: inherit; background: transparent; padding: 0; }
   button[data-slot] { cursor: pointer; }
   button[data-slot]:disabled { cursor: not-allowed; }
   [data-slot="dialog-close"] { padding: 0; }
@@ -276,6 +279,13 @@ main[tabindex="-1"]:focus { outline: none; }
 .shell { display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); min-height: 100vh; }
 .sidebar { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 8px; padding: 16px 12px; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 10px; font-weight: var(--fw-semibold); font-size: 15px; color: var(--text); text-decoration: none; }
+/* NAV-01: brand area with the collapse toggle at its right end (desktop sidebar only) */
+.brand-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding-bottom: 10px; }
+.brand-row .brand { padding-bottom: 4px; min-width: 0; }
+.sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; border-radius: var(--radius-control); color: var(--muted); cursor: pointer; }
+.sidebar-toggle:hover { background: var(--raised); color: var(--text); }
+.sidebar-toggle svg { width: 16px; height: 16px; }
+.sidebar-toggle:focus-visible, .product-switch-icon:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .product-switch { margin: 0 0 8px; }
 .product-switch-label { display: block; padding: 0 2px 4px; font-size: var(--fs-small); color: var(--muted); }
 .product-switch .select { font-weight: var(--fw-medium); background-color: var(--surface); }
@@ -309,6 +319,28 @@ main[tabindex="-1"]:focus { outline: none; }
 /* page content: lists, tables, boards and calendars use the full width up to --content-max; settings
    and forms opt into --reading-max with .page-narrow */
 .main { min-width: 0; padding: 28px var(--pad) 48px; }
+/* NAV-01..04: the desktop sidebar collapsed to icons (shadcn Sidebar "icon" pattern, mapped to these
+   tokens). Text is hidden visually but kept for assistive tech; logo, icons, avatar and the current-page
+   fill stay; tooltips name each entry. The phone drawer never uses this (it is outside .sidebar). */
+.shell { transition: grid-template-columns .18s ease; }
+@media (prefers-reduced-motion: reduce) { .shell { transition: none; } }
+.shell[data-sidebar="collapsed"] { --sidebar-width: 64px; }
+.shell[data-sidebar="collapsed"] .sidebar { padding: 16px 12px; overflow-x: hidden; }
+.shell[data-sidebar="collapsed"] .sidebar .nav-label,
+.shell[data-sidebar="collapsed"] .sidebar .account-text,
+.shell[data-sidebar="collapsed"] .sidebar .nav-need { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.shell[data-sidebar="collapsed"] .sidebar .brand-row { flex-direction: column; gap: 8px; }
+.shell[data-sidebar="collapsed"] .sidebar .brand { justify-content: center; padding: 4px 0; }
+.shell[data-sidebar="collapsed"] .sidebar .nav-item { justify-content: center; gap: 0; padding: 0; position: relative; }
+.shell[data-sidebar="collapsed"] .sidebar .nav-badge { position: absolute; top: 2px; right: 0; min-width: 16px; padding: 0 4px; font-size: 10px; line-height: 16px; }
+.shell[data-sidebar="collapsed"] .sidebar .account-entry { justify-content: center; padding: 6px 0; }
+.shell[data-sidebar="collapsed"] .sidebar .account-entry > svg { display: none; }
+.product-switch-compact { display: flex; justify-content: center; }
+.product-switch-icon { display: inline-flex; align-items: center; justify-content: center; gap: 0; position: relative; width: 40px; height: 36px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text); cursor: pointer; }
+.product-switch-icon:hover { background: var(--raised); }
+.product-initial { display: inline-flex; align-items: center; justify-content: center; font-weight: var(--fw-semibold); font-size: var(--fs-small); }
+.product-initial svg { width: 16px; height: 16px; color: var(--muted); }
+.product-switch-chev { position: absolute; right: 1px; bottom: 1px; width: 10px; height: 10px; color: var(--muted); }
 /* A page that fills the height the shell gives it (RM-FIX03, Roadmap): main becomes a column and the page
    takes the space left; the board inside it grows into the rest. Only pages marked .page-fill change; the
    bottom padding there matches the board's own spacing instead of the general 48px. */
@@ -321,6 +353,10 @@ main[tabindex="-1"]:focus { outline: none; }
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px 16px; margin-bottom: 24px; flex-wrap: wrap; }
 .page-head h1 { font-size: var(--fs-title); line-height: var(--lh-title); font-weight: var(--fw-title); letter-spacing: -0.01em; }
 .page-head .sub { color: var(--muted); margin-top: 4px; }
+/* UI-01/UI-02: admin function pages (inside the shell only) use a compact 14px h1 without an introductory
+   subtitle; the portal, Login, invitation and error pages keep their own titles */
+.shell .main .page-head { margin-bottom: 16px; align-items: center; }
+.shell .main .page-head h1 { font-size: var(--fs-body); line-height: var(--lh-body); letter-spacing: 0; }
 .page-head-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
 /* a search and filter bar above a list: one quiet panel, so the filters read as one row */
@@ -484,16 +520,23 @@ main[tabindex="-1"]:focus { outline: none; }
 /* focus rings stay inside the scrolling rows instead of being cut off by them */
 .tabs .tab:focus-visible, .board-tabs > :focus-visible { outline-offset: -2px; }
 .board-tabs-add { flex: none; white-space: nowrap; }
-.roadmap-create { margin-bottom: 16px; }
 .publish-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; }
 /* RM-FIX04: the board's dimension as read-only text, a little apart from the publish switch */
-.rm-dimension { display: inline-flex; align-items: center; min-height: 36px; margin-right: 8px; color: var(--text-2); white-space: nowrap; }
+.rm-dimension { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; color: var(--text-2); white-space: nowrap; }
+.rm-dimension-value { color: var(--text); font-weight: 500; }
 .publish-toggle label { cursor: pointer; }
+/* RM-06..09: the toolbar's groups. Within a group 8px; between groups 12px and a thin rule; the disabled
+   switch's text is muted and not a pointer target, so it does not look operable */
+.rm-toolbar .list-toolbar-start { gap: 8px 12px; }
+.rm-toolbar-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.rm-toolbar-sep { width: 1px; height: 20px; background: var(--border); flex: none; }
+.publish-toggle[data-disabled] label { cursor: default; }
+@media (max-width: 640px) { .rm-toolbar-sep { display: none; } .rm-toolbar .list-toolbar-start { gap: 8px; } }
 /* Roadmap board (phase 3 III-R03 to III-R07; reference docs/design-references/phase3-roadmap, mapped to
    tokens). One continuous white surface with thin vertical rules between columns: no gaps, no per-column
    box. A card is at least 300px, so a column at least 300 + 16 + 16 + 1 = 333px; more room is shared.
    The container scrolls sideways (scrollbar hidden; arrows, wheel, keys and touch move it). */
-.board-frame { position: relative; --board-col-min: 333px; flex: 1 0 auto; display: flex; flex-direction: column; min-width: 0; min-height: 200px; }
+.board-frame { position: relative; flex: 1 0 auto; display: flex; flex-direction: column; min-width: 0; min-height: 200px; }
 /* the container scrolls sideways and fills the frame's height; the board stretches to it (RM-FIX03) */
 .board-frame .board-scroll { flex: 1 0 auto; display: flex; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-bottom: 0; scroll-snap-type: none; }
 .board-frame .board-scroll::-webkit-scrollbar { display: none; }
@@ -507,7 +550,7 @@ main[tabindex="-1"]:focus { outline: none; }
 /* RM-FIX01: only a real drag over a valid column marks it, with a soft fill (no dashed frame, nothing on hover) */
 .board-plain .column[data-drop="true"] { outline: 0; background: var(--active); }
 .board-plain .column-empty { text-align: center; padding: 28px 8px; }
-.board-plain .kcard { min-width: 300px; padding: 9px 11px 10px; border-color: var(--border); border-radius: 8px; box-shadow: 0 1px 2px rgb(0 0 0 / 4%); transition: border-color 140ms ease, box-shadow 140ms ease; }
+.board-plain .kcard { padding: 9px 11px 10px; border-color: var(--border); border-radius: 8px; box-shadow: 0 1px 2px rgb(0 0 0 / 4%); transition: border-color 140ms ease, box-shadow 140ms ease; }
 .board-plain .kcard:hover { border-color: var(--border-strong); box-shadow: 0 2px 5px rgb(0 0 0 / 5%); }
 .board-plain .kcard[data-dragging="true"] { opacity: 0.55; }
 .board-arrow { position: absolute; top: min(50%, 320px); z-index: 4; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--surface); color: var(--text-2); box-shadow: 0 2px 8px rgb(0 0 0 / 8%); cursor: pointer; transition: background 140ms ease, opacity 140ms ease; }
@@ -523,13 +566,20 @@ main[tabindex="-1"]:focus { outline: none; }
 .board-scroll { overflow-x: auto; padding-bottom: 8px; }
 .board-swipe-hint { display: none; margin-bottom: 8px; }
 /* columns share the width (at least 260px each) and scroll sideways only when they do not fit */
-.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(260px, 1fr); gap: var(--gap); align-items: start; }
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: var(--board-col); gap: var(--gap); align-items: start; justify-content: start; }
+/* CARD-01: every board card (Roadmap, Personal, portal) is exactly 300px, border included; a column is the
+   card plus its own padding and rule, fixed (no sharing of free space): 300 + 2*8 + 2*1 = 318 for the boxed
+   columns of Personal and the portal, 300 + 2*16 + 1 = 333 for the Roadmap's plain columns. */
+.board-scroll { --board-col: 318px; }
+.board-frame .board-scroll { --board-col: 333px; }
+.board .kcard { width: 300px; max-width: 300px; }
 .column { background: var(--sunken); border: 1px solid var(--border); border-radius: var(--radius-card); display: flex; flex-direction: column; min-height: 120px; }
 .column[data-drop="true"] { outline: 2px dashed var(--focus); outline-offset: -2px; }
 .column-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
-.column-head .label { font-weight: var(--fw-medium); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.column-head .label { font-weight: var(--fw-medium); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.column-head-end { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .column-body { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
-.kcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 10px; display: flex; flex-direction: column; gap: 6px; position: relative; }
+.kcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 10px; display: flex; flex-direction: column; gap: 6px; position: relative; cursor: pointer; }
 .kcard[data-pending="true"] { opacity: 0.6; }
 .kcard[draggable="true"] { cursor: grab; }
 .kcard-title { font-weight: var(--fw-medium); overflow-wrap: anywhere; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
@@ -637,12 +687,7 @@ main[tabindex="-1"]:focus { outline: none; }
   .list-row .meta { flex-wrap: wrap; flex-shrink: 1; min-width: 0; }
   .month-cell { min-height: 72px; }
   .table th, .table td { padding: 8px; }
-  /* read-only public boards stack on phones instead of scrolling sideways */
-  .board-stack-mobile .board { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: minmax(0, 1fr); }
-  /* editable boards keep scrolling sideways in their own container, one whole column per screen */
-  .board-scroll:not(.board-stack-mobile):not(.board-frame .board-scroll) { scroll-snap-type: x mandatory; }
-  .board-scroll:not(.board-stack-mobile) .board:not(.board-plain) { grid-auto-columns: 100%; }
-  .board-scroll:not(.board-stack-mobile) .column { scroll-snap-align: start; }
+  /* boards keep their fixed 300px cards and scroll sideways inside themselves (CARD-03) */
   .board-swipe-hint { display: block; }
 }
 

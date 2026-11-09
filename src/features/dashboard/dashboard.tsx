@@ -107,7 +107,6 @@ export function ProductListPage() {
       <div className="page-head">
         <div>
           <h1 ref={headingRef} tabIndex={-1} className="outline-none">Product</h1>
-          <p className="sub">{products.length ? `${products.length} 個產品。點選卡片即切換目前產品，其他頁面會顯示該產品的資料。` : '尚未建立產品。'}</p>
         </div>
         {products.length ? create : null}
       </div>

@@ -15,6 +15,8 @@ export interface SiteInfo {
   googleLoginConfigured: boolean;
   testLogin: boolean;
   providers: { calendar: 'real' | 'fake'; email: 'real' | 'fake'; storage: 'real' | 'fake' };
+  /** NAV-02: the desktop sidebar's remembered state (a cookie, read on the server so the first render matches) */
+  sidebarCollapsed?: boolean;
 }
 
 /** meError: /me itself failed (network or server), so "not signed in" is not known: never redirect to login on it */

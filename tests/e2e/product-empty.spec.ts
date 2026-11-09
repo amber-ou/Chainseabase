@@ -43,7 +43,7 @@ test('every product can be deleted; Product shows 尚無產品 and 新增產品;
     if (phone) await page.getByRole('button', { name: '開啟選單' }).click();
     const nav = (phone ? page.getByRole('dialog', { name: '選單' }) : page.locator('aside.sidebar')).getByRole('navigation', { name: '後台導覽' });
     await expect(nav.getByText('請先在 Product 新增產品')).toBeVisible();
-    await expect(nav.getByText('Calendar', { exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await expect(nav.locator('.nav-item').filter({ has: page.getByText('Calendar', { exact: true }) })).toHaveAttribute('aria-disabled', 'true');
     await expect(nav.getByRole('link')).toHaveText(['Product']);
     await expectNoPageOverflow(page);
     await page.screenshot({ path: test.info().outputPath(`empty-${size.width}.png`), fullPage: true });

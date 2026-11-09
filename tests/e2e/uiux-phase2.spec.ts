@@ -125,10 +125,10 @@ for (const size of [null, { width: 320, height: 640 }, { width: 390, height: 520
   });
 }
 
-test('the Roadmap 新增 Feedback opens the same dialog (FB09)', async ({ page }) => {
+test('the Roadmap 新增 Feedback opens the same dialog (FB09; from a column ＋ since RM-02)', async ({ page }) => {
   await login(page, 'admin', 'lead@e2e.test', '專案負責人');
   await openFirstProduct(page, 'roadmaps');
-  await page.getByRole('main').getByRole('button', { name: '新增 Feedback' }).click();
+  await page.getByRole('main').getByRole('button', { name: /^新增 Feedback 至〔/ }).first().click();
   const d = page.getByRole('dialog', { name: '新增 Feedback' });
   await expect(d.getByRole('button', { name: /^狀態：/ })).toBeVisible();
   await expect(d.getByRole('button', { name: /^新增圖片/ })).toBeVisible();

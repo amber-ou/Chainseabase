@@ -20,7 +20,7 @@ export function SettingsPage() {
   return (
     // forms keep a reading width instead of stretching across the screen
     <div className="page-narrow">
-      <div className="page-head"><div><h1>Setting</h1><p className="sub">{product ? '管理個人資料、分類標籤與工作職掌。' : '管理個人資料。選取產品後可管理該產品的標籤與 Person tag。'}</p></div></div>
+      <div className="page-head"><div><h1>Setting</h1></div></div>
       {product ? (
         <Tabs label="設定" value={tab} onChange={setTab} tabs={[{ id: 'me', label: '個人設定' }, { id: 'tags', label: '管理標籤' }, { id: 'people', label: '管理 Person tag' }]}>
           {tab === 'me' ? <PersonalSettings /> : tab === 'tags' ? <TagSettings /> : <PersonTagSettings />}

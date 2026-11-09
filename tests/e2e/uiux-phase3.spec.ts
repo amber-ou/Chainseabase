@@ -206,7 +206,8 @@ test('III-R01 to III-R08: Roadmap tabs, continuous board, widths, arrows, wheel,
   });
   expect(prevented).toEqual({ atStart: false, zoom: false });
   await shot(page, 'roadmap-board');
-  // a board with fewer columns shares the width, without arrows; resizing re-checks (ResizeObserver)
+  // CARD-01/02 (2026-11-09, replaces "share the width"): fewer columns keep the fixed 333px from the left,
+  // without arrows when they fit; resizing re-checks (ResizeObserver)
   const size = page.viewportSize()!;
   await main.getByRole('tab', { name: '依類別（自訂括號）' }).click();
   await expect(main.locator('.board-plain > .column')).toHaveCount(3);
@@ -214,7 +215,7 @@ test('III-R01 to III-R08: Roadmap tabs, continuous board, widths, arrows, wheel,
   const few = await main.locator('.board-plain').evaluate((b) => [...b.querySelectorAll<HTMLElement>(':scope > .column')].map((c) => c.getBoundingClientRect().width));
   expect(few).toHaveLength(3);
   if (size.width >= 1024) {
-    expect(Math.min(...few)).toBeGreaterThan(333);
+    for (const w of few) expect(w).toBeCloseTo(333, 0);
     await expect(right).toHaveCount(0);
     await expect(left).toHaveCount(0);
     await page.setViewportSize({ width: 700, height: size.height });

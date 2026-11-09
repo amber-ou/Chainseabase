@@ -460,6 +460,43 @@ Setting
 - **Disabled States**：Skill 建議降低透明度；本次改用已檢查對比的灰底 token 做為統一外觀，透明度會讓黑色主按鈕停用時仍像可按。這是刻意的取捨。
 - **Taste**：沿用既有 tokens 與字重，只減少不一致，不新增視覺元素。
 
+## 後台標題、側邊欄收合與看板精修（2026-11-09）
+
+需求來源：使用者附件 `uiux-sidebar-board-refinements.md`（2026-11-09），延續 UI-11。狀態：**預覽完成，尚未定版視覺基準與完整回歸**；證據見 tasks.md UI-12。本批**取代**先前「卡片至少 300px」「欄位較少時平分寬度」的規格。
+
+### 決定與實作位置
+
+| 編號 | 決定 | 位置 |
+| --- | --- | --- |
+| UI-01～03 | 後台功能頁 h1 為 14px（`--fs-body`），保留 h1 語意。規則只寫在 `.shell .main .page-head h1`，不使用全域 h1；前台、Login、邀請、錯誤頁（不在 `.shell` 內）不受影響。移除 Product、Feedback、Roadmap、User、Setting 頁首的介紹副標題；保留 Calendar 的「目前產品」、使用者資料頁的 Email／角色、表單說明、驗證錯誤與權限提示 | `globals.css`、各頁面 |
+| RM-01 | 移除 Roadmap Tab 列上方的「新增 Feedback」與其佔位；Feedback 列表頁的入口不變 | `roadmap-page.tsx` |
+| RM-02～03 | 欄位標頭順序：色塊 → 名稱 → 數量 → 彈性留白 → ＋（ghost icon 按鈕，Tooltip 與可及性名稱「新增 Feedback 至〔欄位名稱〕」）。數量計算不變 | `board.tsx`、`roadmap-page.tsx` |
+| RM-04～05 | 開啟既有的新增對話框，以欄位的選項 ID 預設：狀態看板 → `statusId`；類別看板 → `categoryId`；單選 Tag 群組看板 → 該 Tag（版本群組則為 `versionTagId`）；未歸類欄不預選該群組。ID 會先對照產品目前的分類，查無時沿用原本預設。使用者仍可修改；取消不建立資料；失敗保留輸入；建立仍經過原本的 API 驗證與權限。只在後台 Roadmap 提供 | `feedback-create-dialog.tsx`（`CreateInitial`）、`feedback-modal.tsx` |
+| NAV-01～06 | 依 shadcn Sidebar 的 icon 收合模式實作（見下方「相容性」）。品牌區右側為收合／展開按鈕，兩種狀態都可見。收合後寬 64px，主內容同步加寬；文字以視覺隱藏方式保留給輔助技術，保留 Logo、icon、頭像與目前頁面底色；各項有右側 Tooltip。帳號仍直接開啟 Setting。產品選擇器收合時改為 icon 入口（顯示產品首字），開啟 Dropdown Menu 選取產品，沿用未儲存提醒；沒有產品或未選取產品時也能開啟並說明。偏好以 cookie `csb_sidebar` 記錄，由 root layout 在伺服器端讀取，第一次渲染即為正確寬度，沒有 hydration 差異或寬度跳動；不新增帳號資料。手機抽屜一律顯示完整選單、不出現收合按鈕 | `shell.tsx`、`src/client/sidebar-pref.ts`、`layout.tsx`、`site.tsx`、`globals.css` |
+| SW-01～03 | 根因：專案沒有 Tailwind Preflight，瀏覽器預設的 button padding（`1px 6px`）套用在 shadcn Switch 的 `<button>` 上，軌道內容區縮小，開啟時圓點超出軌道 6px。修正在共用基礎層：`button[data-slot], input[data-slot]` 的 padding 歸零（與 font、background 的既有重設同處），未逐頁補償位移 | `globals.css` |
+| RM-06～09 | 工具列分組：「當前維度」唯讀文字 → 細分隔線 → 發佈 Switch＋文字＋設定 icon；右側篩選 icon、搜尋框。組內 8px、組間 12px 加 1px 分隔線。設定改為與篩選相同的 outline icon 按鈕（同高、同 icon 尺寸），兩者維持純 icon，有 Tooltip 與可及性名稱。非狀態看板的停用 Switch 文字為灰色、游標非指標，保留「（僅狀態看板）」。手機隱藏分隔線並換行 | `roadmap-page.tsx`、`globals.css` |
+| CARD-01～04 | 卡片固定 `width: 300px`（border-box）。欄寬固定：Roadmap 333px（300＋左右內距 16＋分隔線 1），Personal 與前台 318px；`grid-auto-columns` 固定、`justify-content: start`，不再使用 1fr 或最小寬度。欄位少時由左排列，剩餘空間不拉寬；Roadmap 白底仍以 `max(100%, 欄數 × 欄寬)` 涵蓋全部欄位與剩餘空間。前台手機改為與桌面相同的看板內水平捲動（移除堆疊版面） | `board.tsx`、`globals.css` |
+| CARD-05～07 | 點擊卡片任何非控制項位置（標題、文字、空白）開啟詳情。卡片本身不是 button（避免巢狀互動元素），標題按鈕是鍵盤入口。「⋯」選單與其他控制項只觸發自己；拖曳結束後的點擊、以及結束選取文字的點擊都不開啟詳情。沒有遮罩層 | `board.tsx` |
+
+### 相容性：shadcn Sidebar
+
+官方 `sidebar` 元件會帶入 `SidebarProvider`、`Sheet`、`use-mobile` hook，以及自己的手機抽屜與 cookie 名稱，會取代現有的手機選單（含焦點管理、未儲存提醒與通知浮層定位），也需新增 `sheet`、`skeleton` 等元件。為避免覆蓋既有行為，本批**未安裝** `sidebar.tsx`，改為沿用其 icon 收合模式（寬度變數、cookie 偏好、收合時 Tooltip、產品切換改為 Dropdown Menu），並使用已安裝的 shadcn Tooltip 與 Dropdown Menu。如需改用官方元件，需另行確認手機抽屜的取代方式。
+
+### 不變
+
+- 權限、API 契約、資料結構與商業邏輯不變；不新增 migration。
+- 不重新引入 Schedule，已建立看板的維度不可切換。
+- Roadmap 白底覆蓋、底部高度、無 hover 虛線與水平捲動（UI-11）保留。
+- 前台不新增建立或編輯能力；Personal 與前台只套用固定卡片與整卡點擊。
+
+### UI/UX Pro Max 與 Taste
+
+- **Hover States／Disabled States**：可點擊卡片有指標游標；停用的發佈 Switch 文字為灰色、無指標，不像可操作。
+- **Active State**：收合後目前頁面仍以底色標示。
+- **Keyboard Navigation**：Tab 順序與畫面順序一致；收合後各 icon 仍可聚焦並有可及性名稱；卡片以標題按鈕開啟。
+- **Horizontal Scroll**：三種看板只在看板內捲動，不撐寬頁面。
+- **Taste**：工具列以間距與單一細分隔線建立層級，不加外框或新色彩；沿用既有 tokens。
+
 ## 開發文件參照與影響範圍
 
 | 文件 | CC 要參照或調整的部分 |

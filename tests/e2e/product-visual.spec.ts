@@ -51,7 +51,8 @@ test('Product states for the visual review', async ({ page }) => {
     };
   });
   const width = page.viewportSize()!.width;
-  expect(style.h1).toEqual([width < 640 ? '20px' : '24px', '600']);
+  // UI-01 (2026-11-09): admin function-page titles are 14px, still h1 and semibold
+  expect(style.h1).toEqual(['14px', '600']);
   // one control height for both component systems: 36px, 44px on phones (UI stabilisation)
   expect(style.addHeight).toBe(width <= 640 ? 44 : 36);
   expect(style.addBg).toBe('rgb(24, 24, 27)'); // --action: general primary actions are black (phase 3 III-06)

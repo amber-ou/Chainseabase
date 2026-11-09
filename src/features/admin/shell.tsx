@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ComponentPropsWithRef, type CSSProperties, type ReactNode } from 'react';
 import { api } from '@/client/api';
 import { useResource, useVisiblePolling } from '@/client/hooks';
 import { loginHref, useSite } from '@/client/site';
@@ -13,6 +13,12 @@ import {
   IconBell, IconCalendar, IconFeedback, IconMenu, IconPersonal, IconPortal, IconProduct, IconRoadmap, IconSettings, IconUsers, IconX,
 } from '@/components/icons';
 import { BrandMark } from '@/components/brand';
+import { ChevronsUpDownIcon, PanelLeftCloseIcon, PanelLeftOpenIcon } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { writeSidebarCookie } from '@/client/sidebar-pref';
 
 export interface ProductItem { id: string; name: string; slug: string; revision: number; createdAt: string }
 
@@ -86,6 +92,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const dirty = useRef(new Set<string>());
   const [pendingNav, setPendingNav] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // NAV-01/02: desktop icon collapse; the first value comes from the server (cookie), so no layout jump
+  const [collapsed, setCollapsed] = useState(Boolean(site.sidebarCollapsed));
+  const toggleSidebar = () => setCollapsed((c) => { writeSidebarCookie(!c); return !c; });
   const setDirty = useCallback((key: string, d: boolean) => {
     if (d) dirty.current.add(key);
     else dirty.current.delete(key);
@@ -158,86 +167,122 @@ export function AdminShell({ children }: { children: ReactNode }) {
   // A01: the whole account area is the entry to Setting (no menu in between); A03: logout lives in Setting
   const settingsHref = product ? `/products/${product.id}/settings` : '/products/settings';
   const onSettings = section === 'settings';
-  const foot = (
+  const foot = (compact: boolean) => (
     <div className="sidebar-foot">
-      <NavLink href={settingsHref} active={onSettings} onNavigate={go} className="user-row account-entry">
-        <Avatar name={me.displayName} url={me.avatarUrl} id={me.id} size={28} />
-        <span className="account-text">
-          <span className="name">{me.displayName}</span>
-          <span className="name small muted">{me.email}</span>
-        </span>
-        <span className="sr-only">（開啟 Setting）</span>
-        <IconSettings />
-      </NavLink>
+      <SideTip on={compact} label={`Setting（${me.displayName}）`}>
+        <NavLink href={settingsHref} active={onSettings} onNavigate={go} className="user-row account-entry">
+          <Avatar name={me.displayName} url={me.avatarUrl} id={me.id} size={28} />
+          <span className="account-text">
+            <span className="name">{me.displayName}</span>
+            <span className="name small muted">{me.email}</span>
+          </span>
+          <span className="sr-only">（開啟 Setting）</span>
+          <IconSettings />
+        </NavLink>
+      </SideTip>
     </div>
   );
   // with no product selected, the product sections are shown but cannot open (no request is made for them)
   const needProduct = list.length ? '請先從 Product 選取產品' : '請先在 Product 新增產品';
-  const off = (label: string, icon: ReactNode) => (
-    <span key={label} className="nav-item" aria-disabled="true" title={needProduct} aria-describedby="nav-need-product">{icon}{label}</span>
+  // the off items stay plain, non-focusable text as before; collapsed, a tooltip names them on hover
+  const off = (compact: boolean, label: string, icon: ReactNode) => (
+    <SideTip key={label} on={compact} label={`${label}（${needProduct}）`}>
+      <span className="nav-item" aria-disabled="true" title={compact ? undefined : needProduct} aria-describedby="nav-need-product">{icon}<span className="nav-label">{label}</span></span>
+    </SideTip>
   );
-  const nav = product ? (
-    <>
-      <Link className="brand" href={`/products/${product.id}/dashboard`}><BrandMark /><span>Chainseabase</span></Link>
-      <div className="product-switch">
-        <label className="product-switch-label" htmlFor="product-switch">目前產品<span className="sr-only">（切換產品）</span></label>
-        <select id="product-switch" className="select" value={product.id} onChange={(e) => switchProduct(e.target.value)}>
-          {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-      </div>
-      <nav className="nav" aria-label="後台導覽">
-        <div className="nav-group">
-          {SECTIONS.map((s) => (
-            <NavLink key={s.key} href={`/products/${product.id}/${s.key}`} active={section === s.key} onNavigate={go} icon={<s.icon />}>{s.label}</NavLink>
-          ))}
-          <a className="nav-item" href={`${site.portalOrigin}/p/${product.slug}/feedback`}><IconPortal />Live Portal</a>
-        </div>
-        <div className="nav-group nav-group-bottom">
-          {SECTIONS_BOTTOM.map((s) => (
-            <NavLink key={s.key} href={`/products/${product.id}/${s.key}`} active={section === s.key} onNavigate={go} icon={<s.icon />}>{s.label}</NavLink>
-          ))}
-          <NotificationsButton productId={product.id} onOpenFeedback={(id) => go(`/products/${product.id}/feedback?item=${id}`)} />
-        </div>
-      </nav>
-      {foot}
-    </>
+  const item = (compact: boolean, key: string, href: string, label: string, icon: ReactNode, active: boolean) => (
+    <SideTip key={key} on={compact} label={label}>
+      <NavLink href={href} active={active} onNavigate={go} icon={icon}><span className="nav-label">{label}</span></NavLink>
+    </SideTip>
+  );
+  // NAV-01: the brand area; on the desktop sidebar its right end holds the collapse toggle (always shown)
+  const brand = (inSidebar: boolean, compact: boolean) => (
+    <div className="brand-row">
+      <SideTip on={compact} label="Chainseabase">
+        <Link className="brand" href={product ? `/products/${product.id}/dashboard` : '/products'}><BrandMark /><span className="nav-label">Chainseabase</span></Link>
+      </SideTip>
+      {inSidebar ? (
+        <SideTip on label={compact ? '展開側邊欄' : '收合側邊欄'} side={compact ? 'right' : 'bottom'}>
+          <button type="button" className="sidebar-toggle" aria-label={compact ? '展開側邊欄' : '收合側邊欄'} aria-expanded={!compact} aria-controls="admin-sidebar" onClick={toggleSidebar}>
+            {compact ? <PanelLeftOpenIcon aria-hidden="true" /> : <PanelLeftCloseIcon aria-hidden="true" />}
+          </button>
+        </SideTip>
+      ) : null}
+    </div>
+  );
+  // NAV-04: collapsed, the product select becomes an icon entry with the same choices (and the same
+  // unsaved-work guard); with no product it still opens and says so
+  const productSwitch = (compact: boolean) => compact ? (
+    <CompactProductSwitch product={product} list={list} onPick={(id) => product ? switchProduct(id) : go(`/products/${id}/dashboard`)} />
+  ) : product ? (
+    <div className="product-switch">
+      <label className="product-switch-label" htmlFor="product-switch">目前產品<span className="sr-only">（切換產品）</span></label>
+      <select id="product-switch" className="select" value={product.id} onChange={(e) => switchProduct(e.target.value)}>
+        {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </div>
   ) : (
-    <>
-      <Link className="brand" href="/products"><BrandMark /><span>Chainseabase</span></Link>
-      <div className="product-switch">
-        <label className="product-switch-label" htmlFor="product-switch">目前產品<span className="sr-only">（切換產品）</span></label>
-        <select id="product-switch" className="select" value="" disabled={!list.length} onChange={(e) => { if (e.target.value) go(`/products/${e.target.value}/dashboard`); }}>
-          <option value="" disabled>{list.length ? '尚未選取產品' : '尚無產品'}</option>
-          {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-      </div>
-      <nav className="nav" aria-label="後台導覽">
-        <p id="nav-need-product" className="small muted" style={{ margin: '0 10px 6px' }}>{needProduct}</p>
-        <div className="nav-group">
-          <NavLink href="/products" active={!onSettings} onNavigate={go} icon={<IconProduct />}>Product</NavLink>
-          {SECTIONS.filter((s) => s.key !== 'dashboard').map((s) => off(s.label, <s.icon />))}
-          {off('Live Portal', <IconPortal />)}
-        </div>
-        <div className="nav-group nav-group-bottom">
-          {SECTIONS_BOTTOM.map((s) => off(s.label, <s.icon />))}
-          {off('Notification', <IconBell />)}
-        </div>
-      </nav>
-      {foot}
-    </>
+    <div className="product-switch">
+      <label className="product-switch-label" htmlFor="product-switch">目前產品<span className="sr-only">（切換產品）</span></label>
+      <select id="product-switch" className="select" value="" disabled={!list.length} onChange={(e) => { if (e.target.value) go(`/products/${e.target.value}/dashboard`); }}>
+        <option value="" disabled>{list.length ? '尚未選取產品' : '尚無產品'}</option>
+        {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </div>
   );
+  const nav = (inSidebar: boolean) => {
+    const compact = inSidebar && collapsed;
+    return product ? (
+      <>
+        {brand(inSidebar, compact)}
+        {productSwitch(compact)}
+        <nav className="nav" aria-label="後台導覽">
+          <div className="nav-group">
+            {SECTIONS.map((s) => item(compact, s.key, `/products/${product.id}/${s.key}`, s.label, <s.icon />, section === s.key))}
+            <SideTip on={compact} label="Live Portal">
+              <a className="nav-item" href={`${site.portalOrigin}/p/${product.slug}/feedback`}><IconPortal /><span className="nav-label">Live Portal</span></a>
+            </SideTip>
+          </div>
+          <div className="nav-group nav-group-bottom">
+            {SECTIONS_BOTTOM.map((s) => item(compact, s.key, `/products/${product.id}/${s.key}`, s.label, <s.icon />, section === s.key))}
+            <NotificationsButton compact={compact} productId={product.id} onOpenFeedback={(id) => go(`/products/${product.id}/feedback?item=${id}`)} />
+          </div>
+        </nav>
+        {foot(compact)}
+      </>
+    ) : (
+      <>
+        {brand(inSidebar, compact)}
+        {productSwitch(compact)}
+        <nav className="nav" aria-label="後台導覽">
+          <p id="nav-need-product" className="small muted nav-need" style={{ margin: '0 10px 6px' }}>{needProduct}</p>
+          <div className="nav-group">
+            {item(compact, 'products', '/products', 'Product', <IconProduct />, !onSettings)}
+            {SECTIONS.filter((s) => s.key !== 'dashboard').map((s) => off(compact, s.label, <s.icon />))}
+            {off(compact, 'Live Portal', <IconPortal />)}
+          </div>
+          <div className="nav-group nav-group-bottom">
+            {SECTIONS_BOTTOM.map((s) => off(compact, s.label, <s.icon />))}
+            {off(compact, 'Notification', <IconBell />)}
+          </div>
+        </nav>
+        {foot(compact)}
+      </>
+    );
+  };
 
   return (
     <Ctx.Provider value={{ product, products: list, reloadProducts: products.reload, setDirty }}>
-      <div className="shell">
-        <aside className="sidebar">{nav}</aside>
+      <div className="shell" data-sidebar={collapsed ? 'collapsed' : 'expanded'}>
+        <aside id="admin-sidebar" className="sidebar">{nav(true)}</aside>
         <header className="topbar">
           <Button ref={menuBtnRef} variant="ghost" icon aria-label="開啟選單" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><IconMenu /></Button>
           <span className="screen-name">{product ? `${current} · ${product.name}` : onSettings ? 'Setting' : 'Product'}</span>
         </header>
         <div ref={sheetRef} className="mobile-sheet" data-open={menuOpen} role="dialog" aria-modal="true" aria-label="選單" hidden={!menuOpen}>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}><Button variant="ghost" icon aria-label="關閉選單" onClick={() => setMenuOpen(false)}><IconX /></Button></div>
-          {menuOpen ? nav : null}
+          {/* NAV-06: the phone drawer is always the full menu, whatever the desktop preference */}
+          {menuOpen ? nav(false) : null}
         </div>
         <main id="main" tabIndex={-1} className="main" key={product?.id ?? 'none'}>{children}</main>
       </div>
@@ -251,6 +296,47 @@ export function AdminShell({ children }: { children: ReactNode }) {
   );
 }
 
+/** NAV-03: a tooltip for a sidebar entry, only while the sidebar is collapsed (its text is then hidden). */
+function SideTip({ on, label, side = 'right', children }: { on: boolean; label: string; side?: 'right' | 'bottom'; children: ReactNode }) {
+  if (!on) return <>{children}</>;
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipContent side={side} sideOffset={6} collisionPadding={8} className="pointer-events-none">{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/** NAV-04: the product switcher of the collapsed sidebar: an icon entry that opens the same choices. */
+function CompactProductSwitch({ product, list, onPick }: { product: ProductItem | null; list: ProductItem[]; onPick: (id: string) => void }) {
+  const label = product ? `目前產品：${product.name}（切換產品）` : list.length ? '尚未選取產品（選取產品）' : '尚無產品';
+  return (
+    <div className="product-switch product-switch-compact">
+      <DropdownMenu modal={false}>
+        <SideTip on label={label}>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className="product-switch-icon" aria-label={label}>
+              <span aria-hidden="true" className="product-initial">{product ? [...product.name][0]?.toUpperCase() : <IconProduct />}</span>
+              <ChevronsUpDownIcon aria-hidden="true" className="product-switch-chev" />
+            </button>
+          </DropdownMenuTrigger>
+        </SideTip>
+        <DropdownMenuContent side="right" align="start" collisionPadding={8} className="w-56">
+          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">目前產品</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {list.length ? (
+            <DropdownMenuRadioGroup value={product?.id ?? ''} onValueChange={(id) => { if (id && id !== product?.id) onPick(id); }}>
+              {list.map((p) => <DropdownMenuRadioItem key={p.id} value={p.id}>{p.name}</DropdownMenuRadioItem>)}
+            </DropdownMenuRadioGroup>
+          ) : <DropdownMenuItem disabled>尚無產品</DropdownMenuItem>}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
 /** Replaces the page with Login (no history entry for the page that needed a session). */
 function ToLogin() {
   useEffect(() => {
@@ -259,10 +345,12 @@ function ToLogin() {
   return <LoadingState label="正在前往登入頁…" />;
 }
 
-function NavLink({ href, active, children, icon, onNavigate, className = 'nav-item', label }: { href: string; active: boolean; children: ReactNode; icon?: ReactNode; onNavigate: (href: string) => void; className?: string; label?: string }) {
+// extra props and the ref are passed on to the link, so a Tooltip trigger (asChild) can wrap it (NAV-03)
+function NavLink({ href, active, children, icon, onNavigate, className = 'nav-item', label, onClick, ...rest }: { href: string; active: boolean; children: ReactNode; icon?: ReactNode; onNavigate: (href: string) => void; className?: string; label?: string } & Omit<ComponentPropsWithRef<'a'>, 'href' | 'className' | 'children'>) {
   return (
-    <a className={className} href={href} aria-label={label} aria-current={active ? 'page' : undefined} onClick={(e) => {
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    <a {...rest} className={className} href={href} aria-label={label} aria-current={active ? 'page' : undefined} onClick={(e) => {
+      onClick?.(e);
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
       e.preventDefault();
       onNavigate(href);
     }}>{icon}{children}</a>
@@ -273,7 +361,7 @@ const REASON_TEXT: Record<string, string> = { assigned: '指派你為負責人',
 
 interface NotificationItem { id: string; reasons: string[]; feedback: { id: string; title: string }; actor: { id: string; displayName: string; avatarUrl: string | null } | null; createdAt: string; readAt: string | null }
 
-export function NotificationsButton({ productId, onOpenFeedback, basePath = `/products/${productId}` }: { productId: string; onOpenFeedback: (feedbackId: string) => void; basePath?: string }) {
+export function NotificationsButton({ productId, onOpenFeedback, basePath = `/products/${productId}`, compact = false }: { productId: string; onOpenFeedback: (feedbackId: string) => void; basePath?: string; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -316,9 +404,11 @@ export function NotificationsButton({ productId, onOpenFeedback, basePath = `/pr
   return (
     <div ref={ref} style={{ position: 'relative' }}
       onBlur={(e) => { if (open && !e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false); }}>
-      <button ref={triggerRef} type="button" className="nav-item" aria-expanded={open} aria-haspopup="dialog" onClick={() => { setOpen((o) => !o); void res.reload(); }}>
-        <IconBell />Notification{unread > 0 ? <span className="nav-badge num" aria-label={`${unread} 則未讀`}>{unread}</span> : null}
-      </button>
+      <SideTip on={compact && !open} label={unread > 0 ? `Notification（${unread} 則未讀）` : 'Notification'}>
+        <button ref={triggerRef} type="button" className="nav-item" aria-expanded={open} aria-haspopup="dialog" onClick={() => { setOpen((o) => !o); void res.reload(); }}>
+          <IconBell /><span className="nav-label">Notification</span>{unread > 0 ? <span className="nav-badge num" aria-label={`${unread} 則未讀`}>{unread}</span> : null}
+        </button>
+      </SideTip>
       {open ? (
         <div ref={panelRef} tabIndex={-1} className="popover" role="dialog" aria-label="通知" style={{ ...place, overflowY: 'auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 6px 8px' }}>

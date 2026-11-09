@@ -6,7 +6,11 @@ import { Avatar } from '@/components/ui';
 import { ActionMenu, type MenuItemDef } from '@/components/menu';
 
 export interface BoardCard { id: string; title: string; revision: number; author: { id: string; displayName: string; avatarUrl: string | null }; createdAt: string; tags?: { name: string; groupName: string | null }[]; version?: { name: string } | null; status?: { name: string } }
-export interface BoardColumn { id: string; label: ReactNode; title: string; count: number; cards: BoardCard[]; isDefault?: boolean; headerExtra?: ReactNode }
+export interface BoardColumn {
+  id: string; label: ReactNode; title: string; count: number; cards: BoardCard[]; isDefault?: boolean;
+  /** shown at the right end of the column header, after the flexible space (RM-03): Roadmap's ＋, Personal's column menu */
+  headerExtra?: ReactNode;
+}
 
 /**
  * Shared kanban (Roadmap = blue mark, Personal = teal mark). Native drag and
@@ -47,6 +51,21 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
   };
 
   const scroll = useBoardScroll(rootRef, Boolean(plain), columns.length);
+  // a drag that ends on the card must not also count as a click that opens it (CARD-06)
+  const justDragged = useRef(false);
+  /**
+   * CARD-05..07: a click anywhere on a card opens it, except on the card's own controls (menu, links),
+   * right after a drag, or when the click ended a text selection. The title stays the one keyboard
+   * control (a real button; no nested interactive elements, no overlay over the card's content).
+   */
+  const openFromCard = (e: React.MouseEvent<HTMLElement>, cardId: string) => {
+    if (!onOpen || justDragged.current) return;
+    const target = e.target as HTMLElement;
+    const control = target.closest('button, a, input, select, textarea, [role="menu"], [role="menuitem"], .kcard-menu');
+    if (control && !control.classList.contains('kcard-title')) return;
+    if (!control && window.getSelection()?.toString()) return;
+    onOpen(cardId);
+  };
 
   const finishDrop = (colId: string) => {
     if (!dragId || !onMove || !drop) return;
@@ -77,18 +96,20 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
 
   return (
     <>
-      {readOnly ? null : <p className="board-swipe-hint small muted" aria-hidden="true">左右滑動查看其他欄位（共 {columns.length} 欄）</p>}
+      <p className="board-swipe-hint small muted" aria-hidden="true">左右滑動查看其他欄位（共 {columns.length} 欄）</p>
       <div className={plain ? 'board-frame' : undefined}>
       {/* focusable so keyboard users can scroll the columns horizontally (WCAG 2.1.1); Roadmap (plain):
           arrows and Home / End on the container itself move one column / to either end (phase 3 III-R07) */}
-      <div ref={rootRef} className={`board-scroll${readOnly ? ' board-stack-mobile' : ''}`} tabIndex={0} role="region" aria-label="看板，可左右捲動"
+      {/* CARD-03: every board (the portal's too) scrolls sideways inside itself on narrow screens; cards keep 300px */}
+      <div ref={rootRef} className="board-scroll" tabIndex={0} role="region" aria-label="看板，可左右捲動"
         onKeyDown={plain ? scroll.onKeyDown : undefined}>
         <div className={`board${plain ? ' board-plain' : ''}`} role="list" aria-label="看板欄位"
           // RM-FIX02: the board itself is as wide as all its columns (never narrower than the space it has),
           // so its white surface and rules cover every column; the container around it scrolls sideways
+          // CARD-01/02: fixed column widths from the 300px card (no 1fr sharing): one column stays on the left
           style={plain ? {
-            gridTemplateColumns: `repeat(${Math.max(columns.length, 1)}, minmax(var(--board-col-min), 1fr))`,
-            width: `max(100%, calc(${Math.max(columns.length, 1)} * var(--board-col-min)))`,
+            gridTemplateColumns: `repeat(${Math.max(columns.length, 1)}, var(--board-col))`,
+            width: `max(100%, calc(${Math.max(columns.length, 1)} * var(--board-col)))`,
           } : undefined}>
           {columns.map((col) => (
             <section key={col.id} className="column" role="listitem" aria-label={`${col.title}，${col.count} 筆`} data-drop={drop?.col === col.id || undefined}
@@ -100,11 +121,12 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
               onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDrop(null); }}
               onDrop={(e) => { e.preventDefault(); finishDrop(col.id); }}
             >
+              {/* RM-03: mark, name, count right after the name, flexible space, then the column's own action */}
               <div className="column-head">
                 <span className={`mark mark-${accent}`} aria-hidden="true" />
                 <span className="label">{col.label}</span>
-                <span className="muted num small" aria-label={`共 ${col.count} 筆`}>{col.count}</span>
-                {col.headerExtra}
+                <span className="column-count muted num small" aria-label={`共 ${col.count} 筆`}>{col.count}</span>
+                {col.headerExtra ? <span className="column-head-end">{col.headerExtra}</span> : null}
               </div>
               <div className="column-body">
                 {col.cards.map((card, i) => (
@@ -114,7 +136,8 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
                       data-dragging={dragId === card.id || undefined}
                       aria-label={card.title}
                       onDragStart={(e) => { setDragId(card.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', card.id); }}
-                      onDragEnd={() => { setDragId(null); setDrop(null); }}
+                      onDragEnd={() => { setDragId(null); setDrop(null); justDragged.current = true; setTimeout(() => { justDragged.current = false; }, 0); }}
+                      onClick={(e) => openFromCard(e, card.id)}
                       onDragOver={(e) => {
                         if (readOnly || !dragId) return;
                         e.preventDefault();
@@ -125,7 +148,7 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
                       }}
                       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); finishDrop(col.id); }}
                     >
-                      <button type="button" className="kcard-title" style={{ paddingRight: readOnly ? 0 : 28 }} onClick={() => onOpen?.(card.id)}>{card.title}</button>
+                      <button type="button" className="kcard-title" style={{ paddingRight: readOnly ? 0 : 28 }}>{card.title}</button>
                       {cardExtra?.(card)}
                       <div className="kcard-foot">
                         <Avatar name={card.author.displayName} url={card.author.avatarUrl} id={card.author.id} size={18} />

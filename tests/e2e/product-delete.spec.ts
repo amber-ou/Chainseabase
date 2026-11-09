@@ -115,7 +115,8 @@ test('delete the selected product: selection cleared, back to Product, old URLs 
   const navigation = nav.getByRole('navigation', { name: '後台導覽' });
   await expect(navigation.getByText('請先從 Product 選取產品')).toBeVisible();
   for (const label of ['Calendar', 'Feedback', 'Roadmap', 'User', 'Live Portal', 'Personal', 'Notification']) {
-    await expect(navigation.getByText(label, { exact: true })).toHaveAttribute('aria-disabled', 'true');
+    // the label sits in .nav-label (NAV-03); the disabled state is on its nav item
+    await expect(navigation.locator('.nav-item').filter({ has: page.getByText(label, { exact: true }) })).toHaveAttribute('aria-disabled', 'true');
   }
   // Setting is the account entry below the navigation and stays open without a product (checklist A04)
   await expect(nav.locator('.sidebar-foot').getByRole('link', { name: /開啟 Setting/ })).toHaveAttribute('href', '/products/settings');

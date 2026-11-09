@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Settings2Icon } from 'lucide-react';
+import { PlusIcon, Settings2Icon } from 'lucide-react';
 import { api, ApiError, errorMessage, newKey } from '@/client/api';
 import { useDebounced, useResource } from '@/client/hooks';
 import { Button, ErrorState, Field, LoadingState, Spinner, useAnnouncer } from '@/components/ui';
@@ -16,12 +16,13 @@ import { IconPlus } from '@/components/icons';
 import { useToast } from '@/components/toast';
 import { useProduct } from '@/features/admin/shell';
 import { FeedbackModal } from '@/features/feedback/feedback-modal';
+import type { CreateInitial } from '@/features/feedback/feedback-create-dialog';
 import { tagOptions, type Feedback, type Taxonomy } from '@/features/feedback/types';
 import { Board, type BoardColumn } from './board';
 
 interface Roadmap { id: string; name: string; description: string; dimension: 'status' | 'category' | 'tag_group'; tagGroupId: string | null; tagGroupName: string | null; sortMode: 'create_time' | 'freedom'; isDefault: boolean; portalPublished: boolean; revision: number }
 type BoardCard = Feedback & { placementRevision: number };
-interface BoardData { roadmap: Roadmap; columns: { id: string; label: string; count: number; isUnclassified: boolean; cards: BoardCard[] }[] }
+interface BoardData { roadmap: Roadmap; columns: { id: string; label: string; count: number; isUnclassified: boolean; optionId: string | null; cards: BoardCard[] }[] }
 
 const DIMENSION_LABEL: Record<string, string> = { status: '狀態', category: '類別', tag_group: 'Tag 群組' };
 
@@ -34,7 +35,8 @@ export function RoadmapPage() {
   const tax = useResource<Taxonomy>(`/products/${product.id}/taxonomy`);
   const selectedId = params.get('board') ?? roadmaps.data?.[0]?.id ?? null;
   const [creating, setCreating] = useState(false);
-  const [creatingFeedback, setCreatingFeedback] = useState(false);
+  // RM-02/RM-04: creating from a column carries that column's option (null: closed)
+  const [creatingFeedback, setCreatingFeedback] = useState<CreateInitial | null>(null);
   const [settings, setSettings] = useState(false);
   const [openCard, setOpenCard] = useState<string | null>(null);
   const select = (id: string) => router.replace(`${pathname}?board=${id}`, { scroll: false });
@@ -70,12 +72,7 @@ export function RoadmapPage() {
       <div className="page-head">
         <div>
           <h1>Roadmap</h1>
-          <p className="sub">每張看板只依一個維度分欄；拖曳只修改該維度，每筆 Feedback 恰好出現在一欄。</p>
         </div>
-      </div>
-      {/* R02: the existing create-Feedback flow, below the description and above the tabs */}
-      <div className="roadmap-create">
-        <Button variant="primary" onClick={() => setCreatingFeedback(true)} disabled={!tax.data}><IconPlus />新增 Feedback</Button>
       </div>
       {roadmaps.loading ? <LoadingState /> : roadmaps.error ? <ErrorState message={roadmaps.error.message} onRetry={roadmaps.reload} /> : (
         <>
@@ -93,7 +90,7 @@ export function RoadmapPage() {
             <Button variant="ghost" size="sm" className="board-tabs-add" onClick={() => setCreating(true)}><IconPlus />新增 Roadmap</Button>
           </div>
           {selectedId ? (
-            <RoadmapBoard key={selectedId} roadmapId={selectedId} dimensionLabel={dimensionLabel} taxonomy={tax.data ?? null} onOpen={setOpenCard} onSettings={() => setSettings(true)} onRoadmapsChanged={() => void roadmaps.reload()} />
+            <RoadmapBoard key={selectedId} roadmapId={selectedId} dimensionLabel={dimensionLabel} taxonomy={tax.data ?? null} onCreate={tax.data ? setCreatingFeedback : undefined} onOpen={setOpenCard} onSettings={() => setSettings(true)} onRoadmapsChanged={() => void roadmaps.reload()} />
           ) : <QuietEmpty>尚無看板，可從「新增 Roadmap」建立。</QuietEmpty>}
         </>
       )}
@@ -104,14 +101,14 @@ export function RoadmapPage() {
         <RoadmapSettings roadmapId={selectedId} onClose={() => setSettings(false)} onChanged={() => void roadmaps.reload()} onDeleted={async () => { setSettings(false); await roadmaps.reload(); router.replace(pathname); }} />
       ) : null}
       {creatingFeedback && tax.data ? (
-        <FeedbackModal mode="create" taxonomy={tax.data} onClose={() => setCreatingFeedback(false)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} onTaxonomyChanged={() => void tax.reload()} />
+        <FeedbackModal mode="create" taxonomy={tax.data} initial={creatingFeedback} onClose={() => setCreatingFeedback(null)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} onTaxonomyChanged={() => void tax.reload()} />
       ) : null}
       {openCard && tax.data ? <FeedbackModal mode="edit" feedbackId={openCard} taxonomy={tax.data} onClose={() => setOpenCard(null)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} /> : null}
     </div>
   );
 }
 
-function RoadmapBoard({ roadmapId, dimensionLabel, taxonomy, onOpen, onSettings, onRoadmapsChanged }: { roadmapId: string; dimensionLabel: string; taxonomy: Taxonomy | null; onOpen: (id: string) => void; onSettings: () => void; onRoadmapsChanged: () => void }) {
+function RoadmapBoard({ roadmapId, dimensionLabel, taxonomy, onCreate, onOpen, onSettings, onRoadmapsChanged }: { roadmapId: string; dimensionLabel: string; taxonomy: Taxonomy | null; onCreate?: (initial: CreateInitial) => void; onOpen: (id: string) => void; onSettings: () => void; onRoadmapsChanged: () => void }) {
   const { product } = useProduct();
   const board = useResource<BoardData>(`/products/${product.id}/roadmaps/${roadmapId}/board?limit=50`);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -212,7 +209,20 @@ function RoadmapBoard({ roadmapId, dimensionLabel, taxonomy, onOpen, onSettings,
   const columns: BoardColumn[] = data.columns.map((c) => {
     const cards = filtering ? c.cards.filter(matches) : c.cards;
     // while filtering, a column counts what it shows (the loaded cards that match)
-    return { id: c.id, label: c.label, title: c.label, count: filtering ? cards.length : c.count, cards };
+    // RM-04: the column's own option, by ID (the 未歸類 column of a tag group has none)
+    const initial: CreateInitial = rm.dimension === 'status' ? { statusId: c.optionId ?? undefined }
+      : rm.dimension === 'category' ? { categoryId: c.optionId ?? undefined }
+        : c.isUnclassified || !c.optionId ? {} : { tagId: c.optionId };
+    const name = `新增 Feedback 至〔${c.label}〕`;
+    return {
+      id: c.id, label: c.label, title: c.label, count: filtering ? cards.length : c.count, cards,
+      // RM-02: the ＋ at the right end of the column header
+      headerExtra: onCreate ? (
+        <IconTip label={name}>
+          <UiButton variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" aria-label={name} onClick={() => onCreate(initial)}><PlusIcon aria-hidden="true" /></UiButton>
+        </IconTip>
+      ) : undefined,
+    };
   });
   const partlyLoaded = data.columns.some((c) => c.count > c.cards.length);
   const canPublish = rm.dimension === 'status';
@@ -221,21 +231,24 @@ function RoadmapBoard({ roadmapId, dimensionLabel, taxonomy, onOpen, onSettings,
   return (
     <div className="board-area">
       {region}
-      {/* R06: publish switch, its text and the settings icon on the left; Filter and search on the right */}
-      <div className="list-toolbar">
+      {/* RM-06..09: board info | publish & settings on the left; filter & search on the right */}
+      <div className="list-toolbar rm-toolbar">
         <div className="list-toolbar-start">
-          {/* RM-FIX04: plain text, not a control; the dimension is chosen when a board is created and never changes */}
-          {dimensionLabel ? <span className="rm-dimension">當前維度 : {dimensionLabel}</span> : null}
-          <span className="publish-toggle">
-            <UiSwitch id="rm-publish" checked={published} disabled={!canPublish || publishing !== null} aria-busy={publishing !== null || undefined}
-              aria-describedby={canPublish ? undefined : 'rm-publish-note'} onCheckedChange={publish} />
-            <label htmlFor="rm-publish" className={canPublish ? '' : 'muted'}>發佈到前台</label>
-            {canPublish ? null : <span id="rm-publish-note" className="small muted">（僅狀態看板）</span>}
-            {publishing !== null ? <Spinner label="儲存中" /> : null}
-          </span>
-          <IconTip label="看板設定">
-            <UiButton variant="ghost" size="icon" aria-label="看板設定" onClick={onSettings}><Settings2Icon aria-hidden="true" /></UiButton>
-          </IconTip>
+          {/* RM-FIX04 / RM-09: plain text, not a control; the dimension is chosen when a board is created and never changes */}
+          {dimensionLabel ? <span className="rm-dimension">當前維度 : <span className="rm-dimension-value">{dimensionLabel}</span></span> : null}
+          {dimensionLabel ? <span className="rm-toolbar-sep" aria-hidden="true" /> : null}
+          <div className="rm-toolbar-group" role="group" aria-label="發佈與設定">
+            <span className="publish-toggle" data-disabled={canPublish ? undefined : ''}>
+              <UiSwitch id="rm-publish" checked={published} disabled={!canPublish || publishing !== null} aria-busy={publishing !== null || undefined}
+                aria-describedby={canPublish ? undefined : 'rm-publish-note'} onCheckedChange={publish} />
+              <label htmlFor="rm-publish" className={canPublish ? '' : 'muted'}>發佈到前台</label>
+              {canPublish ? null : <span id="rm-publish-note" className="small muted">（僅狀態看板）</span>}
+              {publishing !== null ? <Spinner label="儲存中" /> : null}
+            </span>
+            <IconTip label="看板設定">
+              <UiButton variant="outline" size="icon" className="bg-background" aria-label="看板設定" onClick={onSettings}><Settings2Icon aria-hidden="true" /></UiButton>
+            </IconTip>
+          </div>
         </div>
         <div className="list-toolbar-end" role="search" aria-label="搜尋與篩選看板 Feedback">
           {board.refreshing ? <Spinner label="更新中" /> : null}

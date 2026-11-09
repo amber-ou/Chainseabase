@@ -79,7 +79,6 @@ export function FeedbackPage() {
       <div className="page-head">
         <div>
           <h1>Feedback</h1>
-          <p className="sub">哪些需求需要處理？依狀態分類，搜尋目前產品的標題與描述。</p>
         </div>
       </div>
       {/* F01/F06/F09: one toolbar on the page background; create on the left, Filter and search on the right */}

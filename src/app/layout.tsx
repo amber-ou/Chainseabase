@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { Inter } from 'next/font/google';
 import { GeistMono } from 'geist/font/mono'; // taste-skill-ignore: commands/coordinates only
 // Traditional Chinese: Noto Sans TC, self-hosted (unicode-range slices: a page downloads only the
@@ -10,6 +10,7 @@ import '@fontsource/noto-sans-tc/600.css';
 import './globals.css';
 import { getConfig, siteForHost } from '@/server/config';
 import { SiteProvider, type SiteInfo } from '@/client/site';
+import { SIDEBAR_COOKIE } from '@/client/sidebar-pref';
 import { InputModality } from '@/components/input-modality';
 import { ToastProvider } from '@/components/toast';
 
@@ -31,6 +32,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const h = await headers();
   const site = siteForHost(h.get('x-forwarded-host') ?? h.get('host')) ?? 'portal';
   const cfg = getConfig();
+  // NAV-02: the admin sidebar's collapse preference; only this browser's cookie, no account data
+  const sidebarCollapsed = site === 'admin' && (await cookies()).get(SIDEBAR_COOKIE)?.value === 'collapsed';
   const info: SiteInfo = {
     site,
     adminOrigin: cfg.adminOrigin,
@@ -38,6 +41,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     googleLoginConfigured: Boolean(cfg.googleClientId && cfg.googleClientSecret),
     testLogin: cfg.e2eTestLogin,
     providers: { calendar: cfg.calendarProvider, email: cfg.emailProvider, storage: cfg.storageProvider },
+    sidebarCollapsed,
   };
   return (
     <html lang="zh-Hant-TW" className={`${inter.variable} ${GeistMono.variable}`}>{/* taste-skill-ignore: mono variable for literal commands */}

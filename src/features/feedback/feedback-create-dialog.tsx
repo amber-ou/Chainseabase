@@ -33,7 +33,10 @@ const MAX_IMAGES = 5;
 const MAX_BYTES = 5 * 1024 * 1024;
 const TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-interface Form { title: string; description: string; statusId: string; categoryId: string; personTagIds: string[]; tagIds: string[] }
+interface Form { title: string; description: string; statusId: string; categoryId: string; personTagIds: string[]; tagIds: string[]; versionTagId: string | null }
+
+/** A Roadmap column's own option (RM-04), by ID: a status, a category, or a tag of a single-choice group. */
+export interface CreateInitial { statusId?: string; categoryId?: string; tagId?: string }
 
 interface Upload {
   key: string;
@@ -44,20 +47,27 @@ interface Upload {
   error?: string;
 }
 
-function defaults(t: Taxonomy): Form {
+function defaults(t: Taxonomy, initial?: CreateInitial): Form {
+  // a column's option is used only when it is a real option of this product; otherwise the usual default
+  const status = initial?.statusId && t.statuses.some((s) => s.id === initial.statusId) ? initial.statusId : null;
+  const category = initial?.categoryId && t.categories.some((c) => c.id === initial.categoryId) ? initial.categoryId : null;
+  const group = initial?.tagId ? t.tagGroups.find((g) => g.tags.some((x) => x.id === initial.tagId)) : undefined;
   return {
     title: '', description: '',
-    statusId: t.statuses.find((s) => s.isDefault)?.id ?? t.statuses[0]?.id ?? '',
-    categoryId: t.categories.find((c) => c.isDefault)?.id ?? t.categories[0]?.id ?? '',
-    personTagIds: [], tagIds: [],
+    statusId: status ?? t.statuses.find((s) => s.isDefault)?.id ?? t.statuses[0]?.id ?? '',
+    categoryId: category ?? t.categories.find((c) => c.isDefault)?.id ?? t.categories[0]?.id ?? '',
+    personTagIds: [],
+    // the version group is its own field (versionTagId); any other single-choice group is a tag
+    tagIds: group && group.systemKey !== 'version' ? [initial!.tagId!] : [],
+    versionTagId: group?.systemKey === 'version' ? initial!.tagId! : null,
   };
 }
 
-export function CreateFeedbackDialog({ taxonomy, onClose, onChanged, onTaxonomyChanged }: { taxonomy: Taxonomy; onClose: () => void; onChanged: () => void; onTaxonomyChanged?: () => void }) {
+export function CreateFeedbackDialog({ taxonomy, initial, onClose, onChanged, onTaxonomyChanged }: { taxonomy: Taxonomy; initial?: CreateInitial; onClose: () => void; onChanged: () => void; onTaxonomyChanged?: () => void }) {
   const { product } = useProduct();
   const toast = useToast();
   const { announce, region } = useAnnouncer();
-  const [form, setForm] = useState<Form>(() => defaults(taxonomy));
+  const [form, setForm] = useState<Form>(() => defaults(taxonomy, initial));
   // tags created from this dialog are not in the taxonomy the page loaded yet
   const [createdTags, setCreatedTags] = useState<{ id: string; label: string; group: null }[]>([]);
   const [revision, setRevision] = useState(taxonomy.productRevision);
@@ -164,7 +174,7 @@ export function CreateFeedbackDialog({ taxonomy, onClose, onChanged, onTaxonomyC
         // the hidden fields keep the values this dialog always sent (FB08)
         body: {
           title: form.title, description: form.description, statusId: form.statusId, categoryId: form.categoryId,
-          personTagIds: form.personTagIds, tagIds: versionless, priority: 'P0', versionTagId: null, visibility: 'internal',
+          personTagIds: form.personTagIds, tagIds: versionless, priority: 'P0', versionTagId: form.versionTagId, visibility: 'internal',
           imageIds: uploads.map((u) => u.serverId!),
         },
       });
@@ -297,6 +307,15 @@ export function CreateFeedbackDialog({ taxonomy, onClose, onChanged, onTaxonomyC
             </DropdownMenu>
             {/* III-04: the chosen tags come before ＋, which stays last when the row wraps.
                 III-05: clicking a chosen tag (Enter / Space too) takes it off this Feedback; the shared tag stays */}
+            {form.versionTagId ? (() => {
+              const v = taxonomy.tagGroups.find((g) => g.systemKey === 'version')?.tags.find((x) => x.id === form.versionTagId);
+              return v ? (
+                <button type="button" className="fbc-pill fbc-tag" aria-label={`取消選取：版本 ${v.name}`}
+                  onClick={() => { set({ versionTagId: null }); announce(`已取消選取版本「${v.name}」`); requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-tag-add]')?.focus()); }}>
+                  <span className="fbc-pill-text">版本：{v.name}</span>
+                </button>
+              ) : null;
+            })() : null}
             {chosenTags.map((t) => (
               <button key={t.id} type="button" className="fbc-pill fbc-tag" aria-label={`取消選取：${t.label}`}
                 onClick={() => {

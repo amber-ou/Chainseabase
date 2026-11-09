@@ -631,3 +631,33 @@ UI-10 補充（2026-11-09）：
 - 修正後的完整回歸。
 - 本機 `npm test`：只改 UI，交由 CI 的三組 `npm test`。
 - Firefox／Safari、實機觸控板與手機、螢幕閱讀器、Windows 主機。
+
+## UI-12：後台標題、側邊欄收合與看板精修（2026-11-09）
+
+狀態：**預覽完成，尚未定版視覺基準與完整回歸**。需求：使用者附件 `uiux-sidebar-board-refinements.md`；決定、根因與相容性說明見[變更需求](docs/change-requests/sidebar-position.md)「後台標題、側邊欄收合與看板精修」。延續 UI-11。本批取代「卡片至少 300px」「欄位較少時平分寬度」。無新 migration。
+
+| 編號 | 狀態 | 說明 |
+| --- | --- | --- |
+| UI-01～03 | 完成 | 後台功能頁 h1 14px（只限 `.shell .main .page-head`），移除介紹副標題；前台、Login、邀請、錯誤頁不變 |
+| RM-01～05 | 完成 | 移除頂部新增鈕；各欄標頭右端 ＋（Tooltip／名稱「新增 Feedback 至〔欄位〕」）；標頭順序 色塊→名稱→數量→留白→＋；依選項 ID 預設狀態／類別／Tag，未歸類不預選 |
+| NAV-01～06 | 完成 | 桌面側邊欄 icon 收合（64px），cookie 記憶、伺服器端讀取無跳動；收合時 Tooltip、產品 icon 選單；手機抽屜不變。**未安裝** shadcn `sidebar.tsx`（會取代既有手機抽屜），改沿用其模式 |
+| SW-01～03 | 完成 | 根因：無 Preflight，瀏覽器預設 button padding `1px 6px` 讓圓點超出軌道 6px；於共用基礎層歸零 |
+| RM-06～09 | 完成 | 工具列分組：當前維度｜Switch＋文字＋設定 icon … 篩選 icon、搜尋；設定與篩選同為 outline 純 icon；停用 Switch 不像可操作；手機換行 |
+| CARD-01～07 | 完成 | 三種看板卡片固定 300px（border-box），欄寬固定（Roadmap 333、Personal／前台 318），由左排列；前台手機改為看板內捲動；整卡點擊開啟詳情，選單、拖曳與選取文字不誤觸，標題為鍵盤入口 |
+
+修改檔案：
+- 共用：`src/app/globals.css`、`src/app/layout.tsx`、`src/client/site.tsx`、新增 `src/client/sidebar-pref.ts`。
+- 頁面：`src/features/admin/shell.tsx`、`src/features/roadmap/{board,roadmap-page}.tsx`、`src/features/feedback/{feedback-create-dialog,feedback-modal,feedback-page}.tsx`、`src/features/{dashboard/dashboard,settings/settings-page,users/users-page}.tsx`。
+- 測試：新增 `tests/e2e/ui-refine.spec.ts`（並加入 `playwright.config.ts` 的 768／390）；更新 `product-visual`（h1 14px）、`uiux-phase3`（少欄固定 333）、`uiux-checklist` R02 與 `uiux-phase2` FB09（改為欄位 ＋）、`product-delete`／`product-empty`（導覽文字在 `.nav-label` 內，停用狀態仍在導覽項）。
+
+驗證（Linux 容器，隔離 e2e 資料庫；Google、寄信、儲存為 fake）：
+- **修正前重現**：Switch 幾何量測，開啟時圓點右側內距 −6px（padding `1px 6px`）。
+- **ui-refine**：1440／768／390 共 21 passed。以實際渲染量測：Switch 內距與置中；h1 14px 與非後台頁不是 14px；欄位 ＋ 在狀態、類別、單選 Tag、未歸類欄的預設；取消不建立資料；標頭順序；卡片寬 300（border-box）且欄寬一致、由左排列、最左／中間／最右捲動；整卡點擊、選單、文字選取、拖曳、Enter；側邊欄收合、重新整理、換頁、產品切換、通知浮層位於視窗內、無 hydration 錯誤、手機抽屜。
+- **全套 Playwright（修改測試前）**：200 passed、13 failed、8 skipped；13 個失敗都在上述 6 個已更新的檔案，原因為舊規格斷言（h1 24px、少欄 >333、頂部新增鈕、導覽文字結構）。更新後重跑這 7 個檔案：84 passed、6 skipped。**更新後未重跑完整套**。
+- lint、typecheck、build、security:scan、`git diff --check` 皆 exit 0。
+- 人工檢視截圖：收合／展開側邊欄、收合時通知浮層、手機抽屜、工具列（含手機換行）、欄位標頭、三種看板（含前台手機）、Switch。
+
+尚未驗證：
+- 視覺基準定版、更新後的完整回歸（等使用者確認）。
+- 本機 `npm test`：只改 UI，交由 CI。
+- Firefox／Safari、實機觸控與螢幕閱讀器、Windows 主機。

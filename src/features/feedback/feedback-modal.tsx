@@ -10,7 +10,7 @@ import { MultiSelect } from '@/components/multiselect';
 import { IconCheck, IconLock } from '@/components/icons';
 import { useToast } from '@/components/toast';
 import { useProduct, useUnsaved } from '@/features/admin/shell';
-import { CreateFeedbackDialog } from './feedback-create-dialog';
+import { CreateFeedbackDialog, type CreateInitial } from './feedback-create-dialog';
 import { CommentThread } from './comments';
 import { tagOptions, versionGroup, type Feedback, type Taxonomy } from './types';
 
@@ -35,12 +35,12 @@ function fromFeedback(f: Feedback): FormState {
 }
 
 type Props =
-  | { mode: 'create'; taxonomy: Taxonomy; onClose: () => void; onChanged: () => void; personal?: boolean; onTaxonomyChanged?: () => void }
+  | { mode: 'create'; taxonomy: Taxonomy; onClose: () => void; onChanged: () => void; personal?: boolean; onTaxonomyChanged?: () => void; initial?: CreateInitial }
   | { mode: 'edit'; feedbackId: string; taxonomy: Taxonomy; onClose: () => void; onChanged: () => void; personal?: boolean };
 
 export function FeedbackModal(props: Props) {
   // every create entry (Feedback, Roadmap, Personal) opens the same dialog (phase 2 FB09)
-  if (props.mode === 'create') return <CreateFeedbackDialog taxonomy={props.taxonomy} onClose={props.onClose} onChanged={props.onChanged} onTaxonomyChanged={props.onTaxonomyChanged} />;
+  if (props.mode === 'create') return <CreateFeedbackDialog taxonomy={props.taxonomy} initial={props.initial} onClose={props.onClose} onChanged={props.onChanged} onTaxonomyChanged={props.onTaxonomyChanged} />;
   return <EditFeedback {...props} />;
 }
 
