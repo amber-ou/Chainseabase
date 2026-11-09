@@ -130,7 +130,7 @@ export function PersonalPage() {
           <label className="field-label" id="subject-label" htmlFor="subject">負責人</label>
           {/* PE03: avatar, name (「我」 for yourself) and Person tags inside the trigger and in every option */}
           <Select value={subjectId} onValueChange={switchSubject}>
-            <SelectTrigger id="subject" aria-labelledby="subject-label subject" className="personal-subject-trigger h-auto min-h-9 w-auto min-w-0 max-w-full bg-background py-1.5">
+            <SelectTrigger id="subject" aria-labelledby="subject-label subject" className="personal-subject-trigger h-auto min-h-(--control-height) w-auto min-w-0 max-w-full bg-background py-1.5">
               <SelectValue placeholder="選擇負責人" />
             </SelectTrigger>
             <SelectContent position="popper" align="start" className="max-w-[min(28rem,calc(100vw-2rem))]">

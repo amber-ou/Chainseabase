@@ -81,8 +81,11 @@ test.describe('desktop keyboard walkthrough', () => {
     await page.keyboard.press('Enter');
     await expect.poll(() => focused(page)).toMatch(/menuitemradio/);
     // move to a status other than the default (the product's order is not assumed)
-    for (let i = 0; i < 6 && /新貼文/.test(await focused(page)); i++) await page.keyboard.press('ArrowDown');
-    await expect.poll(() => focused(page)).toMatch(/menuitemradio/);
+    // Radix moves focus onto the first item just after opening: settle first, then step until another
+    // item has focus, and only press Enter once that is confirmed
+    await page.waitForTimeout(150);
+    for (let i = 0; i < 6 && /新貼文/.test(await focused(page)); i++) { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(50); }
+    await expect.poll(() => focused(page)).toMatch(/^[a-z]+\[menuitemradio\] (?!新貼文)/);
     await page.keyboard.press('Enter');
     await expect.poll(() => focused(page)).toMatch(/^button 狀態：(?!新貼文)/);
     // leaving with input asks first; the safe choice has focus

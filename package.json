@@ -25,7 +25,8 @@
     "security:scan": "tsx scripts/check-secrets.ts",
     "db:restore-drill": "tsx scripts/restore-drill.ts",
     "load-test": "tsx scripts/load-test.ts",
-    "test:ui": "playwright test --config playwright.ui.config.ts"
+    "test:ui": "playwright test --config playwright.ui.config.ts",
+    "test:visual": "playwright test --config playwright.visual.config.ts"
   },
   "dependencies": {
     "@fontsource/noto-sans-tc": "5.3.1",

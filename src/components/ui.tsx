@@ -3,6 +3,7 @@
 import { forwardRef, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { IconAlert, IconCheck, IconLock } from './icons';
 import { Switch as UiSwitch } from './ui/switch';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from './ui/empty';
 
 export function Spinner({ label }: { label?: string }) {
   return <span className="spinner" role={label ? 'status' : undefined} aria-label={label} />;
@@ -72,13 +73,19 @@ export function LoadingState({ label = '載入中…' }: { label?: string }) {
   return <div className="state state-center" role="status" aria-live="polite"><Spinner /><span>{label}</span></div>;
 }
 
+/**
+ * An empty list: the shared shadcn Empty (the same look as Product's empty list), through the old API.
+ * The admin Feedback list keeps its own grey-text style (checklist F07).
+ */
 export function EmptyState({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="state">
-      <span className="state-title">{title}</span>
-      {children ? <span className="muted">{children}</span> : null}
-      {action}
-    </div>
+    <Empty className="border border-dashed border-border bg-card p-6 md:p-8">
+      <EmptyHeader>
+        <EmptyTitle>{title}</EmptyTitle>
+        {children ? <EmptyDescription>{children}</EmptyDescription> : null}
+      </EmptyHeader>
+      {action ? <EmptyContent>{action}</EmptyContent> : null}
+    </Empty>
   );
 }
 

@@ -84,7 +84,12 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
       <div ref={rootRef} className={`board-scroll${readOnly ? ' board-stack-mobile' : ''}`} tabIndex={0} role="region" aria-label="看板，可左右捲動"
         onKeyDown={plain ? scroll.onKeyDown : undefined}>
         <div className={`board${plain ? ' board-plain' : ''}`} role="list" aria-label="看板欄位"
-          style={plain ? { gridTemplateColumns: `repeat(${Math.max(columns.length, 1)}, minmax(var(--board-col-min), 1fr))` } : undefined}>
+          // RM-FIX02: the board itself is as wide as all its columns (never narrower than the space it has),
+          // so its white surface and rules cover every column; the container around it scrolls sideways
+          style={plain ? {
+            gridTemplateColumns: `repeat(${Math.max(columns.length, 1)}, minmax(var(--board-col-min), 1fr))`,
+            width: `max(100%, calc(${Math.max(columns.length, 1)} * var(--board-col-min)))`,
+          } : undefined}>
           {columns.map((col) => (
             <section key={col.id} className="column" role="listitem" aria-label={`${col.title}，${col.count} 筆`} data-drop={drop?.col === col.id || undefined}
               onDragOver={(e) => {

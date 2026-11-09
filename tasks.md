@@ -582,3 +582,52 @@ UI-08 預覽階段已執行（Linux 容器，隔離 e2e 資料庫，Google 與�
 - Windows 主機查看。
 
 **完整回歸待使用者確認預覽後執行。**
+
+UI-10 補充（2026-11-09）：
+- 使用者確認 Google 文字登入按鈕維持黑色，導覽、徽章與 Switch 開啟色維持海軍藍。
+- `83adbcd` 的 CI（push、PR）三組工作都通過，三組都包含 `npm test`：verify（Node 22／PG16，另有 lint、typecheck、migration、build、security:scan、全套 E2E）、pg18-node24、win-native。
+
+## UI-11：全站 UI 穩定化修正與 Roadmap 當前維度（2026-11-09）
+
+狀態：**修正版預覽完成，尚未定版視覺基準與完整回歸**。問題、根因與修正位置見[變更需求](docs/change-requests/sidebar-position.md)「全站 UI 穩定化修正」。延續 `83adbcd`。
+
+| 編號 | 狀態 | 說明 |
+| --- | --- | --- |
+| RM-FIX01 | 修正完成 | 刪除 hover 虛線規則；只有實際拖曳時顯示淡底，不使用虛線 |
+| RM-FIX02 | 修正完成 | 看板寬度為 `max(100%, 欄數 × 333px)`，白底與分隔線涵蓋全部欄位 |
+| RM-FIX03 | 修正完成 | 移除 `100dvh - 380px`；Roadmap 頁以 flex 填滿剩餘高度，底部 24px（手機 16px）；內容多時延伸 |
+| RM-FIX04 | 完成 | 工具列唯讀文字「當前維度 : …」，取自實際維度與群組名稱 |
+| 全站一致性 | 修正完成 | 控制項高度統一使用一個 token（手機 44）；small 按鈕高度；停用外觀；對話框標題、按鈕列與關閉鈕；EmptyState 改用 shadcn Empty；前台搜尋改用共用 SearchBox；移除前台工具列的 `!important` |
+
+修改檔案：
+- 共用：`src/app/globals.css`、`src/components/ui.tsx`、`src/components/ui/{button,input,select,input-group,dialog,alert-dialog}.tsx`。
+- 頁面：`src/features/roadmap/board.tsx`、`src/features/roadmap/roadmap-page.tsx`、`src/features/portal/portal-feedback.tsx`、`src/features/personal/personal-page.tsx`。
+- 測試：
+  - 新增 `tests/e2e/ui-stabilize.spec.ts`。
+  - 新增 `tests/visual/visual.spec.ts`、`playwright.visual.config.ts` 與 `npm run test:visual`。視覺測試不進 CI，也尚未提交基準。
+  - 更新 `keyboard`、`product-visual`、`uiux-phase3`：手機 44px、停用外觀、等待欄位載入與色彩轉換。
+  - 新增 `playwright.config.ts` 的 ui-stabilize。
+
+驗證（Linux 容器，隔離 e2e 資料庫；Google、寄信、儲存為 fake）：
+- **修正前重現**：在 `83adbcd` 執行 `ui-stabilize`，四項在 1440／768／390 都失敗：
+  - hover 時出現 1 個虛線框。
+  - 看板寬 1128，但內容 1665。
+  - 看板下方 114px（上限 49）。
+  - 沒有維度文字。
+- **修正後**：`ui-stabilize` 13 passed、2 skipped（手機專屬）。檢查方式：
+  - 依實際像素確認三種看板在最左、中間、最右都沒有灰色頁面底色。
+  - 看板寬度至少等於捲動寬度。
+  - 欄數分別為 5、3、3。
+  - hover 時沒有任何虛線；實際拖曳時有淡底。
+  - 底部間距、內容延伸、矮視窗與工具列換行。
+- **全站量測**：以暫時腳本量測各頁控制項的高度、字重與圓角、溢出與浮層捲軸，比較修正前後（腳本未提交）。390 時所有控制項為 44px（看板箭頭 36、Switch 18 為刻意）；1440 時為 36px，small 為 32px。
+- **人工檢視修正前後截圖**：Login、Product（含新增對話框）、Calendar、Feedback（含新增、篩選、詳情）、Roadmap（含設定、新增看板）、Personal（含新增欄位）、User（含邀請）、Notification、Setting 三個分頁、前台首頁、前台 Feedback（含新增）、前台 Roadmap、邀請頁，各 1440／768／390。
+- **視覺比對**：候選圖片 12 張（Roadmap、捲到最右、新增 Feedback、看板設定、Login × 3 種寬度），在同一環境重跑完全一致，可做為穩定基準；**未提交，等使用者確認**。
+- **全套 Playwright**：191 passed、1 failed、8 skipped。失敗的是 keyboard 狀態選單的測試時序（Radix 開啟選單後移動焦點），已修正並重跑 5 次全數通過；修正後未再跑完整套。
+- lint、typecheck、build、security:scan、`git diff --check` 皆 exit 0。
+
+尚未驗證：
+- 視覺基準定版與後續比對。
+- 修正後的完整回歸。
+- 本機 `npm test`：只改 UI，交由 CI 的三組 `npm test`。
+- Firefox／Safari、實機觸控板與手機、螢幕閱讀器、Windows 主機。

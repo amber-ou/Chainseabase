@@ -59,8 +59,13 @@ export function RoadmapPage() {
     tabRowRef.current?.querySelectorAll<HTMLElement>('[role="tab"]')[j]?.focus();
   };
 
+  // RM-FIX04: the selected board's real dimension, as read-only text in the toolbar
+  const current = list.find((r) => r.id === selectedId);
+  const dimensionLabel = current ? (current.dimension === 'tag_group' ? `單選 Tag 群組（${current.tagGroupName ?? ''}）` : DIMENSION_LABEL[current.dimension]) : '';
+
   return (
-    <>
+    // RM-FIX03: a column that fills the height under the shell; the board takes what is left
+    <div className="page-fill">
       {/* R01: the title has no icon; the status columns keep their colour marks */}
       <div className="page-head">
         <div>
@@ -88,7 +93,7 @@ export function RoadmapPage() {
             <Button variant="ghost" size="sm" className="board-tabs-add" onClick={() => setCreating(true)}><IconPlus />新增 Roadmap</Button>
           </div>
           {selectedId ? (
-            <RoadmapBoard key={selectedId} roadmapId={selectedId} taxonomy={tax.data ?? null} onOpen={setOpenCard} onSettings={() => setSettings(true)} onRoadmapsChanged={() => void roadmaps.reload()} />
+            <RoadmapBoard key={selectedId} roadmapId={selectedId} dimensionLabel={dimensionLabel} taxonomy={tax.data ?? null} onOpen={setOpenCard} onSettings={() => setSettings(true)} onRoadmapsChanged={() => void roadmaps.reload()} />
           ) : <QuietEmpty>尚無看板，可從「新增 Roadmap」建立。</QuietEmpty>}
         </>
       )}
@@ -102,11 +107,11 @@ export function RoadmapPage() {
         <FeedbackModal mode="create" taxonomy={tax.data} onClose={() => setCreatingFeedback(false)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} onTaxonomyChanged={() => void tax.reload()} />
       ) : null}
       {openCard && tax.data ? <FeedbackModal mode="edit" feedbackId={openCard} taxonomy={tax.data} onClose={() => setOpenCard(null)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} /> : null}
-    </>
+    </div>
   );
 }
 
-function RoadmapBoard({ roadmapId, taxonomy, onOpen, onSettings, onRoadmapsChanged }: { roadmapId: string; taxonomy: Taxonomy | null; onOpen: (id: string) => void; onSettings: () => void; onRoadmapsChanged: () => void }) {
+function RoadmapBoard({ roadmapId, dimensionLabel, taxonomy, onOpen, onSettings, onRoadmapsChanged }: { roadmapId: string; dimensionLabel: string; taxonomy: Taxonomy | null; onOpen: (id: string) => void; onSettings: () => void; onRoadmapsChanged: () => void }) {
   const { product } = useProduct();
   const board = useResource<BoardData>(`/products/${product.id}/roadmaps/${roadmapId}/board?limit=50`);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -214,11 +219,13 @@ function RoadmapBoard({ roadmapId, taxonomy, onOpen, onSettings, onRoadmapsChang
   const published = publishing ?? rm.portalPublished;
 
   return (
-    <div>
+    <div className="board-area">
       {region}
       {/* R06: publish switch, its text and the settings icon on the left; Filter and search on the right */}
       <div className="list-toolbar">
         <div className="list-toolbar-start">
+          {/* RM-FIX04: plain text, not a control; the dimension is chosen when a board is created and never changes */}
+          {dimensionLabel ? <span className="rm-dimension">當前維度 : {dimensionLabel}</span> : null}
           <span className="publish-toggle">
             <UiSwitch id="rm-publish" checked={published} disabled={!canPublish || publishing !== null} aria-busy={publishing !== null || undefined}
               aria-describedby={canPublish ? undefined : 'rm-publish-note'} onCheckedChange={publish} />

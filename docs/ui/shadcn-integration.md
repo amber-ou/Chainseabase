@@ -136,6 +136,17 @@ npm run test:e2e
 
 其他元件與官方相同。焦點外觀（III-01）不改元件，只在 `globals.css` 依 `html[data-input]` 調整 ring 與 outline。
 
+## UI 穩定化調整（2026-11-09）
+
+用 variants 與 tokens 修改，沒有新增元件：
+- `button.tsx`：尺寸改用 `--control-height`／`--control-height-sm`（手機 44）；停用時以 `--color-disabled*` 呈現，取代 50% 透明。
+- `input.tsx`、`select.tsx`、`input-group.tsx`：高度改用 `--control-height`。
+- `dialog.tsx`、`alert-dialog.tsx`：標題靠左、按鈕列靠右一列；Dialog 的關閉鈕與其他圖示按鈕相同。
+
+舊元件的相容包裝：
+- `ui.tsx` 的 `EmptyState` 改用 shadcn Empty。
+- 前台搜尋改用 `list-controls.tsx` 的 `SearchBox`。
+
 ## 修改檔案索引
 
 - 相依／設定：`package.json`、`package-lock.json`、`components.json`、`postcss.config.mjs`、`tsconfig.json`。

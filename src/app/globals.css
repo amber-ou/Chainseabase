@@ -35,6 +35,8 @@
   --color-cancel: var(--cancel-bg);
   --color-cancel-hover: var(--cancel-bg-hover);
   --color-cancel-foreground: var(--cancel-ink);
+  --color-disabled: var(--disabled-bg);
+  --color-disabled-foreground: var(--disabled-ink);
   --font-sans: var(--font);
   --font-mono: var(--mono);
   --radius-sm: var(--radius-chip);
@@ -123,7 +125,8 @@
   --content-max: 1440px;      /* lists, tables, boards and calendars */
   --reading-max: 960px;       /* settings, forms, profile */
   --row-height: 44px;
-  --control-height: 36px;
+  --control-height: 36px;     /* default controls of both systems (legacy .btn/.input and shadcn) */
+  --control-height-sm: 32px;  /* small buttons */
   /* type: Inter for Latin letters and digits, then Noto Sans TC for Chinese (the browser falls back
      per character); system fonts only if both fail to load */
   --font: var(--font-inter), "Inter", "Noto Sans TC", system-ui, sans-serif;
@@ -209,8 +212,11 @@ main[tabindex="-1"]:focus { outline: none; }
 .btn-danger { color: var(--negative); border-color: var(--negative); }
 .btn-danger.btn-solid { background: var(--negative); color: #fff; }
 .btn-ghost { border-color: transparent; background: transparent; }
+/* a disabled ghost button stays a ghost (no grey fill), as in the shadcn Button */
+.btn-ghost[disabled], .btn-ghost[aria-disabled="true"] { background: transparent; border-color: transparent; }
 .btn-ghost:hover { background: var(--raised); }
-.btn-sm { min-height: 28px; padding: 0 10px; font-size: var(--fs-small); }
+.btn-sm { min-height: var(--control-height-sm); padding: 0 10px; font-size: var(--fs-small); }
+.btn-icon.btn-sm { width: var(--control-height-sm); }
 .btn-icon { padding: 0; width: var(--control-height); }
 .btn .spinner { width: 14px; height: 14px; }
 
@@ -303,6 +309,12 @@ main[tabindex="-1"]:focus { outline: none; }
 /* page content: lists, tables, boards and calendars use the full width up to --content-max; settings
    and forms opt into --reading-max with .page-narrow */
 .main { min-width: 0; padding: 28px var(--pad) 48px; }
+/* A page that fills the height the shell gives it (RM-FIX03, Roadmap): main becomes a column and the page
+   takes the space left; the board inside it grows into the rest. Only pages marked .page-fill change; the
+   bottom padding there matches the board's own spacing instead of the general 48px. */
+.main:has(> .page-fill) { display: flex; flex-direction: column; padding-bottom: 24px; }
+.page-fill { flex: 1 0 auto; display: flex; flex-direction: column; min-width: 0; }
+.board-area { flex: 1 0 auto; display: flex; flex-direction: column; min-width: 0; }
 .main > * { max-width: var(--content-max); }
 .main > .page-narrow, .page-narrow { max-width: var(--reading-max); }
 /* one page header everywhere: h1 24/600, an optional grey line about the data, actions on the right */
@@ -319,6 +331,7 @@ main[tabindex="-1"]:focus { outline: none; }
 .list-toolbar-start { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 .list-toolbar-end { display: flex; align-items: center; gap: 8px; margin-left: auto; min-width: 0; }
 .list-toolbar-search { width: 280px; }
+.portal-search { flex: 1 1 260px; max-width: 420px; }
 @media (max-width: 640px) {
   .list-toolbar-end { flex: 1 1 100%; margin-left: 0; }
   .list-toolbar-search { width: auto; flex: 1 1 auto; min-width: 0; }
@@ -473,24 +486,27 @@ main[tabindex="-1"]:focus { outline: none; }
 .board-tabs-add { flex: none; white-space: nowrap; }
 .roadmap-create { margin-bottom: 16px; }
 .publish-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; }
+/* RM-FIX04: the board's dimension as read-only text, a little apart from the publish switch */
+.rm-dimension { display: inline-flex; align-items: center; min-height: 36px; margin-right: 8px; color: var(--text-2); white-space: nowrap; }
 .publish-toggle label { cursor: pointer; }
 /* Roadmap board (phase 3 III-R03 to III-R07; reference docs/design-references/phase3-roadmap, mapped to
    tokens). One continuous white surface with thin vertical rules between columns: no gaps, no per-column
    box. A card is at least 300px, so a column at least 300 + 16 + 16 + 1 = 333px; more room is shared.
    The container scrolls sideways (scrollbar hidden; arrows, wheel, keys and touch move it). */
-.board-frame { position: relative; --board-col-min: 333px; }
-.board-frame .board-scroll { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-bottom: 0; scroll-snap-type: none; }
+.board-frame { position: relative; --board-col-min: 333px; flex: 1 0 auto; display: flex; flex-direction: column; min-width: 0; min-height: 200px; }
+/* the container scrolls sideways and fills the frame's height; the board stretches to it (RM-FIX03) */
+.board-frame .board-scroll { flex: 1 0 auto; display: flex; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-bottom: 0; scroll-snap-type: none; }
 .board-frame .board-scroll::-webkit-scrollbar { display: none; }
 .board-frame .board-scroll:focus-visible { outline-offset: -2px; }
-.board.board-plain { gap: 0; align-items: stretch; grid-auto-flow: row; background: var(--surface); min-height: calc(100dvh - 380px); }
+.board.board-plain { flex: 0 0 auto; gap: 0; align-items: stretch; grid-auto-flow: row; background: var(--surface); }
 .board-plain .column { background: none; border: 0; border-radius: 0; min-height: 0; padding: 0 16px 16px; min-width: 0; transition: background 150ms ease; }
 .board-plain .column + .column { border-left: 1px solid var(--border); }
 .board-plain .column-head { border-bottom: 0; height: 50px; padding: 0 5px; }
 .board-plain .column-head .label { font-size: 13px; }
 .board-plain .column-body { padding: 0; min-height: 76px; }
-.board-plain .column[data-drop="true"] { outline: 0; background: var(--active); box-shadow: inset 0 0 0 1px var(--border-strong); }
-.board-plain .column-empty { border: 1px dashed transparent; border-radius: 7px; text-align: center; padding: 28px 8px !important; }
-.board-plain .column:hover .column-empty, .board-plain .column[data-drop="true"] .column-empty { border-color: var(--border-strong); }
+/* RM-FIX01: only a real drag over a valid column marks it, with a soft fill (no dashed frame, nothing on hover) */
+.board-plain .column[data-drop="true"] { outline: 0; background: var(--active); }
+.board-plain .column-empty { text-align: center; padding: 28px 8px; }
 .board-plain .kcard { min-width: 300px; padding: 9px 11px 10px; border-color: var(--border); border-radius: 8px; box-shadow: 0 1px 2px rgb(0 0 0 / 4%); transition: border-color 140ms ease, box-shadow 140ms ease; }
 .board-plain .kcard:hover { border-color: var(--border-strong); box-shadow: 0 2px 5px rgb(0 0 0 / 5%); }
 .board-plain .kcard[data-dragging="true"] { opacity: 0.55; }
@@ -597,6 +613,8 @@ main[tabindex="-1"]:focus { outline: none; }
   .topbar .screen-name { font-weight: var(--fw-medium); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mobile-sheet[data-open="true"] { display: flex; position: fixed; inset: 0; z-index: 90; background: var(--surface); flex-direction: column; padding: 12px 16px 24px; gap: 8px; overflow-y: auto; }
   .main { padding: 20px 16px 40px; }
+  /* under the 52px top bar the shell does not stretch main: give a filling page the window's height */
+  .main:has(> .page-fill) { min-height: calc(100dvh - 52px); padding-bottom: 16px; }
   .modal-backdrop { padding: 16px; }
   .modal { max-height: calc(100vh - 32px); }
   .settings-section { grid-template-columns: minmax(0, 1fr); gap: 12px; }
@@ -605,14 +623,15 @@ main[tabindex="-1"]:focus { outline: none; }
   .modal-backdrop { padding: 0; }
   .modal, .modal-wide { max-width: none; min-height: 100vh; max-height: none; border-radius: 0; }
   .fb-row { grid-template-columns: minmax(0, 1fr); }
-  .btn, .menu-item, .tab, .nav-item, .list-row, .ms-option { min-height: 44px; }
-  .btn-sm { min-height: 44px; }
+  /* touch size on phones: one token for every control (legacy and shadcn) instead of per-class rules */
+  :root { --control-height: 44px; --control-height-sm: 44px; }
+  .menu-item, .tab, .nav-item, .list-row, .ms-option { min-height: 44px; }
   /* a signed-in member's header (nav, notifications, account) wraps instead of widening the page */
   .portal-top { flex-wrap: wrap; height: auto; min-height: 56px; padding: 8px 16px; gap: 4px 8px; }
   .portal-main { padding: 20px 16px 40px; }
   .page-head h1 { font-size: 20px; line-height: 28px; }
   /* a filter bar on a phone: one control per line, each the full width (inline widths are desktop sizes) */
-  .toolbar-panel > * { flex: 1 1 100%; width: auto !important; max-width: none !important; }
+  .toolbar-panel > * { flex: 1 1 100%; max-width: none; }
   .list-row { flex-wrap: wrap; }
   .list-row .title { flex-basis: 100%; white-space: normal; }
   .list-row .meta { flex-wrap: wrap; flex-shrink: 1; min-width: 0; }

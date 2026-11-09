@@ -52,7 +52,8 @@ test('Product states for the visual review', async ({ page }) => {
   });
   const width = page.viewportSize()!.width;
   expect(style.h1).toEqual([width < 640 ? '20px' : '24px', '600']);
-  expect(style.addHeight).toBe(36);
+  // one control height for both component systems: 36px, 44px on phones (UI stabilisation)
+  expect(style.addHeight).toBe(width <= 640 ? 44 : 36);
   expect(style.addBg).toBe('rgb(24, 24, 27)'); // --action: general primary actions are black (phase 3 III-06)
   // a border or a shadow, never both: every shadow layer Tailwind composes is transparent
   expect(style.cardShadow === 'none' || /^(rgba\(0, 0, 0, 0\) 0px 0px 0px 0px(, )?)+$/.test(style.cardShadow)).toBe(true);

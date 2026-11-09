@@ -9,7 +9,8 @@ import { formatDateTime, relativeTime } from '@/client/format';
 import { Avatar, Button, EmptyState, ErrorState, Field, LoadingState } from '@/components/ui';
 import { Modal } from '@/components/modal';
 import { Markdown } from '@/components/markdown';
-import { IconPlus, IconSearch, IconUp } from '@/components/icons';
+import { IconPlus, IconUp } from '@/components/icons';
+import { SearchBox } from '@/components/list-controls';
 import { useToast } from '@/components/toast';
 import { CommentThread, type CommentEndpoints } from '@/features/feedback/comments';
 import { usePortalProduct } from './portal-shell';
@@ -43,11 +44,8 @@ export function PortalFeedbackPage() {
       </div>
       {!product.viewer.canInteract ? <p id="create-hint" className="small muted" style={{ marginTop: -12, marginBottom: 12 }}>{product.viewer.loggedIn ? '你尚未受邀參與此產品，無法新增或互動。' : '登入並受邀後才能新增、投票與留言。'}</p> : null}
       <div className="toolbar toolbar-panel" role="search">
-        <div style={{ position: 'relative', flex: '1 1 260px', maxWidth: 420 }}>
-          <label className="sr-only" htmlFor="pq">搜尋公開回饋</label>
-          <span style={{ position: 'absolute', left: 10, top: 9, color: 'var(--muted)' }}><IconSearch /></span>
-          <input id="pq" className="input" style={{ paddingLeft: 32 }} maxLength={200} placeholder="搜尋標題或描述…" value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
+        {/* the shared search control (shadcn Input Group), as on the admin lists */}
+        <SearchBox id="pq" label="搜尋公開回饋" value={q} onChange={setQ} className="portal-search" />
         <span className="small muted num">{list.data ? `共 ${list.meta.total ?? 0} 筆` : ''}</span>
       </div>
       {list.loading ? <LoadingState /> : list.error ? <ErrorState message={list.error.message} onRetry={list.reload} /> : (list.data ?? []).length === 0 ? (

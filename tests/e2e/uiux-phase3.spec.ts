@@ -75,7 +75,9 @@ test('III-03/III-06/III-07: shadcn Switch with its label on the right; black pri
   await page.getByRole('menuitem', { name: '刪除產品' }).click();
   const alert = page.getByRole('alertdialog');
   await alert.getByRole('textbox').fill(extra.name);
-  expect((await bg(alert.getByRole('button', { name: '永久刪除' })))[0]).toBe('rgb(196, 36, 42)');
+  // the button is enabled once the name matches (a disabled button now shows the disabled fill)
+  await expect(alert.getByRole('button', { name: '永久刪除' })).toBeEnabled();
+  await expect.poll(async () => (await bg(alert.getByRole('button', { name: '永久刪除' })))[0]).toBe('rgb(196, 36, 42)'); // after its colour transition
   expect((await bg(alert.getByRole('button', { name: '取消' })))[0]).toBe('rgb(236, 239, 243)');
   await shot(page, 'buttons-danger');
   await alert.getByRole('button', { name: '取消' }).click();
@@ -225,6 +227,8 @@ test('III-R01 to III-R08: Roadmap tabs, continuous board, widths, arrows, wheel,
   // touch and keyboard use the card menu, covered in admin.spec and keyboard.spec)
   if (testInfo.project.use.hasTouch) return;
   await main.getByRole('tab', { name: '產品進度' }).click();
+  // wait for the status board itself (its five columns), not the board that was shown before
+  await expect(main.locator('.board-plain > .column')).toHaveCount(5);
   await scroller.evaluate((e) => { e.scrollLeft = 0; });
   const card = main.locator('.kcard', { hasText: '看板卡片甲' });
   const target = main.locator('.board-plain .column').nth(1);

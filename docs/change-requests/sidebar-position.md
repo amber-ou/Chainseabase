@@ -412,6 +412,54 @@ Setting
 - **Touch Target**：箭頭 36px。
 - **Color Contrast**：取消鈕、主要按鈕與焦點框都符合對比要求。
 
+## 全站 UI 穩定化修正與 Roadmap 當前維度（2026-11-09）
+
+目標是修正視覺缺陷並統一元件規則，不重新設計網站。延續 `83adbcd`。狀態：**修正版預覽完成，尚未定版視覺基準與完整回歸**；證據見 tasks.md UI-11。
+
+### 第三階段已確認
+
+- Google 文字登入按鈕維持黑色。
+- 導覽、徽章與 Switch 開啟色維持海軍藍。
+
+### 問題、根因與修正位置
+
+先在 `83adbcd` 以新的檢查（`tests/e2e/ui-stabilize.spec.ts`）重現，四項在 1440／768／390 都失敗，修正後通過。
+
+| 問題 | 根因（實際確認） | 修正 |
+| --- | --- | --- |
+| RM-FIX01 滑鼠移入空欄出現虛線 | `globals.css` 的 `.board-plain .column:hover .column-empty` 在一般 hover 時把透明虛線框改為可見 | 刪除該規則與虛線框；只有實際拖曳到有效欄位時（`data-drop`）顯示 `--active` 淡底，不使用虛線 |
+| RM-FIX02 捲到右側露出灰底 | 白底在 `.board`（Grid 容器）上，但容器寬度等於捲動區寬度，例如 1440 時看板寬 1128，欄位合計 1665；超出的欄位是透明的，露出頁面灰底 | 看板寬度改為 `max(100%, 欄數 × 333px)`（依實際欄數，`board.tsx`）；外層捲動區負責捲動，內層看板涵蓋全部欄位 |
+| RM-FIX03 底部大片灰色 | 看板 `min-height: calc(100dvh - 380px)` 是固定扣除值，與實際頁首、Tab、工具列及換行無關；`.main` 另有 48px 底部 padding | 移除固定扣除值。Roadmap 頁標記 `.page-fill`：`main` 成為 flex 欄、頁面填滿剩餘高度、看板（`.board-area` → `.board-frame` → `.board-scroll`）取用剩餘空間並延伸。只有這一頁的底部間距改為 24px（手機 16px），全站的 `.main` padding 不變。手機頂列下方以 `100dvh - 52px` 為最低高度 |
+| RM-FIX04 當前維度 | 新需求 | 工具列左側新增唯讀文字「當前維度 : 狀態／類別／單選 Tag 群組（群組名稱）」，取自看板實際的 dimension 與 tagGroupName。是 `<span>`，不是控制項；Tab 仍只顯示名稱，維度仍不可修改 |
+| 手機上控制項高度混用 44 與 36 | 舊 CSS 以 `.btn`、`.btn-sm` 各自的 640px 規則設為 44px；shadcn 的 Button、Input、Select、Input Group 寫死 `h-9`／`h-8`。同一個對話框或工具列因此高度不一 | 單一來源 token：`--control-height`（36，手機 44）與 `--control-height-sm`（32，手機 44），舊 `.btn`／`.input`／`.select` 與 shadcn 元件都使用它；刪除舊的逐類別手機規則 |
+| 舊 `btn-sm` 28px 與 shadcn sm 32px 不一致 | 兩套尺寸各自定義 | `.btn-sm` 改用 `--control-height-sm` |
+| 停用狀態外觀不一 | 舊按鈕停用時以 `--disabled-bg` 填灰（連 ghost 也是），shadcn 則是整顆 50% 透明，黑色主按鈕停用時仍像可按 | 統一使用 tokens：實心按鈕停用時為灰底與灰字；ghost 與 link 停用時只改字色、不填底（新增 `--color-disabled*`） |
+| 對話框標題、按鈕列與關閉鈕不一 | shadcn Dialog 在手機上置中標題並把按鈕直排滿寬，關閉鈕只有 22px；舊 Modal 標題靠左、按鈕在右、關閉鈕 36px | `dialog.tsx`、`alert-dialog.tsx`：標題一律靠左，按鈕列靠右一列，關閉鈕改為與其他圖示按鈕相同（`--control-height`、hover 底） |
+| 空狀態三種外觀 | 舊 `EmptyState` 是靠左粗體虛線框，Product 使用 shadcn Empty，後台 Feedback 是灰字（F07） | `EmptyState` 改為包裝 shadcn Empty（與 Product 相同），用法不變；後台 Feedback 依 F07 保留灰字 |
+| 前台搜尋框與後台不同 | 前台 Feedback 是自製 input 加 inline 樣式，需要 `!important` 才能在手機蓋過 | 改用共用的 `SearchBox`（shadcn Input Group），並移除該 `!important` |
+
+保留的 `!important`（有原因，已註記）：
+- 滑鼠點擊時隱藏焦點框：shadcn ring 屬於較後的 cascade layer。
+- 提示泡泡不攔截點擊：Radix 在 modal 內以 inline 樣式設定 pointer-events。
+- 減少動態效果。
+
+### 不變
+
+- 功能、權限、API、資料結構與商業邏輯不變。
+- 不重新引入 Schedule，維度不可切換。
+- Personal 看板與前台唯讀看板不在本次修改範圍。
+- 主要按鈕黑色、取消灰色、危險操作紅色、焦點規則（III-01）延續。
+
+### UI/UX Pro Max 與 Taste
+
+- **Touch Target Size／Touch Spacing**：手機上所有控制項統一為 44px，取代兩套各自的規則；控制項之間保持間距。
+- **Dragging Movements**：拖曳提示只在實際拖曳時出現，卡片選單仍可移動。
+- **Horizontal Scroll**：內容只在看板內溢出，不撐寬頁面。
+- **Focus States**：對話框內控制項（包括關閉鈕）都有焦點框。
+- **Empty States**：統一外觀，並保留各頁原有的說明與操作。
+- **Disabled States**：Skill 建議降低透明度；本次改用已檢查對比的灰底 token 做為統一外觀，透明度會讓黑色主按鈕停用時仍像可按。這是刻意的取捨。
+- **Taste**：沿用既有 tokens 與字重，只減少不一致，不新增視覺元素。
+
 ## 開發文件參照與影響範圍
 
 | 文件 | CC 要參照或調整的部分 |
