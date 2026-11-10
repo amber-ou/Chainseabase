@@ -7,6 +7,8 @@ test('A: bootstrap email becomes team; sidebar keeps the fixed order', async ({ 
   await login(page, 'admin', 'lead@e2e.test', '專案負責人');
   await openFirstProduct(page);
   const nav = page.getByRole('navigation', { name: '後台導覽' }).first();
+  // wait for the shell to finish loading the products (allInnerTexts alone reads whatever is there)
+  await expect(nav.locator('.nav-item')).toHaveCount(8);
   const labels = await nav.locator('.nav-item').allInnerTexts();
   expect(labels.map((l) => l.replace(/\d+/g, '').trim())).toEqual(['Product', 'Calendar', 'Feedback', 'Roadmap', 'User', 'Live Portal', 'Personal', 'Notification']);
   // Setting opens from the account area (checklist A01/A02)
@@ -25,7 +27,10 @@ test('FB: create dialog keeps the defaults; continuous creation keeps the classi
   await expect(dialog.getByRole('button', { name: '狀態：新貼文' })).toBeVisible();
   await expect(dialog.getByRole('button', { name: '類別：需求討論' })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Person tag：未安排' })).toBeVisible();
-  for (const gone of ['優先級', '版本', '公開範圍']) await expect(dialog.getByLabel(gone)).toHaveCount(0);
+  // 2026-11-10 ATTR-02..05: priority and version come from ＋ (no pill until chosen); 內部／公開 in the footer, 內部 by default
+  await expect(dialog.getByRole('button', { name: /^優先級：/ })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: /^版本：/ })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: '公開範圍：內部' })).toBeVisible();
   await expect(dialog.getByRole('tab')).toHaveCount(0);
   // FB02: placeholders are hints, not values
   await expect(dialog.getByLabel('標題')).toHaveValue('');
@@ -47,16 +52,22 @@ test('FB: create dialog keeps the defaults; continuous creation keeps the classi
   await expect(dialog.getByRole('button', { name: '狀態：進行中' })).toBeVisible();
   await dialog.getByRole('button', { name: '取消' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  // the hidden fields kept their defaults: internal, P0, no version
-  await page.getByLabel('搜尋 Feedback').fill(title);
-  await page.getByRole('button', { name: new RegExp(title) }).first().click();
+  // the hidden fields kept their defaults: internal, P0, no version. It is 進行中, so it is not in the
+  // only table (新貼文, LIST-02): open it from its link
+  const pid = page.url().match(/products\/([0-9a-f-]{36})/)![1];
+  const found = (await (await page.request.get(`${ADMIN}/api/v1/products/${pid}/feedback?q=${encodeURIComponent(title)}`)).json()).data[0];
+  await page.goto(`${ADMIN}/products/${pid}/feedback?item=${found.id}`);
   // the detail shows the status; the edit form (⋯ → 編輯, 2026-11-10) shows the kept settings
   const detail = page.getByRole('dialog', { name: title });
   await expect(detail.getByRole('button', { name: '狀態：進行中' })).toBeVisible();
   const edit = await openEdit(page, detail);
   await expect(edit.getByRole('button', { name: '優先級：P0 非常重要' })).toBeVisible();
   await expect(edit.getByRole('button', { name: '公開範圍：內部' })).toBeVisible();
-  await expect(edit.getByRole('button', { name: '版本：未歸類' })).toBeVisible();
+  // no version: no version pill; ＋ shows 版本 as 未歸類 (ATTR-02)
+  await expect(edit.getByRole('button', { name: /^版本：/ })).toHaveCount(0);
+  await edit.getByRole('button', { name: /^加入標籤、優先級或版本/ }).click();
+  await expect(page.getByRole('dialog', { name: '加入標籤、優先級或版本' }).getByRole('button', { name: /^版本/ })).toContainText('未歸類');
+  await page.keyboard.press('Escape');
   await expect(edit.getByRole('tab', { name: 'Schedule' })).toHaveCount(0);
 });
 
@@ -169,7 +180,7 @@ test('P03/P05: personal private column with autosave, feedback fields untouched'
   await expect(page.getByText('已儲存')).toBeVisible();
   // Feedback status unchanged
   await page.goto(`${base}/feedback`);
-  await expect(page.getByRole('region', { name: '新貼文 的 Feedback' })).toContainText(title);
+  await expect(page.locator('section.fbv', { has: page.getByRole('heading', { name: '新貼文', level: 2 }) })).toContainText(title);
 });
 
 test('A10/A05: a tester gets a permission screen on the admin site', async ({ page }) => {
@@ -191,16 +202,16 @@ test('A08: a slow response from the previous product never overwrites the newly 
   await page.evaluate(async ({ p, t }) => {
     await fetch(`/api/v1/products/${p}/feedback`, { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': crypto.randomUUID() }, body: JSON.stringify({ title: t }) });
   }, { p: firstId, t: onlyInFirst });
-  // delay every feedback list response of the first product
-  await page.route(new RegExp(`/api/v1/products/${firstId}/feedback\\?`), async (route) => {
+  // delay every feedback list response of the first product (since LIST-01, each table's rows)
+  await page.route(new RegExp(`/api/v1/products/${firstId}/feedback-views/[^/]+/items`), async (route) => {
     await new Promise((r) => setTimeout(r, 2500));
     await route.continue();
   });
   await page.goto(`${base}/feedback`);
   await switchProduct(page, name);
   await page.waitForURL(new RegExp(`/products/${created.id}/feedback`));
-  await expect(page.getByText('這個產品還沒有 Feedback')).toBeVisible();
+  await expect(page.getByText('這個表格目前沒有 Feedback。')).toBeVisible();
   await page.waitForTimeout(3500);
   await expect(page.getByText(onlyInFirst)).toHaveCount(0);
-  await expect(page.getByText('這個產品還沒有 Feedback')).toBeVisible();
+  await expect(page.getByText('這個表格目前沒有 Feedback。')).toBeVisible();
 });

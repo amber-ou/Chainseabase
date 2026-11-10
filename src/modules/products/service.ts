@@ -3,6 +3,7 @@ import { AppError, assertRevision } from '@/server/errors';
 import { slugify } from '@/modules/shared/text';
 import { detachDeletedProduct } from '@/modules/identity/invitations';
 import { deleteImagesOfProduct } from '@/modules/feedback/images';
+import { deleteViewsOfProduct } from '@/modules/feedback/views';
 
 export const DEFAULT_STATUSES = ['新貼文', '進行中', '待討論', '已完成', '延後'] as const;
 export const DEFAULT_ROADMAP_LABELS = ['需求池', '進行中', '待討論', '已完成', '延後'] as const;
@@ -134,6 +135,8 @@ export async function deleteProduct(tx: Db, productId: string, confirmName: stri
   // images (rows now, their files by a job after commit), comments, votes, then the feedback itself
   // (feedback tags cascade)
   await deleteImagesOfProduct(tx, productId);
+  // shared Feedback views and their row orders (2026-11-10, migration 0008)
+  await deleteViewsOfProduct(tx, productId);
   await tx`delete from comment_likes where comment_id in (select id from comments where product_id = ${productId})`;
   await tx`delete from feedback_votes where feedback_id in (select id from feedback where product_id = ${productId})`;
   await tx`delete from comments where product_id = ${productId}`;

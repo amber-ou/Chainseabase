@@ -9,7 +9,8 @@ import { IconLock } from '@/components/icons';
 import { useToast } from '@/components/toast';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useProduct } from '@/features/admin/shell';
-import { AttributePills, CreateFeedbackDialog, fromFeedback, type CreateInitial, type EditTarget, type PillValue } from './feedback-create-dialog';
+import { CreateFeedbackDialog, type CreateInitial, type EditTarget } from './feedback-create-dialog';
+import { AttributePills, attrsOf, createProductTag, SaveStatus, useAttributeSaver, VisibilityNote } from './feedback-attributes';
 import { adminCommentEndpoints, CommentThread } from './comments';
 import { DetailDescription, DetailDialog, DetailImages } from './feedback-detail';
 import type { Feedback, Taxonomy } from './types';
@@ -41,10 +42,11 @@ function AdminFeedbackDetail({ feedbackId, taxonomy, onClose, onChanged, persona
   const imgs = useResource<ImageItem[]>(`${P}/feedback/${feedbackId}/images`);
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [banner, setBanner] = useState<{ kind: 'error' | 'conflict'; text: string } | null>(null);
-  const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const pills = useMemo(() => (res.data ? fromFeedback(res.data) : null), [res.data]);
+  // instant-save rules: every attribute change is saved at once, here and in the edit form alike
+  const saver = useAttributeSaver(`${P}/feedback/${feedbackId}`, res.data, (f) => res.setData(f), onChanged);
+  const pills = useMemo(() => (res.data ? attrsOf(res.data) : null), [res.data]);
 
   if (res.loading || (!res.data && !res.error)) return <DetailDialog title="Feedback" onClose={onClose}><div className="fd-state"><LoadingState /></div></DetailDialog>;
   if (res.error || !res.data) {
@@ -61,31 +63,12 @@ function AdminFeedbackDetail({ feedbackId, taxonomy, onClose, onChanged, persona
   // DETAIL-03: the shared form, in edit mode; 取消 comes back here, 儲存 updates this Feedback
   if (editing) {
     return (
-      <CreateFeedbackDialog taxonomy={taxonomy} edit={editing} onChanged={onChanged} onTaxonomyChanged={onTaxonomyChanged}
+      <CreateFeedbackDialog taxonomy={taxonomy} edit={editing} live={{ feedback: fb, ...saver }} onChanged={onChanged} onTaxonomyChanged={onTaxonomyChanged}
         onClose={() => setEditing(null)}
         onSaved={(f) => { res.setData(f); void imgs.reload(); setEditing(null); }} />
     );
   }
 
-  // DETAIL-06: a pill change is saved at once to this Feedback, with its revision
-  const savePills = async (p: Partial<PillValue>) => {
-    if (saving || !pills) return;
-    const body: Record<string, unknown> = { ...p };
-    if ('tagIds' in p && !('versionTagId' in p)) body.versionTagId = pills.versionTagId;
-    setSaving(true);
-    setBanner(null);
-    try {
-      const r = await api.patch<Feedback>(`${P}/feedback/${fb.id}`, { body: { ...body, expectedRevision: fb.revision } });
-      res.setData(r.data);
-      onChanged();
-      announce('已儲存');
-    } catch (e) {
-      setBanner(e instanceof ApiError && e.status === 409
-        ? { kind: 'conflict', text: '這筆 Feedback 剛被其他人更新，已載入最新內容，請再修改一次。' }
-        : { kind: 'error', text: `${errorMessage(e)}（屬性維持原本的值）` });
-      void res.reload();
-    } finally { setSaving(false); }
-  };
   const remove = async () => {
     setDeleting(true);
     try {
@@ -111,12 +94,12 @@ function AdminFeedbackDetail({ feedbackId, taxonomy, onClose, onChanged, persona
           {banner ? <div className={`banner ${banner.kind === 'error' ? 'banner-error' : ''} fd-banner`} role="alert">{banner.text}</div> : null}
           <DetailDescription text={fb.description} />
           <DetailImages images={imgs.data ?? []} url={(id, v) => `/api/v1${P}/feedback/${fb.id}/images/${id}/${v}`} />
-          {pills ? <AttributePills taxonomy={taxonomy} value={pills} onChange={(p) => void savePills(p)} announce={announce} disabled={saving}
-            onCreateTag={async (name) => {
-              const r = await api.post<{ tag: { id: string; name: string } }>(`${P}/tags`, { body: { name, groupId: null, expectedRevision: (await api.get<Taxonomy>(`${P}/taxonomy`)).data.productRevision } });
-              onTaxonomyChanged?.();
-              return r.data.tag;
-            }} /> : null}
+          {/* DETAIL-06, instant-save rules: a change is saved at once to this Feedback */}
+          {pills ? <AttributePills taxonomy={taxonomy} value={pills} onChange={(p) => void saver.save(p)} announce={announce} disabled={saver.saving}
+            onCreateTag={async (name) => { const tag = await createProductTag(P, name); onTaxonomyChanged?.(); return tag; }} /> : null}
+          {/* ATTR-06: visibility is shown read-only here; it is changed in the edit form */}
+          {pills ? <VisibilityNote value={pills.visibility} /> : null}
+          <SaveStatus state={saver.state} />
           {personal ? <PersonalTagsRow feedbackId={fb.id} /> : null}
         </>}>
         <CommentThread feedbackId={fb.id} isPublic={fb.visibility === 'public'} endpoints={adminCommentEndpoints(product.id, fb.id)}

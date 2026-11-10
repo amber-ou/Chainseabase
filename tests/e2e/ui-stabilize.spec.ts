@@ -46,13 +46,17 @@ async function setup(page: Page, cards = 3) {
   return { product, P, main };
 }
 
-/** Pixels of one horizontal line inside the board, below the cards: only white and the column rule. */
-async function lineColours(page: Page, scroller: Locator, yFromTop: number) {
+/**
+ * Pixels of one horizontal line inside the board, below the cards: only white and the column rule.
+ * `inset` leaves out the edges, which fade into the page on purpose (MASK-01..07, 2026-11-10: at most
+ * 64px on a side); everything between them must be the white board.
+ */
+async function lineColours(page: Page, scroller: Locator, yFromTop: number, inset = 0) {
   const png = await scroller.screenshot({ animations: 'disabled' });
   const img = sharp(png);
   const { width, height } = await img.metadata();
   const y = Math.min(height! - 2, yFromTop);
-  const { data, info } = await img.extract({ left: 0, top: y, width: width!, height: 1 }).raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = await img.extract({ left: inset, top: y, width: width! - 2 * inset, height: 1 }).raw().toBuffer({ resolveWithObject: true });
   const colours = new Map<string, number>();
   for (let x = 0; x < info.width; x++) {
     const i = x * info.channels;
@@ -113,7 +117,7 @@ test('RM-FIX02: the white board and rules cover every column at the left, middle
       await shot(page, `rm02-${tab}-${where}`, main.locator('.board-frame'));
       // a line near the bottom of the board, under the cards: white and rules only, never the grey page
       const h = (await scroller.boundingBox())!.height;
-      const colours = await lineColours(page, scroller, Math.round(h - 12));
+      const colours = await lineColours(page, scroller, Math.round(h - 12), 64);
       const total = [...colours.values()].reduce((a, b) => a + b, 0);
       found.push({ tab, where, geo, ground: colours.has(GROUND), white: (colours.get(WHITE) ?? 0) / total, colours: JSON.stringify([...colours]) });
     }

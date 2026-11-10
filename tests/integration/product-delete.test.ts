@@ -121,6 +121,10 @@ async function populate(productId: string, calendarId: string, extra: { personTa
   expectOk(await api.post(`${P}/personal/views/${v.view.id}/moves`, { as: w.teamB, body: { feedbackId: f.id, targetColumnId: col.column.id, expectedRevision: col.revision } }));
   const pt = expectOk(await api.post(`${P}/personal/tags`, { as: w.teamB, body: { name: '私人' } }), 201);
   expectOk(await api.put(`${P}/personal/feedback/${f.id}/tags`, { as: w.teamB, body: { personalTagIds: [pt.id], expectedRevision: 0 } }));
+  // shared Feedback views (2026-11-10, migration 0008): the 新貼文 view with a manual order
+  const fv = expectOk(await api.get(`${P}/feedback-views`, { as: w.teamA }));
+  const second = await createFeedback(w, { title: '另一筆' }, w.teamA, productId);
+  expectOk(await api.post(`${P}/feedback-views/${fv.views[0].id}/move`, { as: w.teamA, body: { feedbackId: f.id, beforeId: second.id, expectedRevision: fv.views[0].revision } }));
   // Roadmap: a move on the default board stores a rank for the card
   const [rm] = expectOk(await api.get(`${P}/roadmaps`, { as: w.teamA })) as { id: string }[];
   const board = expectOk(await api.get(`${P}/roadmaps/${rm.id}/board`, { as: w.teamA }));

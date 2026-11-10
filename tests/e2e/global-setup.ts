@@ -15,6 +15,8 @@ export default async function globalSetup() {
     const [p] = await sql<{ id: string }[]>`select id from products where system_key = 'initial'`;
     const [t] = await sql<{ id: string }[]>`insert into users (google_sub, verified_email, display_name, role) values ('test-tester@e2e.test', 'tester@e2e.test', '測試者', 'tester') returning id`;
     await sql`insert into product_access (user_id, product_id) values (${t.id}, ${p.id})`;
+    // a second team member, for shared views and concurrent edits (2026-11-10)
+    await sql`insert into users (google_sub, verified_email, display_name, role) values ('test-pm@e2e.test', 'pm@e2e.test', '產品經理', 'team')`;
   } finally {
     await sql.end();
   }

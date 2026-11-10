@@ -114,9 +114,11 @@ test('DETAIL-03/04: 編輯 uses the shared form, 儲存 updates the same Feedbac
   await expect(form.getByLabel('標題')).toHaveValue('詳情測試');
   await expect(form.getByLabel('描述')).toHaveValue('希望在詳情集中查看討論。');
   await expect(form.getByRole('list', { name: /已選圖片，共 2 張/ })).toBeVisible();
-  // DETAIL-04: priority, version and visibility stay editable here
+  // DETAIL-04 (as rearranged by ATTR-01..04): priority as a pill, version from ＋, 內部／公開 in the footer
   await expect(form.getByRole('button', { name: /^優先級：/ })).toBeVisible();
-  await expect(form.getByRole('button', { name: /^版本：/ })).toBeVisible();
+  await form.getByRole('button', { name: /^加入標籤、優先級或版本/ }).click();
+  await expect(page.getByRole('dialog', { name: '加入標籤、優先級或版本' }).getByRole('button', { name: /^版本/ })).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(form.getByRole('button', { name: '公開範圍：內部' })).toBeVisible();
   await expect(form.getByText('新增多筆')).toHaveCount(0);
   // 取消 (with a change) asks, then returns to the detail with nothing saved
@@ -125,7 +127,7 @@ test('DETAIL-03/04: 編輯 uses the shared form, 儲存 updates the same Feedbac
   await page.getByRole('alertdialog').getByRole('button', { name: '放棄修改' }).click();
   d = page.getByRole('dialog', { name: '詳情測試' });
   await expect(d).toBeVisible();
-  // edit for real: title, remove the first image, add a new one, make it public
+  // edit for real: title, remove the first image, add a new one; 公開 is an attribute, saved at once
   await d.getByRole('button', { name: 'Feedback 更多操作' }).click();
   await page.getByRole('menuitem', { name: '編輯' }).click();
   form = page.getByRole('dialog', { name: '編輯 Feedback' });
@@ -135,6 +137,7 @@ test('DETAIL-03/04: 編輯 uses the shared form, 儲存 updates the same Feedbac
   await expect(form.locator('.fbc-preview[data-state="done"]')).toHaveCount(2);
   await form.getByRole('button', { name: '公開範圍：內部' }).click();
   await page.getByRole('menuitemradio', { name: /^公開/ }).click();
+  await expect(form.getByRole('button', { name: '公開範圍：公開' })).toBeVisible();
   await shot(page, 'edit');
   await form.getByRole('button', { name: '儲存', exact: true }).click();
   d = page.getByRole('dialog', { name: '詳情測試（已編輯）' });
@@ -382,43 +385,29 @@ test('TOOL-01..04: icon buttons without resting fill or border; thin rules betwe
   }
 });
 
-test('BOARD-01..03: edge fades only where columns are hidden, on Roadmap, Personal and the portal; never catching input', async ({ page }) => {
+test('BOARD-01..03 (as MASK-01..07 since 2026-11-10): the edges follow the hidden columns on Roadmap and Personal, re-measured when the sidebar collapses', async ({ page }) => {
   await login(page, 'admin', 'lead@e2e.test', '專案負責人');
   const base = await openFirstProduct(page, 'roadmaps');
   const main = page.getByRole('main');
   await expect(main.locator('.board-plain > .column')).toHaveCount(5);
+  const wide = page.viewportSize()!.width > 800 ? '64px' : '48px';
+  const edges = (s: Locator) => s.evaluate((e) => [getComputedStyle(e).getPropertyValue('--mask-l').trim(), getComputedStyle(e).getPropertyValue('--mask-r').trim()]);
+  const overflowOf = (s: Locator) => s.evaluate((e) => e.scrollWidth > e.clientWidth + 1);
   const scroller = main.locator('.board-frame .board-scroll');
-  const fades = () => main.locator('.board-fade').evaluateAll((els) => els.map((e) => e.hasAttribute('data-on')));
-  const overflow = await scroller.evaluate((e) => e.scrollWidth > e.clientWidth + 1);
-  if (overflow) {
-    await expect.poll(fades).toEqual([false, true]);
-    await scroller.evaluate((e) => { e.scrollLeft = (e.scrollWidth - e.clientWidth) / 2; });
-    await expect.poll(fades).toEqual([true, true]);
-    await scroller.evaluate((e) => { e.scrollLeft = e.scrollWidth; });
-    await expect.poll(fades).toEqual([true, false]);
-    // the fade is fixed to the visible edge (it does not move with the columns) and lets clicks through
-    const f = (await main.locator('.board-fade-left').boundingBox())!, s = (await scroller.boundingBox())!;
-    expect(Math.abs(f.x - s.x)).toBeLessThanOrEqual(1);
-    expect(await main.locator('.board-fade-left').evaluate((e) => getComputedStyle(e).pointerEvents)).toBe('none');
-    // the arrows sit above the fades
-    const z = await main.evaluate(() => [getComputedStyle(document.querySelector('.board-arrow')!).zIndex, getComputedStyle(document.querySelector('.board-fade')!).zIndex].map(Number));
-    expect(z[0]).toBeGreaterThan(z[1]);
-    await shot(page, 'board-fade-right-end', main.locator('.board-frame'));
-  } else {
-    await expect.poll(fades).toEqual([false, false]);
-  }
+  await expect.poll(() => edges(scroller)).toEqual(['16px', (await overflowOf(scroller)) ? wide : '16px']);
+  // no white overlay and nothing catching input: the mask is on the scroller itself
+  await expect(main.locator('.board-fade')).toHaveCount(0);
   // collapsing the sidebar (more room) re-checks the edges
   if (page.viewportSize()!.width > 1024) {
-    await scroller.evaluate((e) => { e.scrollLeft = 0; });
     await main.getByRole('button', { name: '收合側邊欄' }).click();
-    await expect.poll(async () => (await fades())[1]).toBe(await scroller.evaluate((e) => e.scrollWidth > e.clientWidth + 1));
+    await expect.poll(async () => (await edges(scroller))[1]).toBe((await overflowOf(scroller)) ? wide : '16px');
+    await shot(page, 'board-mask-collapsed', main.locator('.board-frame'));
     await main.getByRole('button', { name: '展開側邊欄' }).click();
   }
-  // Personal and the portal use the same board: fades follow their own overflow
+  // Personal uses the same board and mask
   await page.goto(`${base}/personal`);
   await expect(main.locator('.board .column').first()).toBeVisible();
   const p = main.locator('.board-scroll');
-  await expect.poll(async () => (await main.locator('.board-fade-right').evaluate((e) => e.hasAttribute('data-on')))).toBe(await p.evaluate((e) => e.scrollWidth > e.clientWidth + 1));
-  expect(await main.locator('.board-fade-left').evaluate((e) => e.hasAttribute('data-on'))).toBe(false);
+  await expect.poll(() => edges(p)).toEqual(['16px', (await overflowOf(p)) ? wide : '16px']);
   await expectNoPageOverflow(page);
 });

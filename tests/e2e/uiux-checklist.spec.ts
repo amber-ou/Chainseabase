@@ -105,8 +105,8 @@ test('F01–F09: Feedback toolbar, Filter popover, search and grey empty states'
   const product = await createProduct(page, unique('Feedback 工具列'));
   await page.goto(`${ADMIN}/products/${product.id}/feedback`);
   const main = page.getByRole('main');
-  // F07: nothing yet: grey text only, no box, no 新增第一筆
-  await expect(main.getByRole('status').filter({ hasText: '這個產品還沒有 Feedback。' })).toBeVisible();
+  // F07: nothing yet: grey text only, no box, no 新增第一筆 (since LIST-01, inside the 新貼文 table)
+  await expect(main.locator('.fbv-empty')).toHaveText('這個表格目前沒有 Feedback。');
   await expect(main.getByRole('button', { name: '新增第一筆' })).toHaveCount(0);
   // F02: one 新增 Feedback, in the toolbar (not in the page header)
   await expect(main.getByRole('button', { name: '新增 Feedback' })).toHaveCount(1);
@@ -158,8 +158,8 @@ test('F01–F09: Feedback toolbar, Filter popover, search and grey empty states'
   await search.fill(title);
   await expect(main.getByRole('button', { name: title })).toBeVisible();
   await search.fill(unique('沒有這筆'));
-  await expect(main.getByRole('status').filter({ hasText: '沒有符合目前搜尋或篩選條件的 Feedback' })).toBeVisible();
-  const color = await main.getByRole('status').filter({ hasText: '沒有符合' }).evaluate((e) => getComputedStyle(e).color);
+  await expect(main.locator('.fbv-empty')).toHaveText('沒有符合目前搜尋或篩選條件的 Feedback。');
+  const color = await main.locator('.fbv-empty').evaluate((e) => getComputedStyle(e).color);
   expect(color).toBe('rgb(85, 98, 116)'); // --muted: 5.8:1 on the page background
   await shot(page, 'feedback-no-results');
 });

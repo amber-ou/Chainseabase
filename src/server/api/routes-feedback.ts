@@ -5,7 +5,7 @@ import { getSql, withTx } from '../db';
 import { AppError } from '../errors';
 import { listReadableProducts, requireMember, requirePortalMember, requireProduct, requireProductReader, requireTeam, requireUser } from '../authz';
 import { createFeedback, listFeedback, listFeedbackIds, softDeleteFeedback, updateFeedback } from '@/modules/feedback/service';
-import { loadFeedbackDto, loadPublicFeedbackDtos, lockFeedback } from '@/modules/feedback/repo';
+import { loadFeedbackDto, loadFeedbackDtos, loadPublicFeedbackDtos, lockFeedback } from '@/modules/feedback/repo';
 import {
   createGeneralComment, deleteComment, editComment, getCommentDto, listComments, listPublicComments, setCommentLike, setVote,
 } from '@/modules/feedback/comments';
@@ -14,6 +14,7 @@ import {
 } from '@/modules/feedback/images';
 import { text, zLimit, zRevision, zUuid } from '@/modules/shared/text';
 import { mutate } from './helpers';
+import { createView, listViewItems, listViews, moveViewItem, removeView, reorderViews, sortViewByCreated } from '@/modules/feedback/views';
 
 const zTitle = text(1, 200, '標題');
 const zDescription = text(0, 20000, '描述');
@@ -106,6 +107,57 @@ export function registerFeedbackRoutes(r: Router) {
       await softDeleteFeedback(tx, user, productId, feedbackId, rev);
       return { data: { id: feedbackId, deleted: true } };
     });
+  });
+
+  // ---------------- shared Feedback views (2026-11-10 LIST-01..15, migration 0008; team only) ----------------
+  r.get('/products/:p/feedback-views', ['admin'], async (ctx) => {
+    const { user, productId } = await teamProduct(ctx);
+    // the first visit of a product makes its 新貼文 view once (a write, so in a transaction)
+    return { data: await withTx((tx) => listViews(tx, productId, user.id)) };
+  });
+
+  r.post('/products/:p/feedback-views', ['admin'], async (ctx) => {
+    const { user, productId } = await teamProduct(ctx);
+    const body = await ctx.body(z.object({ kind: z.enum(['status', 'tag']), optionId: zUuid, expectedRevision: zRevision }).strict());
+    return mutate(ctx, { body }, async (tx) => ({ status: 201, data: await createView(tx, user.id, productId, body) }));
+  });
+
+  r.put('/products/:p/feedback-views/order', ['admin'], async (ctx) => {
+    const { productId } = await teamProduct(ctx);
+    const body = await ctx.body(z.object({ viewIds: z.array(zUuid).max(200), expectedRevision: zRevision }).strict());
+    return mutate(ctx, { body }, async (tx) => ({ data: await reorderViews(tx, productId, body.viewIds, body.expectedRevision) }));
+  });
+
+  r.delete('/products/:p/feedback-views/:v', ['admin'], async (ctx) => {
+    const { productId } = await teamProduct(ctx);
+    const viewId = uuidParam(ctx, 'v');
+    const rev = ctx.ifMatchRevision();
+    return mutate(ctx, { body: { rev } }, async (tx) => ({ data: await removeView(tx, productId, viewId, rev) }));
+  });
+
+  r.get('/products/:p/feedback-views/:v/items', ['admin'], async (ctx) => {
+    const { productId } = await teamProduct(ctx);
+    const q = ctx.query(z.object({
+      q: z.string().max(200).optional(), categoryId: zUuid.optional(),
+      tagIds: z.union([zUuid, z.array(zUuid).max(20)]).optional().transform((v) => (v === undefined ? [] : Array.isArray(v) ? v : [v])),
+      cursor: z.string().regex(/^\d{1,6}$/).optional(), limit: zLimit,
+    }));
+    const res = await listViewItems(getSql(), productId, uuidParam(ctx, 'v'), { q: q.q, categoryId: q.categoryId, tagIds: q.tagIds, offset: q.cursor ? Number(q.cursor) : 0, limit: q.limit });
+    return { data: await loadFeedbackDtos(getSql(), productId, res.ids), meta: { total: res.total, nextCursor: res.nextCursor } };
+  });
+
+  r.post('/products/:p/feedback-views/:v/move', ['admin'], async (ctx) => {
+    const { productId } = await teamProduct(ctx);
+    const viewId = uuidParam(ctx, 'v');
+    const body = await ctx.body(z.object({ feedbackId: zUuid, beforeId: zUuid.nullable(), expectedRevision: zRevision }).strict());
+    return mutate(ctx, { body }, async (tx) => ({ data: await moveViewItem(tx, productId, viewId, body) }));
+  });
+
+  r.put('/products/:p/feedback-views/:v/sort', ['admin'], async (ctx) => {
+    const { productId } = await teamProduct(ctx);
+    const viewId = uuidParam(ctx, 'v');
+    const body = await ctx.body(z.object({ mode: z.literal('created'), expectedRevision: zRevision }).strict());
+    return mutate(ctx, { body }, async (tx) => ({ data: await sortViewByCreated(tx, productId, viewId, body.expectedRevision) }));
   });
 
   // ---------------- images (phase 2 IM01-IM06) ----------------

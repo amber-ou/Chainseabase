@@ -722,3 +722,61 @@ UI-10 補充（2026-11-09）：
 - 真實 Supabase Storage（留言圖片使用與 Feedback 圖片相同的介面，只以本機替身測過）。
 
 待確認：前台 tester 是否可上傳留言圖片（見變更需求）。
+
+## UI-14：Feedback 屬性、看板遮罩與分組表格（2026-11-10）
+
+狀態：**預覽完成，尚未完成完整回歸**。需求：使用者附件 `uiux-feedback-views-and-attributes.md` 與 Feedback List 附件（存於 `docs/design-references/feedback-list/`；上一批 Feedback 詳情附件補存於 `docs/design-references/feedback-detail/`）。決定、取代的舊規格、附件界線與 Skill 使用見[變更需求](docs/change-requests/sidebar-position.md)「追加規格：Feedback 屬性、看板遮罩與分組表格」。延續 UI-13（`e800d9a`）。**新增 migration 0008**（共用表格三張新表，只新增，不改既有資料），套用前須依既有流程備份。
+
+| 編號 | 狀態 | 說明 |
+| --- | --- | --- |
+| ATTR-01 | 完成 | 移除編輯模式第二排；資料不變 |
+| ATTR-02／03 | 完成 | ＋ 內含標籤、優先級、版本（第二層清單，點擊、鍵盤與觸控皆可用）；優先級與版本膠囊在 ＋ 左側，用選單調整值 |
+| ATTR-04／05 | 完成 | 編輯 Footer：左側內部／公開，右側取消、儲存；新增 Footer：左側內部／公開、新增多筆，右側取消、建立 |
+| ATTR-06 | 完成 | 查看模式唯讀顯示「公開範圍」 |
+| ATTR-07 | 完成 | Radix 選單、焦點返回、可及性名稱；前台不增加屬性操作 |
+| 即時儲存 | 完成 | 已建立 Feedback 的屬性即時儲存並依序排隊；revision 衝突時，只在對方沒有改到同一屬性時才重送；編輯草稿只含標題、描述與圖片，兩者互不覆蓋 |
+| MASK-01～07 | 完成 | 三種看板的捲動容器使用 `mask-image`／`-webkit-mask-image`：兩側固定 16px，有隱藏欄位的一側 64px（800px 以下 48px）；箭頭在遮罩外；移除白色覆蓋層 |
+| LIST-01～15 | 完成 | 團隊共用、持久保存的篩選表格（狀態或標籤）；新貼文表格只建立一次；同一筆 Feedback 可在多個表格；表格內可排序（拖曳或鍵盤），禁止跨表格；顯示與排序都用建立時間；移除表格只刪視圖；搜尋與篩選取交集；窄螢幕在表格內捲動 |
+
+修改檔案：
+- 資料與 API：`db/migrations/0008_feedback_views.sql`、新增 `src/modules/feedback/views.ts`；`src/server/api/routes-feedback.ts`、`src/modules/products/service.ts`（刪除產品時一併刪除表格）、`docs/04-api-contracts.md`。
+- 前端：
+  - 新增 `src/features/feedback/{feedback-attributes,feedback-views}.tsx`。
+  - 改寫 `feedback-create-dialog.tsx`、`feedback-page.tsx`；`feedback-modal.tsx`（即時儲存）。
+  - `board.tsx` 與 `globals.css`（遮罩與 `.fbv-*`）。
+- 附件：`docs/design-references/{feedback-list,feedback-detail}/`、`README.md`。
+- 測試：
+  - 新增 `tests/integration/feedback-views.test.ts`、`tests/e2e/ui-views.spec.ts`。
+  - 更新：`product-delete.test.ts`（資料集含表格）、`global-setup.ts`（第二位團隊成員 `pm@e2e.test`，只在隔離 e2e 資料庫）、`admin`、`ui-followup`（BOARD 改為遮罩檢查、DETAIL 改為新屬性入口）、`ui-stabilize`（RM-FIX02 排除兩側遮罩區）、`uiux-checklist`（空狀態文字在表格內）、`playwright.config.ts`。
+
+驗證（Linux 容器，隔離 e2e／test 資料庫；Google、寄信、儲存為 fake）：
+- **資料、權限與並行（先驗證）**：`feedback-views.test.ts` 8 passed。涵蓋：
+  - 新貼文表格依預設狀態 ID 只建立一次，並行也一樣；移除後不會補回。
+  - 同產品的團隊共用；tester、未受邀者與其他產品一律拒絕。
+  - 同一筆 Feedback 可出現在多個表格；狀態改變後即時移出；刪除後消失。
+  - 重複條件與過期 revision 拒絕；刪除標籤時，以它為條件的表格一併移除，Feedback 保留。
+  - 移除表格只刪視圖與列序（Feedback 的狀態、標籤與 revision 不變）。
+  - 表格順序共用；過期或不完整的順序拒絕。
+  - 列只能在同一表格內移動，跨表格與表格外的目標拒絕；其他表格不受影響；改回建立時間會清除手動列序；搜尋下移動不會遺失未顯示的列；分頁總數正確。
+- `product-delete.test.ts` 含表格與列序，22 passed。
+- **npm test**：23 個檔案、224 passed。
+- **ui-views（1440／768／390）**：18 passed。涵蓋：
+  - 新增：＋ 的優先級、版本與鍵盤切換；膠囊在 ＋ 左側；Footer 配置；建立後的 API 值。
+  - 查看：即時儲存，唯讀公開範圍。
+  - 編輯：屬性即時儲存且不清掉草稿；取消不回復已儲存的屬性；對方只改屬性時，內容仍會儲存並保留對方的值；對方改了內容時，保留草稿並需明確選擇才覆蓋。
+  - 遮罩：寬度依無溢出／最左／中間／最右與 800px 門檻；箭頭不在遮罩內；沒有白色覆蓋層。
+  - 表格：
+    - 初始只有新貼文；標題列順序、欄位、新到舊、相對時間與完整時間提示。
+    - 新增篩選；同一筆在兩個表格；列內修改同步到另一個表格；狀態改變後移出；搜尋取交集。
+    - 點列開啟詳情，選單不會誤開；鍵盤移動切為手動排序，重新整理後保留，點「建立時間」改回。
+    - 跨表格拖移無效；表格順序由第二位成員看到；收合；移除表格後 Feedback 保留。
+    - 窄螢幕在表格內捲動且欄位不重疊。
+- **全套 Playwright（三種寬度＋empty-last）**：260 passed、10 skipped（既有的寬度專屬案例）、0 failed。
+- lint、typecheck、build、security:scan、`git diff --check` 皆 exit 0。
+- migration 0008 在隔離的 dev／test／e2e 資料庫套用；**未**在使用者 Windows 或正式資料庫執行。
+- 人工檢視截圖：表格（一個、多個、窄螢幕、長標題）、新增與編輯 Footer、＋ 第二層、Roadmap 遮罩（最左／中間／最右、側邊欄收合）。
+
+尚未驗證：
+- 視覺基準定版。
+- 實機觸控拖曳表格：觸控時以 ⋯ 選單上移／下移替代；列在觸控裝置只能用鍵盤 Alt+↑／↓，目前沒有觸控專用的列排序控制。
+- Firefox／Safari 的 `mask-image`（已同時設定 `-webkit-` 前綴）、螢幕閱讀器、Windows 主機。

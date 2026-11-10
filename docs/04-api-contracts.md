@@ -324,6 +324,22 @@ before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 nul
 | `GET /products/:p/feedback/:f/images/:i/(original｜thumb)` | team | 圖片內容。 |
 | `GET /public/products/:slug/feedback/:f/images[/:i/(original｜thumb)]` | 受邀成員，且 Feedback 為公開 | 前台讀取；內部、已刪除或不在受邀產品內一律 404。 |
 
+## 後台 Feedback 共用篩選表格（2026-11-10，LIST-01–LIST-15；migration 0008）
+
+全部只限 team、後台；產品之間互不可見（其他產品的 view id 一律 404）。清單 revision 保護表格的新增、順序與移除；每個表格的 revision 保護其排序模式與列序；過期 revision 回 409，且不寫入任何資料。
+
+| 端點 | 規則 |
+| --- | --- |
+| `GET /products/:p/feedback-views` | `{ revision, views: [{ id, kind: status｜tag, optionId, label, groupName, color, sortMode: created｜manual, revision }] }`。第一次讀取時以產品的預設狀態建立「新貼文」表格一次（可重複呼叫、並行安全）；被移除後不再自動補回。 |
+| `POST /products/:p/feedback-views` | `{ kind, optionId, expectedRevision }`：一個狀態或一個標籤（本產品），加在最後並依序分配標題色。相同條件已存在時回 400。建立後不能修改條件。 |
+| `PUT /products/:p/feedback-views/order` | `{ viewIds, expectedRevision }`：必須正好是目前所有表格，否則 400。 |
+| `DELETE /products/:p/feedback-views/:v`（If-Match：清單 revision） | 只刪除表格與其列序；不改動任何 Feedback、狀態或標籤。 |
+| `GET /products/:p/feedback-views/:v/items?q&categoryId&tagIds&cursor&limit` | 依表格條件與頁面搜尋／篩選的交集，回傳 Feedback DTO；排序：`created` 為建立時間新到舊（id 為穩定次序），`manual` 為尚未排序的較新項目在前、再依手動列序。`meta.total` 為全部符合數，`nextCursor` 為位移。 |
+| `POST /products/:p/feedback-views/:v/move` | `{ feedbackId, beforeId｜null, expectedRevision }`：只在同一表格內移動；兩者都必須目前符合此表格條件，否則 400（不可跨表格）。保留整個表格的順序（搜尋中未顯示的項目不會遺失），表格改為手動排序。 |
+| `PUT /products/:p/feedback-views/:v/sort` | `{ mode: 'created', expectedRevision }`：回到建立時間新到舊，清除此表格的手動列序。 |
+
+刪除狀態、標籤或標籤群組時，以它為條件的表格一併移除；刪除產品時表格與列序一併刪除。
+
 ## Feedback 編輯圖片與留言圖片（2026-11-10，追加調整 DETAIL-03、COMMENT-05／06；migration 0007）
 
 | 端點 | 權限 | 規則 |

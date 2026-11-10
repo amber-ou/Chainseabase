@@ -101,7 +101,10 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
       {/* focusable so keyboard users can scroll the columns horizontally (WCAG 2.1.1); Roadmap (plain):
           arrows and Home / End on the container itself move one column / to either end (phase 3 III-R07) */}
       {/* CARD-03: every board (the portal's too) scrolls sideways inside itself on narrow screens; cards keep 300px */}
+      {/* MASK-01..07: the scrolling container itself is masked (mask-image, CSS), 16px on each side always
+          and wider on a side while columns are hidden past it; the arrows are outside it, unmasked */}
       <div ref={rootRef} className="board-scroll" tabIndex={0} role="region" aria-label="看板，可左右捲動"
+        data-more-left={scroll.edges.left || undefined} data-more-right={scroll.edges.right || undefined}
         onKeyDown={plain ? scroll.onKeyDown : undefined}>
         <div className={`board${plain ? ' board-plain' : ''}`} role="list" aria-label="看板欄位"
           // RM-FIX02: the board itself is as wide as all its columns (never narrower than the space it has),
@@ -166,10 +169,6 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
           ))}
         </div>
       </div>
-      {/* BOARD-01/02: a narrow white-to-clear fade on an edge only while columns are hidden past it; fixed to
-          the visible area, never over the arrows, never catching clicks, drags or scrolling */}
-      <span className="board-fade board-fade-left" data-on={scroll.edges.left || undefined} aria-hidden="true" />
-      <span className="board-fade board-fade-right" data-on={scroll.edges.right || undefined} aria-hidden="true" />
       {plain && (scroll.edges.left || scroll.edges.right) ? (
         <>
           {/* III-R05: only when the board is wider than its space; one column per press */}

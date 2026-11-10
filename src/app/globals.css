@@ -510,8 +510,22 @@ main[tabindex="-1"]:focus { outline: none; }
   .fbc-title { font-size: 19px; }
   .fbc-description { min-height: 120px; }
 }
-/* edit mode (DETAIL-04): the settings row under the attributes; compact previews in the composer */
-.fbc-settings { margin-top: 0; padding-top: 0; }
+/* ATTR-02..06 (2026-11-10): priority and version pills (values, not tags), the footer's 內部／公開
+   control, the instant-save status and the view mode's read-only visibility line */
+.fbc-pill-priority { background: #f5f2ec; color: #66553c; }
+.fbc-pill-version { background: var(--surface); border-color: var(--border-strong); color: var(--text); }
+.fbc-footer-start { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-width: 0; }
+.fbc-visibility { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text-2); font-size: var(--fs-small); cursor: pointer; }
+.fbc-visibility svg { width: 14px; height: 14px; }
+.fbc-visibility:hover, .fbc-visibility[data-state="open"] { background: var(--raised); }
+.fbc-visibility:disabled { cursor: progress; opacity: .7; }
+.fbc-save-state { display: flex; align-items: center; gap: 6px; min-height: 18px; margin: -8px 0 12px; font-size: var(--fs-small); line-height: var(--lh-small); color: var(--muted); }
+.fbc-save-state svg { width: 14px; height: 14px; }
+.fbc-save-state[data-kind="saved"] { color: var(--positive-ink); }
+.fbc-save-error { color: var(--negative); }
+.fd-top .fbc-save-state { margin: 6px 0 0; }
+.fd-visibility { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; font-size: var(--fs-small); color: var(--muted); }
+.fd-visibility svg { width: 14px; height: 14px; }
 .fbc-previews[data-size="sm"] .fbc-preview { width: 64px; height: 52px; }
 .fbc-pill:disabled, .fbc-pills[aria-disabled="true"] .fbc-pill { cursor: progress; opacity: .7; }
 
@@ -666,12 +680,19 @@ html:not([data-input="pointer"]) .fd-input-box:has(.fd-input:focus-visible) { ou
    box. A card is at least 300px, so a column at least 300 + 16 + 16 + 1 = 333px; more room is shared.
    The container scrolls sideways (scrollbar hidden; arrows, wheel, keys and touch move it). */
 .board-wrap { position: relative; }
-/* BOARD-01..03: edge fades of every board's visible area, shown only while columns are hidden that way */
-.board-fade { position: absolute; top: 0; bottom: 0; z-index: 1; width: 28px; pointer-events: none; opacity: 0; transition: opacity .15s ease; }
-.board-fade[data-on] { opacity: 1; }
-.board-fade-left { left: 0; background: linear-gradient(to right, var(--surface), rgb(255 255 255 / 0)); }
-.board-fade-right { right: 0; background: linear-gradient(to left, var(--surface), rgb(255 255 255 / 0)); }
-@media (prefers-reduced-motion: reduce) { .board-fade { transition: none; } }
+/* MASK-01..07 (2026-11-10, replacing the white overlay fades): the horizontal boards' scroll container is
+   masked, so the white surface, text and cards fade into the real page background (no overlay, no seam).
+   Each side always keeps 16px; a side with hidden columns widens to 64px (48px at 800px and below).
+   The edges are re-measured on scroll, resize, column changes and sidebar collapse (useBoardScroll). */
+.board-scroll {
+  --mask-base: 16px; --mask-wide: 64px;
+  --mask-l: var(--mask-base); --mask-r: var(--mask-base);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--mask-l), #000 calc(100% - var(--mask-r)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--mask-l), #000 calc(100% - var(--mask-r)), transparent 100%);
+}
+.board-scroll[data-more-left] { --mask-l: var(--mask-wide); }
+.board-scroll[data-more-right] { --mask-r: var(--mask-wide); }
+@media (max-width: 800px) { .board-scroll { --mask-wide: 48px; } }
 .board-frame { position: relative; flex: 1 0 auto; display: flex; flex-direction: column; min-width: 0; min-height: 200px; }
 /* the container scrolls sideways and fills the frame's height; the board stretches to it (RM-FIX03) */
 .board-frame .board-scroll { flex: 1 0 auto; display: flex; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-bottom: 0; scroll-snap-type: none; }
@@ -837,4 +858,76 @@ html:not([data-input="pointer"]) .fd-input-box:has(.fd-input:focus-visible) { ou
 
 @media (prefers-reduced-motion: reduce) {
   [data-slot] { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* Shared Feedback tables (2026-11-10, LIST-01..15). Layout from docs/design-references/feedback-list
+   (STYLE_SPEC.md) mapped to Chainseabase tokens: a card per view with a soft-coloured header, a column
+   header row and rows; no outer border. Only `.fbv-*` elements use these rules. */
+@layer legacy {
+  .fbv-list { display: flex; flex-direction: column; gap: 24px; }
+  .fbv-filter-note { margin: -8px 0 12px; }
+  .fbv { --fbv-head: #dfe9f5; position: relative; border-radius: 6px; background: var(--surface); box-shadow: 0 1px 2px rgb(15 23 42 / 6%), 0 4px 14px rgb(15 23 42 / 7%); }
+  .fbv[data-color="sand"] { --fbv-head: #eee5d9; }
+  .fbv[data-color="green"] { --fbv-head: #e2efe4; }
+  .fbv[data-color="lilac"] { --fbv-head: #ebe6f4; }
+  .fbv[data-color="rose"] { --fbv-head: #f4e4e4; }
+  .fbv[data-color="teal"] { --fbv-head: #dfeef0; }
+  .fbv[data-drop-view] { box-shadow: inset 0 3px 0 var(--text), 0 4px 14px rgb(15 23 42 / 10%); }
+  .fbv-head { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 10px 14px 10px 12px; border-radius: 6px 6px 0 0; background: var(--fbv-head); }
+  .fbv:has(> [hidden]) .fbv-head { border-radius: 6px; }
+  .fbv-grip { display: grid; place-items: center; width: 24px; height: 32px; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: #8a93a1; cursor: grab; }
+  .fbv-grip:active { cursor: grabbing; }
+  .fbv-grip svg { width: 16px; height: 16px; }
+  .fbv-grip:hover { background: rgb(255 255 255 / 45%); color: var(--text-2); }
+  .fbv-name { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; line-height: 20px; font-weight: var(--fw-semibold); color: var(--text); }
+  .fbv-count { font-size: 15px; line-height: 20px; font-weight: var(--fw-medium); color: var(--text-2); }
+  .fbv-spacer { flex: 1 1 auto; }
+  .fbv-icon { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-2); cursor: pointer; }
+  .fbv-icon svg { width: 18px; height: 18px; transition: transform .15s ease; }
+  .fbv-icon:hover, .fbv-icon[data-state="open"] { background: rgb(255 255 255 / 55%); color: var(--text); }
+  .fbv-collapse[aria-expanded="false"] svg { transform: rotate(-90deg); }
+  @media (prefers-reduced-motion: reduce) { .fbv-icon svg { transition: none; } }
+  .fbv-banner { margin: 10px 14px; }
+  .fbv-scroll { overflow-x: auto; scrollbar-width: none; border-radius: 0 0 6px 6px; }
+  .fbv-scroll::-webkit-scrollbar { display: none; }
+  .fbv-table { min-width: 1000px; }
+  .fbv-row { display: grid; grid-template-columns: minmax(220px, 1.3fr) minmax(300px, 1.3fr) minmax(130px, .6fr) minmax(90px, .42fr) minmax(100px, .45fr); align-items: center; column-gap: 22px; padding-inline: 21px; }
+  .fbv-row > [role="cell"], .fbv-row > [role="columnheader"] { min-width: 0; }
+  .fbv-header { min-height: 38px; background: var(--sunken); color: var(--muted); font-size: var(--fs-small); font-weight: var(--fw-medium); }
+  .fbv-sort { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 6px; margin-left: -6px; border: 0; border-radius: var(--radius-control); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+  .fbv-sort:hover { background: var(--raised); color: var(--text); }
+  .fbv-sort svg { width: 13px; height: 13px; }
+  .fbv-manual { padding: 0 6px; border-radius: 999px; background: var(--raised); color: var(--text-2); font-size: 11px; line-height: 18px; }
+  .fbv-item { min-height: 64px; padding-block: 8px; border-top: 1px solid var(--rule); cursor: pointer; transition: background 140ms ease, box-shadow 140ms ease; }
+  .fbv-item:hover { background: #fafbfc; }
+  .fbv-item.fbv-drop { box-shadow: inset 0 2px 0 var(--text); }
+  .fbv-item[aria-busy="true"] { cursor: progress; }
+  .fbv-cell-title { display: flex; flex-direction: column; gap: 4px; }
+  .fbv-title { display: block; max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--fs-body); font-weight: var(--fw-semibold); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .fbv-title:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .fbv-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--fs-small); line-height: var(--lh-small); }
+  .fbv .fbc-pills-compact { margin: 0; padding: 0; gap: 6px; }
+  .fbv .fbc-pills-compact .fbc-pill { height: 30px; padding: 0 10px; font-size: var(--fs-small); }
+  .fbv .fbc-pills-compact .fbc-pill-add { width: 30px; padding: 0; }
+  .fbv .fbc-pill-category { background: #f3f4f6; color: #4c5564; }
+  .fbv .fbc-pill-person { max-width: 100%; height: 30px; padding: 0 10px; border-radius: 6px; background: #e9eef6; color: #34445b; font-size: var(--fs-small); font-weight: var(--fw-semibold); }
+  .fbv-row-error { display: block; margin-top: 4px; color: var(--negative); font-size: var(--fs-small); }
+  .fbv-comments { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: var(--fs-small); white-space: nowrap; }
+  .fbv-comments svg { width: 14px; height: 14px; }
+  .fbv-time { color: var(--text-2); font-size: var(--fs-small); font-weight: var(--fw-medium); white-space: nowrap; }
+  .fbv-state { padding: 16px 21px; border-top: 1px solid var(--rule); }
+  .fbv-empty { color: var(--muted); font-size: var(--fs-small); }
+  .fbv-end { height: 10px; }
+  .fbv-end[data-drop] { box-shadow: inset 0 2px 0 var(--text); }
+  .fbv-more { padding: 6px 12px 10px; border-top: 1px solid var(--rule); }
+  @media (max-width: 700px) {
+    .fbv-list { gap: 20px; }
+    .fbv-table { min-width: 940px; }
+    .fbv-row { grid-template-columns: 200px 300px 135px 90px 100px; column-gap: 18px; padding-inline: 17px; }
+  }
+  @media (max-width: 640px) {
+    .fbv .fbc-pills-compact .fbc-pill, .fbv .fbc-pill-person { height: 36px; }
+    .fbv .fbc-pills-compact .fbc-pill-add { width: 36px; }
+    .fbv-grip, .fbv-icon { width: 40px; height: 40px; }
+  }
 }

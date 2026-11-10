@@ -1,0 +1,272 @@
+import { DragEvent, useState } from "react";
+
+import "./feedback-List.css";
+
+type FeedbackItem = {
+  id: number;
+  title: string;
+  description: string;
+  tags: string[];
+  role: string;
+  comments: number;
+  updatedAt: string;
+};
+
+type FeedbackGroup = {
+  id: string;
+  name: string;
+  tone: "blue" | "sand";
+  items: FeedbackItem[];
+};
+
+type DragState =
+  | { type: "group"; groupIndex: number }
+  | { type: "item"; groupIndex: number; itemId: number }
+  | null;
+
+const initialGroups: FeedbackGroup[] = [
+  {
+    id: "new",
+    name: "新貼文",
+    tone: "blue",
+    items: [
+      {
+        id: 1,
+        title: "改善回饋建立流程",
+        description: "使用者回報功能細節需要進一步調整",
+        tags: ["需求討論", "P0"],
+        role: "產品經理",
+        comments: 0,
+        updatedAt: "15 小時前",
+      },
+      {
+        id: 2,
+        title: "調整列表資訊層級",
+        description: "建議優化頁面資訊呈現與互動方式",
+        tags: ["需求討論", "P0", "UIUX"],
+        role: "產品設計師",
+        comments: 0,
+        updatedAt: "4 天前",
+      },
+      {
+        id: 3,
+        title: "確認行動版操作方式",
+        description: "團隊需要確認需求內容與後續處理方向",
+        tags: ["需求討論", "P0", "UIUX"],
+        role: "前端工程師",
+        comments: 0,
+        updatedAt: "2026/10/28",
+      },
+    ],
+  },
+  {
+    id: "discussion",
+    name: "待討論",
+    tone: "sand",
+    items: [
+      {
+        id: 4,
+        title: "統一元件命名方式",
+        description: "希望能改善目前的操作流程與使用體驗",
+        tags: ["需求討論", "P0"],
+        role: "UIUX",
+        comments: 0,
+        updatedAt: "15 小時前",
+      },
+    ],
+  },
+];
+
+function GripIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="5" cy="3.5" r="1" />
+      <circle cx="11" cy="3.5" r="1" />
+      <circle cx="5" cy="8" r="1" />
+      <circle cx="11" cy="8" r="1" />
+      <circle cx="5" cy="12.5" r="1" />
+      <circle cx="11" cy="12.5" r="1" />
+    </svg>
+  );
+}
+
+function MessageIcon() {
+  return (
+    <svg viewBox="0 0 18 18" aria-hidden="true">
+      <path d="M14.5 11.5a6.5 6.5 0 1 0-3 3L15 15l-.5-3.5Z" />
+    </svg>
+  );
+}
+
+function SortIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M5 3v10m0 0-2-2m2 2 2-2M11 13V3m0 0L9 5m2-2 2 2" />
+    </svg>
+  );
+}
+
+export default function FeedbackListStyle() {
+  const [groups, setGroups] = useState(initialGroups);
+  const [dragState, setDragState] = useState<DragState>(null);
+  const [dragOverGroup, setDragOverGroup] = useState<number | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<number | null>(null);
+
+  function finishDrag() {
+    setDragState(null);
+    setDragOverGroup(null);
+    setDragOverItem(null);
+  }
+
+  function moveGroup(targetIndex: number) {
+    if (!dragState || dragState.type !== "group" || dragState.groupIndex === targetIndex) return;
+
+    setGroups((current) => {
+      const next = [...current];
+      const [moved] = next.splice(dragState.groupIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+    finishDrag();
+  }
+
+  function moveItem(targetGroupIndex: number, targetItemId: number) {
+    if (!dragState || dragState.type !== "item") return;
+    if (dragState.groupIndex === targetGroupIndex && dragState.itemId === targetItemId) return;
+
+    setGroups((current) => {
+      const next = current.map((group) => ({ ...group, items: [...group.items] }));
+      const sourceItems = next[dragState.groupIndex].items;
+      const sourceIndex = sourceItems.findIndex((item) => item.id === dragState.itemId);
+      if (sourceIndex < 0) return current;
+
+      const [moved] = sourceItems.splice(sourceIndex, 1);
+      const targetItems = next[targetGroupIndex].items;
+      const targetIndex = targetItems.findIndex((item) => item.id === targetItemId);
+      targetItems.splice(targetIndex < 0 ? targetItems.length : targetIndex, 0, moved);
+      return next;
+    });
+    finishDrag();
+  }
+
+  return (
+    <main className="feedback-list-style">
+      <header className="feedback-list-style__page-header">
+        <h1>Feedback</h1>
+        <div className="feedback-list-style__toolbar" aria-hidden="true">
+          <div className="feedback-list-style__actions">
+            <span className="feedback-list-style__action">＋ 新增 Feedback</span>
+            <span className="feedback-list-style__action">＋ 新增篩選</span>
+          </div>
+          <div className="feedback-list-style__search">⌕　搜尋標題或描述...</div>
+        </div>
+      </header>
+
+      <div className="feedback-list-style__groups">
+        {groups.map((group, groupIndex) => (
+          <section
+            className={`feedback-list-style__group${
+              dragOverGroup === groupIndex ? " is-drag-over" : ""
+            }`}
+            key={group.id}
+          >
+            <div
+              className={`feedback-list-style__group-heading is-${group.tone}`}
+              draggable
+              onDragStart={(event: DragEvent<HTMLDivElement>) => {
+                event.dataTransfer.effectAllowed = "move";
+                setDragState({ type: "group", groupIndex });
+              }}
+              onDragOver={(event) => {
+                if (dragState?.type !== "group") return;
+                event.preventDefault();
+                setDragOverGroup(groupIndex);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                moveGroup(groupIndex);
+              }}
+              onDragEnd={finishDrag}
+            >
+              <div className="feedback-list-style__group-title">
+                <span className="feedback-list-style__grip">
+                  <GripIcon />
+                </span>
+                <h2>{group.name}</h2>
+                <span>{group.items.length}</span>
+              </div>
+              <span className="feedback-list-style__chevron" aria-hidden="true">
+                ⌄
+              </span>
+            </div>
+
+            <div className="feedback-list-style__table-shell">
+              <div className="feedback-list-style__table">
+                <div className="feedback-list-style__table-header">
+                  <span>標題 / 描述</span>
+                  <span>分類</span>
+                  <span>負責人</span>
+                  <span>互動</span>
+                  <span className="feedback-list-style__sortable">
+                    更新時間
+                    <SortIcon />
+                  </span>
+                </div>
+
+                {group.items.map((item) => (
+                  <article
+                    className={`feedback-list-style__row${
+                      dragOverItem === item.id ? " is-drag-over" : ""
+                    }`}
+                    key={item.id}
+                    draggable
+                    onDragStart={(event: DragEvent<HTMLElement>) => {
+                      event.stopPropagation();
+                      event.dataTransfer.effectAllowed = "move";
+                      setDragState({ type: "item", groupIndex, itemId: item.id });
+                    }}
+                    onDragOver={(event) => {
+                      if (dragState?.type !== "item") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setDragOverItem(item.id);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      moveItem(groupIndex, item.id);
+                    }}
+                    onDragEnd={finishDrag}
+                  >
+                    <div className="feedback-list-style__title">
+                      <strong>{item.title}</strong>
+                      <small>{item.description}</small>
+                    </div>
+                    <div className="feedback-list-style__tags">
+                      {item.tags.map((tag) => (
+                        <span className={`is-${tag.toLowerCase()}`} key={tag}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                    <div
+                      className={`feedback-list-style__role is-${item.role === "UIUX" ? "uiux" : "set"}`}
+                    >
+                      {item.role}
+                      <span aria-hidden="true">⌄</span>
+                    </div>
+                    <div className="feedback-list-style__comments">
+                      <MessageIcon />
+                      留言 {item.comments}
+                    </div>
+                    <time>{item.updatedAt}</time>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+        ))}
+      </div>
+    </main>
+  );
+}
