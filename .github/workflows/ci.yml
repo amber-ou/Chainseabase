@@ -1,0 +1,485 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'claude/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: chainsea
+          POSTGRES_PASSWORD: chainsea
+          POSTGRES_DB: chainseabase_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U chainsea" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_test
+      E2E_DATABASE_URL: postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_e2e
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Create E2E database
+        run: PGPASSWORD=chainsea psql -h 127.0.0.1 -U chainsea -d chainseabase_test -c 'create database chainseabase_e2e'
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Unit and PostgreSQL integration tests
+        run: npm test
+      - name: Migrations apply cleanly and re-run idempotently
+        run: |
+          DIRECT_DATABASE_URL=$E2E_DATABASE_URL npm run db:migrate
+          DIRECT_DATABASE_URL=$E2E_DATABASE_URL npm run db:migrate
+      - run: npm run build
+      - name: Secret scan (client bundle + tracked files)
+        run: npm run security:scan
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: E2E (1440 / 768 / 390)
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 14
+
+  # Same Node and PostgreSQL major versions as the Windows host (Node 24.11.1, PostgreSQL 18.6).
+  # Runs on Linux: it checks version compatibility, not Windows behaviour.
+  pg18-node24:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: chainsea
+          POSTGRES_PASSWORD: chainsea
+          POSTGRES_DB: chainseabase_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U chainsea" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_test
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.11.1
+          cache: npm
+      - name: Use npm 10.9.4 (the version used for npm ci on the Windows host)
+        run: npm install -g npm@10.9.4
+      - run: npm ci
+      - name: Server version
+        run: PGPASSWORD=chainsea psql -h 127.0.0.1 -U chainsea -d chainseabase_test -tAc 'show server_version'
+      - name: Migrations apply cleanly and re-run idempotently (PostgreSQL 18)
+        run: |
+          PGPASSWORD=chainsea psql -h 127.0.0.1 -U chainsea -d chainseabase_test -c 'create database chainseabase_pg18'
+          DIRECT_DATABASE_URL=postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_pg18 npm run db:migrate
+          DIRECT_DATABASE_URL=postgres://chainsea:chainsea@127.0.0.1:5432/chainseabase_pg18 npm run db:migrate
+      - name: Unit and integration tests (Node 24.11.1, PostgreSQL 18)
+        run: npm test
+
+  # Native Windows (GitHub-hosted Windows Server runner, not the Windows 11 host): PowerShell
+  # tooling, NTFS ACLs, the configuration loader, migrations and the test suite.
+  win-native:
+    runs-on: windows-2025
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      # runner image default for its preinstalled PostgreSQL (not a secret)
+      RUNNER_PG_PASSWORD: root
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.11.1
+          cache: npm
+      - name: Use npm 10.9.4 (the version used for npm ci on the Windows host)
+        run: npm install -g npm@10.9.4
+      - name: Parse PowerShell scripts (PowerShell 7)
+        run: |
+          foreach ($f in Get-ChildItem scripts/windows/*.ps1, scripts/windows/*.psm1, tests/windows/*.ps1) {
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs) | Out-Null
+            if ($errs) { $errs | Format-List | Out-String | Write-Output; throw "parse errors in $($f.Name)" }
+            Write-Output "parsed $($f.Name)"
+          }
+      - name: Parse PowerShell scripts (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          foreach ($f in Get-ChildItem scripts/windows/*.ps1, scripts/windows/*.psm1, tests/windows/*.ps1) {
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs) | Out-Null
+            if ($errs) { $errs | Format-List | Out-String | Write-Output; throw "parse errors in $($f.Name)" }
+            Write-Output "parsed $($f.Name)"
+          }
+      - name: WIN-03 recovery and membership checks read numbers and SIDs, not display text (PowerShell 7)
+        run: |
+          .\tests\windows\ServiceRecovery.Tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw "ServiceRecovery.Tests.ps1 exit $LASTEXITCODE" }
+      - name: WIN-03 recovery and membership checks (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          .\tests\windows\ServiceRecovery.Tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw "ServiceRecovery.Tests.ps1 exit $LASTEXITCODE" }
+      - name: WIN-03 boot report sign-in classification and process owner race (PowerShell 7)
+        run: |
+          .\tests\windows\BootReport.Tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw "BootReport.Tests.ps1 exit $LASTEXITCODE" }
+      - name: WIN-03 boot report sign-in classification and process owner race (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          .\tests\windows\BootReport.Tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw "BootReport.Tests.ps1 exit $LASTEXITCODE" }
+      - name: Start PostgreSQL as an automatic Windows service, loopback only
+        run: |
+          $svc = Get-Service -Name 'postgresql*' | Select-Object -First 1
+          Add-Content -LiteralPath (Join-Path $env:PGDATA 'postgresql.conf') "`nlisten_addresses = 'localhost'"
+          Set-Service -Name $svc.Name -StartupType Automatic
+          Start-Service -Name $svc.Name
+          & (Join-Path $env:PGBIN 'psql.exe') --version
+      - name: Prerequisite check (Test-ChainseabasePrerequisites.ps1)
+        run: |
+          .\scripts\windows\Test-ChainseabasePrerequisites.ps1 -RequireAdmin
+          if ($LASTEXITCODE -ne 0) { throw "prerequisites exit $LASTEXITCODE" }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Protected configuration file (New/Set/Test-Chainseabase*.ps1)
+        run: |
+          $psql = Join-Path $env:PGBIN 'psql.exe'
+          $env:PGPASSWORD = $env:RUNNER_PG_PASSWORD
+          & $psql -h 127.0.0.1 -U postgres -c 'create database chainseabase_win'
+          if ($LASTEXITCODE -ne 0) { throw 'createdb failed' }
+          # an existing .env.local-style file to import (URL without password, as on the Windows host)
+          $import = Join-Path $env:RUNNER_TEMP 'import.env'
+          Set-Content -LiteralPath $import -Value @(
+            'APP_ENV=development',
+            'DATABASE_URL=postgresql://postgres@127.0.0.1:5432/chainseabase_win',
+            'ADMIN_ORIGIN=http://localhost:3000',
+            'PORTAL_ORIGIN=http://127.0.0.1:3000'
+          )
+          .\scripts\windows\New-ChainseabaseConfig.ps1 -ImportEnvFile $import -SetMachineVariable
+          if ($LASTEXITCODE -ne 0) { throw "New-ChainseabaseConfig exit $LASTEXITCODE" }
+          $cfg = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name PGPASSWORD -Value (ConvertTo-SecureString $env:RUNNER_PG_PASSWORD -AsPlainText -Force)
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name BOOTSTRAP_TEAM_EMAIL -Value (ConvertTo-SecureString 'team-a@example.test' -AsPlainText -Force)
+          # a second run keeps existing values (no regenerated secrets)
+          $before = (Get-FileHash -LiteralPath $cfg).Hash
+          .\scripts\windows\New-ChainseabaseConfig.ps1
+          if ((Get-FileHash -LiteralPath $cfg).Hash -ne $before) { throw 'a second run changed the configuration file' }
+          .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseConfig exit $LASTEXITCODE" }
+          # negative: a readable-by-Users file must fail the check, then be repaired
+          icacls $cfg /grant '*S-1-5-32-545:(R)' | Out-Null
+          .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1 for a file readable by Users, got $LASTEXITCODE" }
+          icacls $cfg /remove:g '*S-1-5-32-545' | Out-Null
+          .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseConfig after repair exit $LASTEXITCODE" }
+      - name: Test-ChainseabaseConfig.ps1 default app directory (PowerShell 7 and 5.1)
+        # Windows 11 host report: the default -AppDirectory failed when $PSScriptRoot was empty
+        run: |
+          $cfg = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'
+          $script = (Resolve-Path '.\scripts\windows\Test-ChainseabaseConfig.ps1').Path
+          $app = (Get-Location).Path
+          function Invoke-Shell([string]$Shell, [string]$Directory, [string]$Command) {
+            $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Command))
+            Push-Location -LiteralPath $Directory
+            try { $out = & $Shell -NoProfile -NonInteractive -EncodedCommand $encoded 2>&1 | Out-String; $code = $LASTEXITCODE }
+            finally { Pop-Location }
+            return @{ Out = $out; Code = $code }
+          }
+          # the script text run as a script block has no script location, as reported on the host
+          $asBlock = "& ([scriptblock]::Create([IO.File]::ReadAllText('$script'))) -Path '$cfg'"
+          foreach ($shell in @('pwsh', 'powershell')) {
+            $probe = Invoke-Shell $shell $app "& ([scriptblock]::Create('[string]::IsNullOrEmpty(`$PSScriptRoot)'))"
+            if ($probe.Out.Trim() -ne 'True') { throw "$shell did not reproduce an empty PSScriptRoot: $($probe.Out)" }
+            $r = Invoke-Shell $shell $env:RUNNER_TEMP "& '$script' -Path '$cfg'"
+            if ($r.Code -ne 0) { throw "$shell by path from another directory: exit $($r.Code)`n$($r.Out)" }
+            $r = Invoke-Shell $shell $app $asBlock
+            if ($r.Code -ne 0) { throw "$shell without script location, in the app directory: exit $($r.Code)`n$($r.Out)" }
+            $r = Invoke-Shell $shell $env:RUNNER_TEMP $asBlock
+            if ($r.Code -ne 1 -or $r.Out -notmatch 'FAIL not the Chainseabase app directory') { throw "$shell without script location, elsewhere: expected exit 1 with the app directory message, got $($r.Code)`n$($r.Out)" }
+            $r = Invoke-Shell $shell $env:RUNNER_TEMP "& '$script' -Path '$cfg' -AppDirectory '$app'"
+            if ($r.Code -ne 0) { throw "$shell with -AppDirectory: exit $($r.Code)`n$($r.Out)" }
+            Write-Output "$shell`: default app directory checks passed"
+          }
+      - name: WIN-02 avatar root (Initialize-ChainseabaseAvatarStorage.ps1) and NTFS checks
+        run: |
+          $cfg = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'
+          $root = Join-Path $env:ProgramData 'Chainseabase\data\avatars'
+          # existing development avatars to import: one object, one stray file
+          $src = Join-Path $env:RUNNER_TEMP 'dev-avatars'
+          $obj = '0b9e1c2a-4d5f-4a6b-8c7d-9e0f1a2b3c4d\AbCdEf0123456789.webp'
+          New-Item -ItemType Directory -Force -Path (Join-Path $src '0b9e1c2a-4d5f-4a6b-8c7d-9e0f1a2b3c4d') | Out-Null
+          Set-Content -LiteralPath (Join-Path $src $obj) -Value 'old-avatar' -NoNewline
+          Set-Content -LiteralPath (Join-Path $src 'notes.txt') -Value 'not an avatar'
+          # refused: a root inside the app directory, and a non-local path
+          .\scripts\windows\Initialize-ChainseabaseAvatarStorage.ps1 -ConfigFile $cfg -Path (Join-Path (Get-Location) '.data\avatars')
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1 for a root inside the app directory, got $LASTEXITCODE" }
+          .\scripts\windows\Initialize-ChainseabaseAvatarStorage.ps1 -ConfigFile $cfg -Path '\\server\share\avatars'
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1 for a UNC root, got $LASTEXITCODE" }
+          .\scripts\windows\Initialize-ChainseabaseAvatarStorage.ps1 -ConfigFile $cfg -ImportFrom $src
+          if ($LASTEXITCODE -ne 0) { throw "Initialize-ChainseabaseAvatarStorage exit $LASTEXITCODE" }
+          if ((Get-Content -LiteralPath (Join-Path $root $obj) -Raw) -ne 'old-avatar') { throw 'avatar not imported' }
+          if (Test-Path -LiteralPath (Join-Path $root 'notes.txt')) { throw 'a stray file was imported' }
+          if (-not (Test-Path -LiteralPath (Join-Path $src $obj))) { throw 'the import source was modified' }
+          if (-not (Get-Acl -LiteralPath $root).AreAccessRulesProtected) { throw 'avatar root inherits permissions' }
+          # rerun is idempotent; repointing an existing root is refused
+          .\scripts\windows\Initialize-ChainseabaseAvatarStorage.ps1 -ConfigFile $cfg -ImportFrom $src
+          if ($LASTEXITCODE -ne 0) { throw "rerun exit $LASTEXITCODE" }
+          .\scripts\windows\Initialize-ChainseabaseAvatarStorage.ps1 -ConfigFile $cfg -Path 'C:\ChainseabaseOther\avatars'
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1 when repointing AVATAR_STORAGE_DIR, got $LASTEXITCODE" }
+          if (Test-Path -LiteralPath 'C:\ChainseabaseOther') { throw 'a refused root was created' }
+          $dirLines = @(Get-Content -LiteralPath $cfg | Where-Object { $_ -match '^(AVATAR_STORAGE_DIR|STORAGE_PROVIDER)=' })
+          if ($dirLines.Count -ne 2) { throw "expected STORAGE_PROVIDER and AVATAR_STORAGE_DIR once each, found $($dirLines.Count)" }
+          # Test-ChainseabaseConfig covers the avatar root ACL and config:check probes it
+          $out = .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg | Out-String
+          Write-Output $out
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseConfig exit $LASTEXITCODE" }
+          if ($out -notmatch 'storage=real \(filesystem\)' -or $out -notmatch 'Avatar storage directory: .* \(writable by the current account\)') { throw 'config:check did not report the filesystem backend' }
+          icacls $root /grant '*S-1-5-32-545:(OI)(CI)(R)' | Out-Null
+          .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1 for an avatar root readable by Users, got $LASTEXITCODE" }
+          icacls $root /remove:g '*S-1-5-32-545' | Out-Null
+          .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseConfig after repair exit $LASTEXITCODE" }
+      - name: Migrate and bootstrap through the loader (URL without password + PGPASSWORD)
+        run: |
+          $env:CHAINSEABASE_CONFIG_FILE = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'
+          Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue   # the config file is the only source
+          npm run db:migrate
+          if ($LASTEXITCODE -ne 0) { throw "db:migrate exit $LASTEXITCODE" }
+          npm run db:migrate
+          if ($LASTEXITCODE -ne 0) { throw "db:migrate rerun exit $LASTEXITCODE" }
+          npm run db:bootstrap
+          if ($LASTEXITCODE -ne 0) { throw "db:bootstrap exit $LASTEXITCODE" }
+          # negative: a different PGPASSWORD in the process environment is refused with exit 78
+          $env:PGPASSWORD = 'different-value'
+          npm run db:migrate
+          if ($LASTEXITCODE -ne 78) { throw "expected exit 78 for conflicting PGPASSWORD, got $LASTEXITCODE" }
+          Remove-Item Env:PGPASSWORD
+          $env:PGPASSWORD = $env:RUNNER_PG_PASSWORD
+          & (Join-Path $env:PGBIN 'psql.exe') -h 127.0.0.1 -U postgres -d chainseabase_win -tA -c "select count(*) from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'" -c 'select name, slug, system_key from products' -c 'select count(*) from bootstrap_team_grants where consumed_at is null'
+          if ($LASTEXITCODE -ne 0) { throw 'verification query failed' }
+      - name: WIN-02 avatar survives a website restart (npm start, filesystem backend)
+        run: |
+          $cfg = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'
+          $root = Join-Path $env:ProgramData 'Chainseabase\data\avatars'
+          # development-only test login for this check (APP_ENV=development in this file)
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name E2E_TEST_LOGIN -Value (ConvertTo-SecureString 'enabled' -AsPlainText -Force)
+          $env:CHAINSEABASE_CONFIG_FILE = $cfg
+          Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+          $base = 'http://localhost:3000'
+          function Start-Site {
+            $p = Start-Process -FilePath 'npm.cmd' -ArgumentList 'start' -PassThru -RedirectStandardOutput (Join-Path $env:RUNNER_TEMP "site-$([guid]::NewGuid()).log") -RedirectStandardError (Join-Path $env:RUNNER_TEMP "site-$([guid]::NewGuid()).err")
+            for ($i = 0; $i -lt 90; $i++) {
+              try { if ((Invoke-WebRequest "$base/api/v1/health" -UseBasicParsing -TimeoutSec 5).StatusCode -eq 200) { return $p } } catch { Start-Sleep -Seconds 1 }
+            }
+            throw 'website did not become healthy'
+          }
+          function Stop-Site($p) {
+            taskkill /PID $p.Id /T /F | Out-Null
+            for ($i = 0; $i -lt 30 -and (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 1 }
+            if (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue) { throw 'port 3000 still listening after stop' }
+          }
+          $site = Start-Site
+          $listen = @(Get-NetTCPConnection -LocalPort 3000 -State Listen | ForEach-Object LocalAddress | Sort-Object -Unique)
+          if (($listen | Where-Object { $_ -notin @('127.0.0.1', '::1') }).Count) { throw "website listens beyond loopback: $($listen -join ', ')" }
+          $s = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+          $h = @{ Origin = $base }
+          Invoke-WebRequest "$base/api/v1/test-support/login" -Method Post -WebSession $s -Headers $h -ContentType 'application/json' -Body '{"email":"team-a@example.test","name":"Windows CI","sub":"win-ci-1"}' -UseBasicParsing | Out-Null
+          $png = Join-Path $env:RUNNER_TEMP 'avatar.png'
+          [IO.File]::WriteAllBytes($png, [Convert]::FromBase64String('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='))
+          $up = Invoke-WebRequest "$base/api/v1/me/avatar-upload" -Method Post -WebSession $s -Headers $h -ContentType 'image/png' -InFile $png -UseBasicParsing
+          $url = ($up.Content | ConvertFrom-Json).data.avatarUrl
+          $first = (Invoke-WebRequest "$base$url" -WebSession $s -UseBasicParsing).RawContentStream.ToArray()
+          Stop-Site $site
+          $site = Start-Site
+          $second = (Invoke-WebRequest "$base$url" -WebSession $s -UseBasicParsing).RawContentStream.ToArray()
+          Stop-Site $site
+          if ($first.Length -lt 20 -or [Convert]::ToBase64String($first) -ne [Convert]::ToBase64String($second)) { throw 'avatar changed or disappeared across the restart' }
+          $files = @(Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object { $_.Name -notlike '.*' })
+          if ($files.Count -lt 2) { throw "expected the imported and the uploaded avatar under the root, found $($files.Count)" }
+          if (Test-Path -LiteralPath '.data\avatars') { throw 'avatars were written inside the app directory' }
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name E2E_TEST_LOGIN -Remove
+          Write-Output "avatar served identically before and after the restart ($($first.Length) bytes); $($files.Count) files under the root"
+      - name: Unit and integration tests on Windows
+        env:
+          TEST_DATABASE_URL: postgres://postgres:root@127.0.0.1:5432/chainseabase_test
+        run: |
+          $env:PGPASSWORD = $env:RUNNER_PG_PASSWORD
+          & (Join-Path $env:PGBIN 'psql.exe') -h 127.0.0.1 -U postgres -c 'create database chainseabase_test'
+          if ($LASTEXITCODE -ne 0) { throw 'createdb failed' }
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw "npm test exit $LASTEXITCODE" }
+      - name: WIN-03 Windows service (virtual account, recovery, database wait, logs, update/rollback, uninstall)
+        run: |
+          $name = 'Chainseabase'
+          $cfg = Join-Path $env:ProgramData 'Chainseabase\config\chainseabase.env'
+          $logs = Join-Path $env:ProgramData 'Chainseabase\logs'
+          $releases = Join-Path $env:ProgramFiles 'Chainseabase\releases'
+          $avatars = Join-Path $env:ProgramData 'Chainseabase\data\avatars'
+          Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+          function Health { try { (Invoke-WebRequest 'http://127.0.0.1:3000/api/v1/health' -UseBasicParsing -TimeoutSec 5).StatusCode } catch { 0 } }
+          function WaitFor([scriptblock]$Condition, [int]$Seconds, [string]$What) {
+            for ($i = 0; $i -lt $Seconds; $i++) { if (& $Condition) { return } ; Start-Sleep -Seconds 1 }
+            Get-ChildItem $logs | Format-Table Name, Length, LastWriteTime | Out-String | Write-Output
+            Get-Content (Join-Path $logs "$name.out.log") -Tail 40 -ErrorAction SilentlyContinue
+            Get-Content (Join-Path $logs "$name.err.log") -Tail 40 -ErrorAction SilentlyContinue
+            throw "timed out: $What"
+          }
+          function WrapperPid { (Get-CimInstance Win32_Service -Filter "Name='$name'").ProcessId }
+          function NodePid { $w = WrapperPid; if ($w) { (Get-CimInstance Win32_Process -Filter "ParentProcessId=$w AND Name='node.exe'" | Select-Object -First 1).ProcessId } }
+          function OutLog { (Get-ChildItem $logs -Filter "$name.*out.log" | ForEach-Object { $fs = [IO.File]::Open($_.FullName, 'Open', 'Read', 'ReadWrite, Delete'); try { (New-Object IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Dispose() } }) -join "`n" }
+          # requests are logged so rotation can be exercised with a small threshold
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name LOG_REQUESTS -Value (ConvertTo-SecureString '1' -AsPlainText -Force)
+
+          # install (downloads WinSW and verifies the pinned SHA-256), then re-run the installer
+          .\scripts\windows\Install-ChainseabaseService.ps1 -ConfigFile $cfg -LogSizeKB 8 -LogKeepFiles 3 -DbWaitSeconds 300
+          if ($LASTEXITCODE -ne 0) { throw "install exit $LASTEXITCODE" }
+          $first = (Get-ChildItem $releases -Directory | Sort-Object Name | Select-Object -Last 1).FullName
+          .\scripts\windows\Install-ChainseabaseService.ps1 -ConfigFile $cfg -LogSizeKB 8 -LogKeepFiles 3 -DbWaitSeconds 300
+          if ($LASTEXITCODE -ne 0) { throw "re-run install exit $LASTEXITCODE" }
+          $second = (Get-ChildItem $releases -Directory | Sort-Object Name | Select-Object -Last 1).FullName
+          if ($first -eq $second) { throw 'the re-run did not build a new release' }
+          (Get-AuthenticodeSignature (Join-Path $env:ProgramFiles "Chainseabase\service\$name.exe")).Status | ForEach-Object { "WinSW Authenticode status: $_" }
+          .\scripts\windows\Test-ChainseabaseService.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseService exit $LASTEXITCODE" }
+          .\scripts\windows\Test-ChainseabaseConfig.ps1 -Path $cfg -AllowedReader "NT SERVICE\$name"
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseConfig exit $LASTEXITCODE" }
+
+          # wrong recovery settings on the installed service must fail the check (counterexamples), and
+          # the installer's own settings must pass it again
+          $sc = "$env:SystemRoot\System32\sc.exe"
+          function ExpectRecoveryFail([string]$What) {
+            $out = @(.\scripts\windows\Test-ChainseabaseService.ps1)
+            $code = $LASTEXITCODE
+            $out | Where-Object { $_ -match 'recovery|^\s{5}' } | Write-Output
+            if ($code -ne 1 -or -not ($out -match '^FAIL recovery')) { $out | Write-Output; throw "Test-ChainseabaseService did not fail the recovery check for $What (exit $code)" }
+            if (@($out -match '^FAIL').Count -ne 1) { $out | Write-Output; throw "other checks failed too for $What" }
+          }
+          & $sc failure $name reset= 60 actions= restart/5000/restart/30000/restart/60000 | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "sc.exe failure exit $LASTEXITCODE" }
+          ExpectRecoveryFail 'reset 60 s and a 5 s first delay'
+          & $sc failure $name reset= 3600 actions= restart/10000/restart/30000 | Out-Null
+          ExpectRecoveryFail 'two actions'
+          Import-Module .\scripts\windows\ChainseabaseService.psm1 -Force
+          $pgService = (Get-Content (Join-Path $env:ProgramFiles 'Chainseabase\service\install.json') -Raw | ConvertFrom-Json).PostgresService
+          Set-ServiceRegistration $name $pgService
+          & $sc failureflag $name 0 | Out-Null
+          ExpectRecoveryFail 'recovery not applied on an error exit'
+          Set-ServiceRegistration $name $pgService
+          .\scripts\windows\Test-ChainseabaseService.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseService after restoring the recovery settings exit $LASTEXITCODE" }
+          Write-Output 'PASS wrong recovery settings fail the check; the installed settings pass it'
+
+          # -BootReport runs end to end; the runner booted long before the service was installed, so its
+          # ready-before-sign-in result is not boot evidence (that stays a host test) and may go either way
+          $br = @(.\scripts\windows\Test-ChainseabaseService.ps1 -BootReport)
+          $brCode = $LASTEXITCODE
+          $br | Write-Output
+          foreach ($label in @('Boot:', 'PostgreSQL service process started:', 'Service wrapper started:', 'First website.starting after boot:', 'First db.ready after boot:', 'First website.ready after boot:', 'Interactive logon sessions since boot', 'First interactive sign-in by a person after boot:')) {
+            if (-not ($br -match ('^' + [regex]::Escape($label)))) { throw "BootReport output lacks '$label'" }
+          }
+          if (-not ($br -match '^PASS Security log readable')) { throw 'BootReport could not read the Security log' }
+          $otherFails = @($br -match '^FAIL' | Where-Object { $_ -notmatch 'website was ready after the reboot before anyone signed in' })
+          if ($otherFails.Count -or $brCode -notin @(0, 1)) { throw "BootReport: unexpected failures (exit $brCode): $($otherFails -join '; ')" }
+          Write-Output 'PASS BootReport runs end to end (timeline, sign-in classification, Security log)'
+          .\scripts\windows\Set-ChainseabaseServiceState.ps1 -Action Status
+          if ($LASTEXITCODE -ne 0) { throw "status exit $LASTEXITCODE" }
+
+          # failure recovery: the website process dies, then the wrapper itself dies
+          $n1 = NodePid; Stop-Process -Id $n1 -Force
+          WaitFor { (Health) -eq 200 -and (NodePid) -and (NodePid) -ne $n1 } 150 'recovery after the website process was killed'
+          $w1 = WrapperPid; $n2 = NodePid; Stop-Process -Id $w1 -Force
+          # the website process notices its wrapper is gone and exits (no orphan holding the port)
+          WaitFor { -not (Get-Process -Id $n2 -ErrorAction SilentlyContinue) } 20 'the website process exits when its wrapper dies'
+          WaitFor { (Health) -eq 200 -and (WrapperPid) -and (WrapperPid) -ne $w1 -and (NodePid) -and (NodePid) -ne $n2 } 150 'recovery after the service wrapper was killed'
+          # stdout went through the dead wrapper; the event goes to its own file in the log folder
+          $events = Get-Content (Join-Path $logs "$name.events.log") -Raw -ErrorAction SilentlyContinue
+          if ($events -notmatch ('"event":"service.wrapper_exited","parentPid":' + $w1 + ',"pid":' + $n2)) { throw "service.wrapper_exited (wrapper $w1, website $n2) not in $name.events.log: $events" }
+          Write-Output 'PASS service restarted itself after the website process and the wrapper were killed'
+
+          # database not ready: point the service at a port with nothing behind it, then let it through
+          $url = (Get-Content $cfg | Where-Object { $_ -match '^DATABASE_URL=' }) -replace '^DATABASE_URL=', ''
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name DATABASE_URL -Value (ConvertTo-SecureString ($url -replace ':5432/', ':55432/') -AsPlainText -Force)
+          .\scripts\windows\Set-ChainseabaseServiceState.ps1 -Action Stop
+          if ($LASTEXITCODE -ne 0) { throw "stop exit $LASTEXITCODE" }
+          Start-Service $name
+          WaitFor { (OutLog) -match '"event":"db.wait".*"errorCode":"ECONNREFUSED"' } 60 'db.wait while the database is unreachable'
+          if ((Health) -eq 200) { throw 'healthy without a database' }
+          # a loopback TCP forwarder 55432 -> 5432 stands in for "PostgreSQL finished starting"
+          $proxyJs = Join-Path $env:RUNNER_TEMP 'db-proxy.js'
+          Set-Content -LiteralPath $proxyJs -Value "require('net').createServer(c=>{const s=require('net').connect(5432,'127.0.0.1');c.pipe(s).pipe(c);c.on('error',()=>s.destroy());s.on('error',()=>c.destroy())}).listen(55432,'127.0.0.1')"
+          $proxy = Start-Process -FilePath node -PassThru -ArgumentList $proxyJs
+          WaitFor { (Health) -eq 200 } 120 'healthy once the database answers'
+          if ((OutLog) -notmatch '"event":"db.ready","attempt":([2-9]|\d\d)') { throw 'db.ready after retries not logged' }
+          Write-Output 'PASS the service waited for the database and started when it answered'
+          .\scripts\windows\Set-ChainseabaseConfigValue.ps1 -Path $cfg -Name DATABASE_URL -Value (ConvertTo-SecureString $url -AsPlainText -Force)
+          .\scripts\windows\Set-ChainseabaseServiceState.ps1 -Action Restart
+          if ($LASTEXITCODE -ne 0) { throw "restart exit $LASTEXITCODE" }
+          Stop-Process -Id $proxy.Id -Force
+
+          # log rotation by size (8 KB, keep 3)
+          for ($i = 0; $i -lt 400; $i++) { [void](Health) }
+          WaitFor { @(Get-ChildItem $logs -Filter "$name.*out.log").Count -ge 2 } 30 'rolled log files'
+          $outFiles = @(Get-ChildItem $logs -Filter "$name.*out.log")
+          $outFiles | Format-Table Name, Length | Out-String | Write-Output
+          if ($outFiles.Count -gt 4) { throw "kept $($outFiles.Count) log files, limit 4" }
+          if ((OutLog) -match 'PGPASSWORD|postgresql://|postgres://') { throw 'a connection string or password appeared in the log' }
+          Write-Output 'PASS logs roll by size and keep at most 3 old files; no connection strings in logs'
+
+          # update: switch releases, then an unhealthy release rolls back automatically
+          .\scripts\windows\Update-ChainseabaseService.ps1 -UseRelease (Split-Path -Leaf $first)
+          if ($LASTEXITCODE -ne 0) { throw "switch to the first release exit $LASTEXITCODE" }
+          Rename-Item (Join-Path $second '.next\server') 'server.disabled'
+          .\scripts\windows\Update-ChainseabaseService.ps1 -UseRelease (Split-Path -Leaf $second) -HealthTimeoutSec 60
+          if ($LASTEXITCODE -ne 1) { throw "expected exit 1 and a rollback, got $LASTEXITCODE" }
+          [xml]$x = Get-Content (Join-Path $env:ProgramFiles "Chainseabase\service\$name.xml") -Raw
+          if ($x.service.workingdirectory -ne $first -or (Health) -ne 200) { throw 'not rolled back to the healthy release' }
+          Rename-Item (Join-Path $second '.next\server.disabled') 'server'
+          .\scripts\windows\Update-ChainseabaseService.ps1 -UseRelease (Split-Path -Leaf $second)
+          if ($LASTEXITCODE -ne 0) { throw "switch to the second release exit $LASTEXITCODE" }
+          .\scripts\windows\Test-ChainseabaseService.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Test-ChainseabaseService after update exit $LASTEXITCODE" }
+          Write-Output 'PASS release switch, automatic rollback of an unhealthy release, switch forward'
+
+          # uninstall keeps configuration, secrets, avatars and logs; re-running is harmless
+          $cfgHash = (Get-FileHash $cfg).Hash
+          $avatarCount = @(Get-ChildItem $avatars -Recurse -File).Count
+          .\scripts\windows\Uninstall-ChainseabaseService.ps1
+          if ($LASTEXITCODE -ne 0) { throw "uninstall exit $LASTEXITCODE" }
+          .\scripts\windows\Uninstall-ChainseabaseService.ps1
+          if ($LASTEXITCODE -ne 0) { throw "uninstall re-run exit $LASTEXITCODE" }
+          if (Get-Service $name -ErrorAction SilentlyContinue) { throw 'service still installed' }
+          if ((Get-FileHash $cfg).Hash -ne $cfgHash) { throw 'configuration file changed' }
+          if (@(Get-ChildItem $avatars -Recurse -File).Count -ne $avatarCount -or $avatarCount -lt 1) { throw 'avatar files changed' }
+          if (@(Get-ChildItem $logs -File).Count -lt 1) { throw 'logs removed' }
+          if (@((Get-Acl $cfg).Access | Where-Object { $_.IdentityReference.Value -like "*$name*" -or $_.IdentityReference.Value -like 'S-1-5-80-*' }).Count) { throw 'service account permission left on the configuration file' }
+          if (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue) { throw 'port 3000 still in use' }
+          Write-Output 'PASS uninstall removed the service and its permissions; configuration, avatars and logs kept'

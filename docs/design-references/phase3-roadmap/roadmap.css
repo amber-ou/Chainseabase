@@ -1,0 +1,580 @@
+/* Standalone, scoped CSS. No Tailwind, global reset, external fonts or images required. */
+.roadmap-style {
+  --rm-page: #f5f7fb;
+  --rm-surface: #fff;
+  --rm-heading: #101828;
+  --rm-text: #252528;
+  --rm-text-secondary: #526278;
+  --rm-text-muted: #83838b;
+  --rm-control-text: #3f3f46;
+  --rm-control-border: #e4e4e7;
+  --rm-divider: #e5e7eb;
+  --rm-card-border: #eeeef2;
+  --rm-card-border-hover: #dcdce3;
+  --rm-drop-background: #eeedf9;
+  --rm-drop-border: #d7d3ef;
+  --rm-label-dot: #b984e9;
+  --rm-status-pool: #a4a4ac;
+  --rm-status-progress: #e6bd05;
+  --rm-status-done: #6864d5;
+  --rm-status-discussion: #a4a4ac;
+  --rm-status-delayed: #9aa3aa;
+  --rm-switch: #0a3489;
+  --rm-gutter: 33px;
+  --rm-board-gutter: 33px;
+  --rm-header-height: 162px;
+  --rm-tabs-height: 55px;
+  --rm-toolbar-height: 64px;
+  --rm-board-top: 12px;
+  --rm-board-bottom: 24px;
+  --rm-control-height: 36px;
+  --rm-control-radius: 9px;
+  --rm-card-radius: 8px;
+  --rm-card-min-width: 300px;
+  --rm-lane-padding-x: 16px;
+  --rm-divider-width: 1px;
+  --rm-lane-min-width: calc(
+    var(--rm-card-min-width) + var(--rm-lane-padding-x) + var(--rm-lane-padding-x) +
+      var(--rm-divider-width)
+  );
+  --rm-lane-min-height: calc(
+    100vh - var(--rm-header-height) - var(--rm-tabs-height) - var(--rm-toolbar-height) -
+      var(--rm-board-top) - var(--rm-board-bottom)
+  );
+  --rm-card-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+  --rm-card-shadow-hover: 0 2px 5px rgb(0 0 0 / 5%);
+  --rm-control-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+  --rm-arrow-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+  --rm-transition: 140ms ease;
+  width: 100%;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow: hidden;
+  color: var(--rm-text);
+  background: var(--rm-page);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Microsoft JhengHei", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  font-synthesis: none;
+}
+
+.roadmap-style,
+.roadmap-style *,
+.roadmap-style *::before,
+.roadmap-style *::after {
+  box-sizing: border-box;
+}
+
+.roadmap-style :where(h1, h2, p) {
+  margin: 0;
+}
+.roadmap-style :where(button, input, select) {
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
+}
+.roadmap-style button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.roadmap-style :focus-visible {
+  outline: 2px solid var(--rm-text-secondary);
+  outline-offset: 3px;
+}
+.roadmap-style .rm-preview-button,
+.roadmap-style select:disabled,
+.roadmap-style input:disabled {
+  opacity: 1;
+  cursor: default;
+  -webkit-text-fill-color: currentColor;
+}
+.roadmap-style .rm-icon {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.roadmap-style .rm-page-header {
+  height: var(--rm-header-height);
+  min-width: 1120px;
+  padding: 29px var(--rm-gutter) 0;
+}
+.roadmap-style .rm-page-header h1 {
+  color: var(--rm-heading);
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 30px;
+  letter-spacing: -0.45px;
+}
+.roadmap-style .rm-page-header p {
+  margin-top: 6px;
+  color: var(--rm-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+.roadmap-style .rm-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 8px;
+  height: var(--rm-control-height);
+  padding: 0 12px;
+  border: 1px solid var(--rm-control-border);
+  border-radius: var(--rm-control-radius);
+  background: var(--rm-surface);
+  color: var(--rm-control-text);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  box-shadow: var(--rm-control-shadow);
+}
+.roadmap-style .rm-create {
+  margin-top: 24px;
+}
+.roadmap-style .rm-create .rm-icon,
+.roadmap-style .rm-add-tab .rm-icon {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.4;
+}
+.roadmap-style .rm-controls {
+  min-width: 900px;
+  padding: 0 var(--rm-gutter);
+  border: 0;
+  background: transparent;
+}
+.roadmap-style .rm-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: var(--rm-tabs-height);
+  border-bottom: 1px solid var(--rm-control-border);
+}
+.roadmap-style .rm-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--rm-tabs-height);
+  padding: 0 15px;
+  color: #71717a;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.roadmap-style .rm-tab-active {
+  color: #18181b;
+  font-weight: 600;
+}
+.roadmap-style .rm-tab-active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: #18181b;
+  content: "";
+}
+.roadmap-style .rm-add-tab {
+  align-self: center;
+  width: 30px;
+  height: 30px;
+  margin-left: 12px;
+  padding: 0;
+  border-radius: 50%;
+}
+.roadmap-style .rm-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: var(--rm-toolbar-height);
+  padding: 12px 0;
+}
+.roadmap-style .rm-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.roadmap-style .rm-square {
+  width: var(--rm-control-height);
+  padding: 0;
+}
+.roadmap-style .rm-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.roadmap-style .rm-select select {
+  appearance: none;
+  min-width: 96px;
+  height: var(--rm-control-height);
+  padding: 0 36px 0 13px;
+  border: 1px solid var(--rm-control-border);
+  border-radius: var(--rm-control-radius);
+  background: var(--rm-surface);
+  color: var(--rm-control-text);
+  font-size: 14px;
+  box-shadow: var(--rm-control-shadow);
+}
+.roadmap-style .rm-select .rm-icon {
+  position: absolute;
+  right: 12px;
+  width: 14px;
+  height: 14px;
+  color: #85858d;
+  pointer-events: none;
+}
+.roadmap-style .rm-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 29px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--rm-switch);
+}
+.roadmap-style .rm-switch span {
+  position: absolute;
+  top: 2px;
+  left: 13px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--rm-surface);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 25%);
+}
+.roadmap-style .rm-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 233px;
+  height: var(--rm-control-height);
+  padding: 0 11px;
+  border: 1px solid var(--rm-control-border);
+  border-radius: var(--rm-control-radius);
+  background: var(--rm-surface);
+  color: #59687d;
+  box-shadow: var(--rm-control-shadow);
+}
+.roadmap-style .rm-search input {
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #172033;
+  font-size: 13px;
+}
+.roadmap-style .rm-search input::placeholder {
+  color: #58687d;
+  opacity: 1;
+}
+.roadmap-style .rm-board {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  min-height: calc(
+    100vh - var(--rm-header-height) - var(--rm-tabs-height) - var(--rm-toolbar-height)
+  );
+  padding: var(--rm-board-top) var(--rm-board-gutter) var(--rm-board-bottom);
+  overflow: hidden;
+  background: transparent;
+}
+.roadmap-style .rm-viewport {
+  width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.roadmap-style .rm-viewport::-webkit-scrollbar {
+  display: none;
+}
+.roadmap-style .rm-viewport:focus-visible {
+  outline-offset: -2px;
+}
+.roadmap-style .rm-layout {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(var(--rm-lane-min-width), 1fr));
+  align-items: stretch;
+  gap: 0;
+  min-width: calc(var(--rm-lane-min-width) * 5);
+  min-height: var(--rm-lane-min-height);
+  background: var(--rm-surface);
+}
+.roadmap-style .rm-lane {
+  min-width: 0;
+  min-height: var(--rm-lane-min-height);
+  padding: 0 var(--rm-lane-padding-x) 16px;
+  border-radius: 0;
+  background: transparent;
+  transition: background 150ms ease;
+}
+.roadmap-style .rm-lane + .rm-lane {
+  border-left: var(--rm-divider-width) solid var(--rm-divider);
+}
+.roadmap-style .rm-lane[data-drop-active="true"] {
+  background: var(--rm-drop-background);
+  box-shadow: inset 0 0 0 1px var(--rm-drop-border);
+}
+.roadmap-style .rm-lane-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 50px;
+  padding: 0 5px;
+}
+.roadmap-style .rm-lane-header h2 {
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 20px;
+}
+.roadmap-style .rm-count {
+  color: var(--rm-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.roadmap-style .rm-status {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.roadmap-style .rm-status[data-status="pool"] {
+  color: var(--rm-status-pool);
+}
+.roadmap-style .rm-status[data-status="progress"] {
+  color: var(--rm-status-progress);
+}
+.roadmap-style .rm-status[data-status="done"] {
+  color: var(--rm-status-done);
+}
+.roadmap-style .rm-status[data-status="discussion"] {
+  color: var(--rm-status-discussion);
+}
+.roadmap-style .rm-status[data-status="delayed"] {
+  color: var(--rm-status-delayed);
+}
+.roadmap-style .rm-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+.roadmap-style .rm-small {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #85858d;
+}
+.roadmap-style .rm-small .rm-icon {
+  width: 15px;
+  height: 15px;
+}
+.roadmap-style .rm-stack {
+  display: grid;
+  gap: 8px;
+}
+.roadmap-style .rm-card {
+  min-width: var(--rm-card-min-width);
+  padding: 9px 11px 10px;
+  border: 1px solid var(--rm-card-border);
+  border-radius: var(--rm-card-radius);
+  background: var(--rm-surface);
+  box-shadow: var(--rm-card-shadow);
+  cursor: grab;
+  transition:
+    border-color var(--rm-transition),
+    box-shadow var(--rm-transition);
+}
+.roadmap-style .rm-card:hover {
+  border-color: var(--rm-card-border-hover);
+  box-shadow: var(--rm-card-shadow-hover);
+}
+.roadmap-style .rm-card:active {
+  cursor: grabbing;
+}
+.roadmap-style .rm-card[data-dragging="true"] {
+  opacity: 0.55;
+}
+.roadmap-style .rm-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 19px;
+  color: #77777f;
+  font-size: 12px;
+}
+.roadmap-style .rm-identifier {
+  letter-spacing: 0.25px;
+  font-variant-numeric: tabular-nums;
+}
+.roadmap-style .rm-assignee {
+  display: grid;
+  width: 19px;
+  height: 19px;
+  border: 1px dashed #c5c5cd;
+  border-radius: 50%;
+  color: #8c8c95;
+  font-size: 9px;
+  place-items: center;
+}
+.roadmap-style .rm-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  margin-top: 2px;
+}
+.roadmap-style .rm-card-title > span {
+  min-width: 0;
+  overflow: hidden;
+  color: #242428;
+  font-size: 13px;
+  line-height: 21px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.roadmap-style .rm-card-labels {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+}
+.roadmap-style .rm-priority,
+.roadmap-style .rm-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid #ebebef;
+  border-radius: 999px;
+  background: var(--rm-surface);
+  color: #686870;
+  font-size: 11px;
+  line-height: 20px;
+}
+.roadmap-style .rm-priority {
+  width: 24px;
+  padding: 0;
+}
+.roadmap-style .rm-priority svg {
+  width: 14px;
+  height: 14px;
+  fill: #77777f;
+}
+.roadmap-style .rm-label-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rm-label-dot);
+}
+.roadmap-style .rm-card-footer {
+  margin-top: 9px;
+  color: var(--rm-text-muted);
+  font-size: 11px;
+  line-height: 17px;
+}
+.roadmap-style .rm-empty {
+  display: grid;
+  width: 100%;
+  min-height: 76px;
+  border: 1px dashed transparent;
+  border-radius: 7px;
+  color: #b1b1bb;
+  font-size: 12px;
+  place-items: center;
+}
+.roadmap-style .rm-lane:hover .rm-empty,
+.roadmap-style .rm-lane[data-drop-active="true"] .rm-empty {
+  border-color: #dddde5;
+  color: #878790;
+}
+.roadmap-style .rm-scroll-arrow {
+  position: absolute;
+  top: min(50%, 320px);
+  z-index: 4;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #e1e3e8;
+  border-radius: 50%;
+  background: var(--rm-surface);
+  color: #52525b;
+  box-shadow: var(--rm-arrow-shadow);
+  cursor: pointer;
+  place-items: center;
+  transition:
+    background var(--rm-transition),
+    opacity var(--rm-transition);
+}
+.roadmap-style .rm-scroll-left {
+  left: calc(var(--rm-board-gutter) - 18px);
+}
+.roadmap-style .rm-scroll-right {
+  right: calc(var(--rm-board-gutter) - 18px);
+}
+.roadmap-style .rm-scroll-arrow .rm-icon {
+  stroke-width: 1.7;
+}
+.roadmap-style .rm-scroll-arrow:hover:not(:disabled) {
+  background: #f4f4f6;
+}
+.roadmap-style .rm-scroll-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.roadmap-style .rm-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 800px) {
+  .roadmap-style {
+    --rm-gutter: 20px;
+    --rm-board-gutter: 16px;
+  }
+  .roadmap-style .rm-page-header {
+    min-width: 900px;
+  }
+  .roadmap-style .rm-scroll-left {
+    left: 2px;
+  }
+  .roadmap-style .rm-scroll-right {
+    right: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roadmap-style .rm-card,
+  .roadmap-style .rm-lane,
+  .roadmap-style .rm-scroll-arrow {
+    transition: none;
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "name": "Feedback detail and discussion AI handoff",
+  "kind": "Source snapshot and integration instructions; not a complete application",
+  "sourceFilesUnmodified": true,
+  "backendIncluded": false,
+  "validation": {
+    "typecheck": "pnpm exec tsc --noEmit",
+    "build": "pnpm run build",
+    "browser": [
+      "Both timestamps adjacent to bubble right and vertically centered",
+      "Independent local like counts",
+      "Second reaction transparent background and filled liked icon",
+      "Latest selected-instance alignment and gap properties",
+      "No horizontal overflow at 320, 390, 768, and 1280px",
+      "No JavaScript runtime exceptions"
+    ],
+    "targetNextProjectTested": false
+  },
+  "files": [
+    {
+      "path": "AI_HANDOFF.md",
+      "bytes": 6427,
+      "sha256": "e9825ce1f16e55e593756275c6765e1519fd85d843dfaf8b9105612725ed2c6d"
+    },
+    {
+      "path": "README.zh-TW.md",
+      "bytes": 1901,
+      "sha256": "be886d3843dd7ea515304b959ea337def084c52546695b96c3254a8f6116cf56"
+    },
+    {
+      "path": "STYLE_SPEC.md",
+      "bytes": 3360,
+      "sha256": "3ed21470c17c35c3311c72d17733fac8cc309015df272dcfeb4f7ae09519612e"
+    },
+    {
+      "path": "source/App.tsx",
+      "bytes": 14637,
+      "sha256": "f98040ad6bb1aa98459c619a8e2f207257d0d8b7f6fc0209ff2e6783c9e3580f"
+    },
+    {
+      "path": "source/index.css",
+      "bytes": 5846,
+      "sha256": "e449b615ed15302897ceebcf1910e6f81b4db9e5a704f53d69ed6fb24c8f9f72"
+    },
+    {
+      "path": "reference-desktop.png",
+      "bytes": 56113,
+      "sha256": "5db014b3ff32985862ffc158b2879ee95e715c52854a74d1abe22c7ded138611"
+    },
+    {
+      "path": "reference-mobile.png",
+      "bytes": 41754,
+      "sha256": "49561be0c33a3a2c4e1cb0cf73c630b366b392887487764755675a80a77cac49"
+    }
+  ],
+  "singleFileExport": {
+    "path": "feedback-detail-ai.md",
+    "sha256": "679ecb88b5e590293c61d5d680f7699413aa4cf4706152bbdfd3f543dbb86251"
+  }
+}
