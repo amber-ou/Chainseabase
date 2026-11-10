@@ -10,7 +10,7 @@ import {
   createGeneralComment, deleteComment, editComment, getCommentDto, listComments, listPublicComments, setCommentLike, setVote,
 } from '@/modules/feedback/comments';
 import {
-  deletePendingImage, IMAGE_MAX_BYTES, imageHeaders, listFeedbackImages, readFeedbackImage, readImageBody, uploadPendingImage, IMAGES_PER_FEEDBACK,
+  deletePendingImage, IMAGE_MAX_BYTES, imageHeaders, listFeedbackImages, readCommentImage, readFeedbackImage, readImageBody, uploadPendingImage, IMAGES_PER_FEEDBACK,
 } from '@/modules/feedback/images';
 import { text, zLimit, zRevision, zUuid } from '@/modules/shared/text';
 import { mutate } from './helpers';
@@ -42,6 +42,7 @@ const patchSchema = z.object({
   title: zTitle.optional(),
   description: zDescription.optional(),
   ...classification,
+  imageIds: z.array(zUuid).max(IMAGES_PER_FEEDBACK).optional(),
   expectedRevision: zRevision,
 }).strict();
 
@@ -140,6 +141,33 @@ export function registerFeedbackRoutes(r: Router) {
     });
   }
 
+  // ---------------- comment images (COMMENT-05/06): same limits, storage and access rules ----------------
+  r.post('/products/:p/comment-images', ['admin'], async (ctx) => {
+    const { user, productId } = await teamProduct(ctx);
+    const ct = ctx.header('content-type') ?? '';
+    if (!/^image\/(jpeg|png|webp)$/.test(ct)) throw new AppError('INVALID_REQUEST', '只接受 JPEG、PNG 或 WebP。', { fieldErrors: { file: '不支援的格式' } });
+    if (Number(ctx.header('content-length') ?? '0') > IMAGE_MAX_BYTES) throw new AppError('INVALID_REQUEST', '每張圖片最大 5 MB。', { fieldErrors: { file: '檔案超過 5 MB' } });
+    const buf = await readImageBody(ctx.req);
+    return { status: 201, data: await uploadPendingImage(getSql(), withTx, user.id, productId, buf, 'comment') };
+  });
+
+  r.delete('/products/:p/comment-images/:i', ['admin'], async (ctx) => {
+    const { user, productId } = await teamProduct(ctx);
+    const imageId = uuidParam(ctx, 'i');
+    return mutate(ctx, { body: {} }, async (tx) => {
+      await deletePendingImage(tx, user.id, productId, imageId, 'comment');
+      return { data: { id: imageId, deleted: true } };
+    });
+  });
+
+  for (const variant of ['original', 'thumb'] as const) {
+    r.get(`/products/:p/comments/:c/images/:i/${variant}`, ['admin'], async (ctx) => {
+      const { productId } = await teamProduct(ctx);
+      const img = await readCommentImage(getSql(), 'team', productId, uuidParam(ctx, 'c'), uuidParam(ctx, 'i'), variant);
+      return new Response(new Uint8Array(img.data), { headers: imageHeaders(img.contentType) });
+    });
+  }
+
   r.get('/products/:p/feedback/:f/comments', ['admin'], async (ctx) => {
     const { user, productId } = await teamProduct(ctx);
     const q = ctx.query(z.object({ cursor: z.string().max(200).optional(), limit: zLimit }));
@@ -150,7 +178,8 @@ export function registerFeedbackRoutes(r: Router) {
   r.post('/products/:p/feedback/:f/comments', ['admin'], async (ctx) => {
     const { user, productId } = await teamProduct(ctx);
     const feedbackId = uuidParam(ctx, 'f');
-    const body = await ctx.body(z.object({ body: zBody, replyToId: zUuid.nullable().optional() }).strict());
+    // COMMENT-05: team comments may carry up to 5 of the author's pending comment images
+    const body = await ctx.body(z.object({ body: zBody, replyToId: zUuid.nullable().optional(), imageIds: z.array(zUuid).max(IMAGES_PER_FEEDBACK).optional() }).strict());
     return mutate(ctx, { body }, async (tx) => {
       const id = await createGeneralComment(tx, user, productId, feedbackId, body, 'team');
       return { status: 201, data: await getCommentDto(tx, id, user.id) };
@@ -226,6 +255,15 @@ export function registerFeedbackRoutes(r: Router) {
     r.get(`/public/products/:slug/feedback/:f/images/:i/${variant}`, ['admin', 'portal'], async (ctx) => {
       const { p } = await reader(ctx);
       const img = await readFeedbackImage(getSql(), 'public', p.id, uuidParam(ctx, 'f'), uuidParam(ctx, 'i'), variant);
+      return new Response(new Uint8Array(img.data), { headers: imageHeaders(img.contentType) });
+    });
+  }
+
+  // public comment images: an invited member (or team), only while the comment's Feedback is public
+  for (const variant of ['original', 'thumb'] as const) {
+    r.get(`/public/products/:slug/comments/:c/images/:i/${variant}`, ['admin', 'portal'], async (ctx) => {
+      const { p } = await reader(ctx);
+      const img = await readCommentImage(getSql(), 'public', p.id, uuidParam(ctx, 'c'), uuidParam(ctx, 'i'), variant);
       return new Response(new Uint8Array(img.data), { headers: imageHeaders(img.contentType) });
     });
   }

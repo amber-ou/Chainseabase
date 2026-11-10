@@ -92,7 +92,7 @@ for (const short of [false, true]) {
     expect(hit).toMatch(/\/settings$/);
 
     // keyboard: from the product switcher, Tab visits the items in the visual order, then the account entry
-    await container.locator('#product-switch').focus();
+    await container.locator('.product-switcher').focus();
     const visited: string[] = [];
     for (let i = 0; i < TOP.length + BOTTOM.length + 1; i++) {
       await page.keyboard.press('Tab');

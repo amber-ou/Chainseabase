@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { IconTip } from '@/components/list-controls';
-import { useProduct, useUnsaved } from '@/features/admin/shell';
+import { useProduct, useUnsaved, PageTitle } from '@/features/admin/shell';
 import { FeedbackModal } from '@/features/feedback/feedback-modal';
 import type { Feedback, Taxonomy } from '@/features/feedback/types';
 import { Board, type BoardColumn } from '@/features/roadmap/board';
@@ -121,7 +121,7 @@ export function PersonalPage() {
       {region}
       {/* PE01/PE02: the title only (no icon, no explanatory text); the rules themselves are unchanged */}
       <div className="page-head">
-        <div><h1>Personal</h1></div>
+        <div><PageTitle><h1>Personal</h1></PageTitle></div>
         <SaveStatus state={save} errorText={saveError} onRetry={retry ?? undefined} />
       </div>
       {/* PE04: 負責人 and its Select on the left; the sort icon and 新增欄位 on the right */}
@@ -241,7 +241,7 @@ export function PersonalPage() {
           欄位中的 {deleting.count} 張卡片會移回「負責的 Feedback」，不會刪除任何 Feedback。
         </ConfirmModal>
       ) : null}
-      {openCard && tax.data ? <FeedbackModal mode="edit" personal feedbackId={openCard} taxonomy={tax.data} onClose={() => setOpenCard(null)} onChanged={() => void load(subjectId)} /> : null}
+      {openCard && tax.data ? <FeedbackModal mode="edit" personal feedbackId={openCard} taxonomy={tax.data} onTaxonomyChanged={() => void tax.reload()} onClose={() => setOpenCard(null)} onChanged={() => void load(subjectId)} /> : null}
     </>
   );
 }

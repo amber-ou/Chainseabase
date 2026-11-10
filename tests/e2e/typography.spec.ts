@@ -56,8 +56,10 @@ test('Inter for Latin, Noto Sans TC for Chinese, only loaded weights; section ti
   await h1.evaluate((el) => el.setAttribute('data-font-probe', 'h1'));
   expect((await renderedFonts(page, '[data-font-probe="h1"]')).map((f) => f.family)).toEqual(['Inter']);
 
-  // mixed text: 「目前產品：產品1」 draws Chinese with Noto Sans TC and the digit with Inter
-  const mixed = page.getByText(/^目前產品：/);
+  // mixed text: the sidebar switcher's 「產品1」 draws Chinese with Noto Sans TC and the digit with Inter
+  // (CAL-01 removed the 「目前產品：產品1」 line under the Calendar title)
+  const mixed = page.locator('aside.sidebar .product-switcher-name');
+  await expect(mixed).toHaveText('產品1');
   await mixed.evaluate((el) => el.setAttribute('data-font-probe', 'mixed'));
   const mixedFonts = await renderedFonts(page, '[data-font-probe="mixed"]');
   expect(mixedFonts.map((f) => f.family.replace(/^(Inter|Noto Sans TC)\b.*$/, '$1')).sort()).toEqual(['Inter', 'Noto Sans TC']);

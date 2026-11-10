@@ -26,7 +26,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export const viewport: Viewport = { width: 'device-width', initialScale: 1 };
+// SCROLL-05: an on-screen keyboard resizes the layout (where supported), so dialogs keep their composer
+// and close button within the visible area instead of being covered
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, interactiveWidget: 'resizes-content' };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const h = await headers();

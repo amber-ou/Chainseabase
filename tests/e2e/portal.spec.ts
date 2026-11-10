@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ADMIN, PORTAL, login, openFirstProduct, unique } from './helpers';
+import { ADMIN, PORTAL, login, openEdit, openFirstProduct, unique } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -21,11 +21,15 @@ test('setup: team publishes one item and keeps one internal', async ({ page }) =
     if (vis === 'public') {
       await page.getByLabel('搜尋 Feedback').fill(title);
       await page.getByRole('button', { name: title }).first().click();
+      // since 2026-11-10: ⋯ → 編輯, then 公開範圍 in the shared form's settings, then 儲存
       const detail = page.getByRole('dialog', { name: title });
-      await detail.getByLabel('公開範圍').selectOption('public');
-      await detail.getByRole('button', { name: '儲存' }).click();
-      await expect(detail.getByText('已儲存')).toBeVisible();
-      await detail.getByRole('button', { name: '關閉' }).first().click();
+      const form = await openEdit(page, detail);
+      await form.getByRole('button', { name: '公開範圍：內部' }).click();
+      await page.getByRole('menuitemradio', { name: /^公開/ }).click();
+      await form.getByRole('button', { name: '儲存', exact: true }).click();
+      await expect(form).toHaveCount(0);
+      await expect(detail).toBeVisible();
+      await detail.getByRole('button', { name: '關閉' }).click();
       await expect(page.getByRole('dialog')).toHaveCount(0);
       await page.getByLabel('搜尋 Feedback').fill('');
     }

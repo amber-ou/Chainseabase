@@ -104,3 +104,23 @@ export async function expectBrandMark(scope: Locator, size: number) {
   });
   expect(hit).toEqual([true, true, true]);
 }
+
+/** The sidebar product switcher (2026-11-10 NAV-02): open it and pick a product by name. */
+export async function switchProduct(page: Page, name: string, scope: Locator = page.locator('aside.sidebar')) {
+  await scope.getByRole('button', { name: /^目前產品 / }).click();
+  await page.getByRole('menuitemradio', { name, exact: true }).click();
+}
+
+/** The name the sidebar switcher shows for the current product (or its empty state). */
+export function currentProductName(scope: Locator) {
+  return scope.locator('.product-switcher-name');
+}
+
+/** From a Feedback detail (2026-11-10 DETAIL-02/03): ⋯ → 編輯, returning the shared form in edit mode. */
+export async function openEdit(page: Page, detail: Locator) {
+  await detail.getByRole('button', { name: 'Feedback 更多操作' }).click();
+  await page.getByRole('menuitem', { name: '編輯' }).click();
+  const form = page.getByRole('dialog', { name: '編輯 Feedback' });
+  await expect(form).toBeVisible();
+  return form;
+}

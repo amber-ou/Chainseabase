@@ -8,7 +8,7 @@ import { relativeTime } from '@/client/format';
 import { Avatar, EmptyState, ErrorState, LoadingState } from '@/components/ui';
 import { Tabs } from '@/components/tabs';
 import { IconChevronLeft } from '@/components/icons';
-import { useProduct } from '@/features/admin/shell';
+import { useProduct, PageTitle } from '@/features/admin/shell';
 import type { Feedback } from '@/features/feedback/types';
 import type { ProductUser } from './users-page';
 
@@ -32,6 +32,7 @@ export function UserProfilePage() {
     <>
       <p style={{ marginBottom: 12 }}><Link className="btn btn-ghost btn-sm" href={`/products/${product.id}/users`}><IconChevronLeft />回到 User</Link></p>
       <div className="page-head">
+        <PageTitle>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <Avatar name={u.displayName} url={u.avatarUrl} id={u.id} size={48} />
           <div>
@@ -39,6 +40,7 @@ export function UserProfilePage() {
             <p className="sub">{u.email} · {u.role === 'team' ? '團隊成員' : '測試成員'}{u.personTags.length ? ` · ${u.personTags.map((t) => t.name).join('、')}` : ''}</p>
           </div>
         </div>
+        </PageTitle>
       </div>
       <Tabs label="成員內容" value={tab} onChange={setTab} tabs={[{ id: 'feedback', label: `建立的 Feedback（${u.feedbackCount}）` }, { id: 'comments', label: `留言（${u.commentCount}）` }]}>
         {tab === 'feedback' ? (

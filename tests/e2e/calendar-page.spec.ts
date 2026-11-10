@@ -27,16 +27,19 @@ test('Calendar opens from the sidebar with the selected product; switching produ
   await nav.getByRole('navigation', { name: '後台導覽' }).getByRole('link', { name: 'Calendar', exact: true }).click();
   await expect(page).toHaveURL(base + '/calendar');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Calendar');
-  await expect(page.getByText('目前產品：產品1')).toBeVisible();
+  // CAL-01 (2026-11-10): no 「目前產品」 line under the title; the sidebar switcher names the product
+  await expect(page.getByRole('main').getByText(/^目前產品：/)).toHaveCount(0);
+  await expect(page.locator('aside.sidebar .product-switcher-name')).toHaveText('產品1');
   await expect(page.getByRole('heading', { name: '產品日曆' })).toBeVisible();
   await expect(page.getByText('開發模擬日曆')).toBeVisible(); // the moved panel (fake provider in E2E)
   await page.screenshot({ path: test.info().outputPath('calendar.png'), fullPage: true });
 
   // the sidebar switcher keeps the Calendar section and shows the other product's own state
   const nav2 = await openNav(page);
-  await nav2.locator('#product-switch').selectOption(other.id);
+  await nav2.getByRole('button', { name: /^目前產品 / }).click();
+  await page.getByRole('menuitemradio', { name: other.name, exact: true }).click();
   await expect(page).toHaveURL(`${ADMIN}/products/${other.id}/calendar`);
-  await expect(page.getByText(`目前產品：${other.name}`)).toBeVisible();
+  await expect(page.locator('aside.sidebar .product-switcher-name')).toHaveText(other.name);
   // not connected or not bound yet: never the events of another product
   await expect(page.getByRole('button', { name: /連結模擬日曆/ }).or(page.getByRole('heading', { name: '綁定產品共用日曆' }))).toBeVisible();
   await expect(page.getByRole('tab', { name: '活動清單' })).toHaveCount(0);

@@ -97,7 +97,7 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
   return (
     <>
       <p className="board-swipe-hint small muted" aria-hidden="true">左右滑動查看其他欄位（共 {columns.length} 欄）</p>
-      <div className={plain ? 'board-frame' : undefined}>
+      <div className={plain ? 'board-frame' : 'board-wrap'}>
       {/* focusable so keyboard users can scroll the columns horizontally (WCAG 2.1.1); Roadmap (plain):
           arrows and Home / End on the container itself move one column / to either end (phase 3 III-R07) */}
       {/* CARD-03: every board (the portal's too) scrolls sideways inside itself on narrow screens; cards keep 300px */}
@@ -166,6 +166,10 @@ export function Board({ columns, accent, onMove, pendingId, readOnly, onOpen, ca
           ))}
         </div>
       </div>
+      {/* BOARD-01/02: a narrow white-to-clear fade on an edge only while columns are hidden past it; fixed to
+          the visible area, never over the arrows, never catching clicks, drags or scrolling */}
+      <span className="board-fade board-fade-left" data-on={scroll.edges.left || undefined} aria-hidden="true" />
+      <span className="board-fade board-fade-right" data-on={scroll.edges.right || undefined} aria-hidden="true" />
       {plain && (scroll.edges.left || scroll.edges.right) ? (
         <>
           {/* III-R05: only when the board is wider than its space; one column per press */}
@@ -195,7 +199,7 @@ function useBoardScroll(ref: React.RefObject<HTMLDivElement | null>, enabled: bo
   const [edges, setEdges] = useState({ left: false, right: false });
   useEffect(() => {
     const el = ref.current;
-    if (!enabled || !el) return;
+    if (!el) return;
     const update = () => {
       const next = { left: el.scrollLeft > 1, right: el.scrollLeft < el.scrollWidth - el.clientWidth - 1 };
       setEdges((cur) => (cur.left === next.left && cur.right === next.right ? cur : next));
@@ -209,8 +213,9 @@ function useBoardScroll(ref: React.RefObject<HTMLDivElement | null>, enabled: bo
       e.preventDefault();
       el.scrollLeft += delta * scale;
     };
+    // the edges are tracked on every board (BOARD-01..03: the fades); the wheel mapping stays Roadmap's
     el.addEventListener('scroll', update, { passive: true });
-    el.addEventListener('wheel', onWheel, { passive: false });
+    if (enabled) el.addEventListener('wheel', onWheel, { passive: false });
     const ro = new ResizeObserver(update);
     ro.observe(el);
     if (el.firstElementChild) ro.observe(el.firstElementChild);

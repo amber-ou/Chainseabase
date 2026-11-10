@@ -30,6 +30,16 @@ const TYPE: Record<Format, string> = { jpeg: 'image/jpeg', png: 'image/png', web
 
 export interface ImageDto { id: string; width: number; height: number; contentType: string }
 
+/**
+ * Where an image belongs. Comment images (COMMENT-05/06, migration 0007) follow the same limits,
+ * storage, pending/attach steps and lifecycle as Feedback images, in their own table and folder.
+ */
+export type ImageKind = 'feedback' | 'comment';
+const KIND = {
+  feedback: { table: 'feedback_images', folder: 'feedback-images' },
+  comment: { table: 'comment_images', folder: 'comment-images' },
+} as const;
+
 function sniff(buf: Buffer): Format | null {
   if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpeg';
   if (buf.length > 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
@@ -86,18 +96,19 @@ async function deleteFilesLater(tx: Db, paths: string[]) {
 }
 
 /** Delete the given image rows and schedule their files. */
-async function deleteRows(tx: Db, where: ReturnType<Db>) {
-  const rows = await tx<{ originalPath: string; thumbPath: string }[]>`delete from feedback_images where ${where} returning original_path, thumb_path`;
+async function deleteRows(tx: Db, where: ReturnType<Db>, kind: ImageKind = 'feedback') {
+  const rows = await tx<{ originalPath: string; thumbPath: string }[]>`delete from ${tx(KIND[kind].table)} where ${where} returning original_path, thumb_path`;
   await deleteFilesLater(tx, rows.flatMap((r) => [r.originalPath, r.thumbPath]));
   return rows.length;
 }
 
 /** Store a pending image for the uploader (team member) in one product. */
-export async function uploadPendingImage(db: Db, withTx: <T>(fn: (tx: Db) => Promise<T>) => Promise<T>, userId: string, productId: string, buf: Buffer): Promise<ImageDto> {
+export async function uploadPendingImage(db: Db, withTx: <T>(fn: (tx: Db) => Promise<T>) => Promise<T>, userId: string, productId: string, buf: Buffer, kind: ImageKind = 'feedback'): Promise<ImageDto> {
   const img = await processImage(buf);
+  const { table, folder } = KIND[kind];
   const [{ id }] = await db<{ id: string }[]>`select gen_random_uuid() as id`;
-  const originalPath = `feedback-images/${productId}/${id}-original.${EXT[img.format]}`;
-  const thumbPath = `feedback-images/${productId}/${id}-thumb.webp`;
+  const originalPath = `${folder}/${productId}/${id}-original.${EXT[img.format]}`;
+  const thumbPath = `${folder}/${productId}/${id}-thumb.webp`;
   const storage = getAvatarStorage();
   try {
     await storage.put(originalPath, img.original, TYPE[img.format]);
@@ -110,13 +121,13 @@ export async function uploadPendingImage(db: Db, withTx: <T>(fn: (tx: Db) => Pro
   try {
     return await withTx(async (tx) => {
       // the uploader's expired pending images go first (cancelled dialogs, closed tabs)
-      await deleteRows(tx, tx`uploader_id = ${userId} and feedback_id is null and created_at < now() - ${`${PENDING_TTL_HOURS} hours`}::interval`);
+      await deleteRows(tx, tx`uploader_id = ${userId} and ${tx(owner(kind))} is null and created_at < now() - ${`${PENDING_TTL_HOURS} hours`}::interval`, kind);
       const [{ n }] = await tx<{ n: number }[]>`
-        select count(*)::int as n from feedback_images where uploader_id = ${userId} and feedback_id is null
+        select count(*)::int as n from ${tx(table)} where uploader_id = ${userId} and ${tx(owner(kind))} is null
       `;
-      if (n >= PENDING_PER_USER) throw new AppError('INVALID_REQUEST', '尚未建立的圖片過多，請先建立或取消目前的 Feedback。', { fieldErrors: { file: '待建立的圖片過多' } });
+      if (n >= PENDING_PER_USER) throw new AppError('INVALID_REQUEST', kind === 'feedback' ? '尚未建立的圖片過多，請先建立或取消目前的 Feedback。' : '尚未送出的留言圖片過多，請先送出或移除目前的圖片。', { fieldErrors: { file: '待送出的圖片過多' } });
       await tx`
-        insert into feedback_images (id, product_id, uploader_id, content_type, original_path, thumb_path, byte_size, width, height)
+        insert into ${tx(table)} (id, product_id, uploader_id, content_type, original_path, thumb_path, byte_size, width, height)
         values (${id}, ${productId}, ${userId}, ${TYPE[img.format]}, ${originalPath}, ${thumbPath}, ${img.original.length}, ${img.width}, ${img.height})
       `;
       return { id, width: img.width, height: img.height, contentType: TYPE[img.format] };
@@ -128,10 +139,80 @@ export async function uploadPendingImage(db: Db, withTx: <T>(fn: (tx: Db) => Pro
   }
 }
 
+const owner = (kind: ImageKind) => (kind === 'feedback' ? 'feedback_id' : 'comment_id');
+
 /** The uploader removes one of their pending images (removed from the dialog, or the dialog was cancelled). */
-export async function deletePendingImage(tx: Db, userId: string, productId: string, imageId: string) {
-  const n = await deleteRows(tx, tx`id = ${imageId} and product_id = ${productId} and uploader_id = ${userId} and feedback_id is null`);
+export async function deletePendingImage(tx: Db, userId: string, productId: string, imageId: string, kind: ImageKind = 'feedback') {
+  const n = await deleteRows(tx, tx`id = ${imageId} and product_id = ${productId} and uploader_id = ${userId} and ${tx(owner(kind))} is null`, kind);
   if (n === 0) throw new AppError('NOT_FOUND');
+}
+
+function checkIds(imageIds: string[], field: string, what: string) {
+  const ids = [...new Set(imageIds)];
+  if (ids.length !== imageIds.length) throw invalid('圖片重複。', { [field]: '圖片重複' });
+  if (ids.length > IMAGES_PER_FEEDBACK) throw invalid(`每${what}最多 ${IMAGES_PER_FEEDBACK} 張圖片。`, { [field]: `最多 ${IMAGES_PER_FEEDBACK} 張` });
+  return ids;
+}
+
+/**
+ * DETAIL-03: the edited Feedback's images become exactly `imageIds`, in that order. Kept images keep
+ * their files; new ones must be the editor's own pending uploads in this product; images left out are
+ * deleted (rows now, files after commit). Returns whether anything changed.
+ */
+export async function replaceFeedbackImages(tx: Db, actorId: string, productId: string, feedbackId: string, imageIds: string[]) {
+  const ids = checkIds(imageIds, 'imageIds', '筆 Feedback ');
+  const current = (await tx<{ id: string }[]>`
+    select id from feedback_images where feedback_id = ${feedbackId} and product_id = ${productId} order by position for update
+  `).map((r) => r.id);
+  const added = ids.filter((id) => !current.includes(id));
+  const removed = current.filter((id) => !ids.includes(id));
+  if (!added.length && !removed.length && ids.every((id, i) => current[i] === id)) return false;
+  if (added.length) {
+    const rows = await tx<{ id: string }[]>`
+      select id from feedback_images
+      where id in ${tx(added)} and product_id = ${productId} and uploader_id = ${actorId} and feedback_id is null
+      for update
+    `;
+    if (rows.length !== added.length) throw invalid('部分圖片已失效，請移除後重新上傳。', { imageIds: '圖片已失效' });
+  }
+  if (removed.length) await deleteRows(tx, tx`id in ${tx(removed)} and feedback_id = ${feedbackId}`);
+  // positions are unique per Feedback at commit (deferred, migration 0007), so they can be reordered
+  for (const [position, id] of ids.entries()) {
+    await tx`update feedback_images set feedback_id = ${feedbackId}, position = ${position}, attached_at = coalesce(attached_at, now()) where id = ${id}`;
+  }
+  return true;
+}
+
+/** COMMENT-05: attach the author's pending images to their new comment, in order. */
+export async function attachCommentImages(tx: Db, actorId: string, productId: string, commentId: string, imageIds: string[]) {
+  if (imageIds.length === 0) return;
+  const ids = checkIds(imageIds, 'imageIds', '則留言');
+  const rows = await tx<{ id: string }[]>`
+    select id from comment_images
+    where id in ${tx(ids)} and product_id = ${productId} and uploader_id = ${actorId} and comment_id is null
+    for update
+  `;
+  if (rows.length !== ids.length) throw invalid('部分圖片已失效，請移除後重新上傳。', { imageIds: '圖片已失效' });
+  for (const [position, id] of ids.entries()) {
+    await tx`update comment_images set comment_id = ${commentId}, position = ${position}, attached_at = now() where id = ${id}`;
+  }
+}
+
+/** The images of the given comments, in order (for the comment list). */
+export async function listCommentImages(db: Db, commentIds: string[]): Promise<Map<string, ImageDto[]>> {
+  const out = new Map<string, ImageDto[]>();
+  if (!commentIds.length) return out;
+  const rows = await db<(ImageDto & { commentId: string })[]>`
+    select comment_id, id, width, height, content_type from comment_images
+    where comment_id in ${db(commentIds)} order by comment_id, position
+  `;
+  for (const { commentId, ...img } of rows) out.set(commentId, [...(out.get(commentId) ?? []), img]);
+  return out;
+}
+
+/** A removed comment's images go with it (COMMENT-06). */
+export async function deleteImagesOfComment(tx: Db, commentId: string) {
+  await deleteRows(tx, tx`comment_id = ${commentId}`, 'comment');
 }
 
 /** Attach the actor's pending images to a new Feedback, in the given order (IM03). */
@@ -160,14 +241,16 @@ export async function listFeedbackImages(db: Db, productId: string, feedbackId: 
   `;
 }
 
-/** Soft-deleted Feedback: its images (rows and files) are removed with it (IM06). */
+/** Soft-deleted Feedback: its images and its comments' images (rows and files) are removed with it (IM06). */
 export async function deleteImagesOfFeedback(tx: Db, feedbackId: string) {
   await deleteRows(tx, tx`feedback_id = ${feedbackId}`);
+  await deleteRows(tx, tx`comment_id in (select id from comments where feedback_id = ${feedbackId})`, 'comment');
 }
 
-/** Product deletion: every image of the product, attached or pending (IM06). */
+/** Product deletion: every image of the product, attached or pending, Feedback and comment (IM06). */
 export async function deleteImagesOfProduct(tx: Db, productId: string) {
   await deleteRows(tx, tx`product_id = ${productId}`);
+  await deleteRows(tx, tx`product_id = ${productId}`, 'comment');
 }
 
 /**
@@ -182,6 +265,25 @@ export async function readFeedbackImage(db: Db, scope: 'team' | 'public', produc
     where i.id = ${imageId} and i.feedback_id = ${feedbackId} and i.product_id = ${productId}
       and f.deleted_at is null ${scope === 'public' ? db`and f.visibility = 'public'` : db``}
   `;
+  return readStoredImage(row, imageId, variant);
+}
+
+/**
+ * One comment image file (COMMENT-06), after checking that the comment is live and its Feedback is
+ * readable for the caller's scope, exactly as for the Feedback's own images. Anything else is 404.
+ */
+export async function readCommentImage(db: Db, scope: 'team' | 'public', productId: string, commentId: string, imageId: string, variant: 'original' | 'thumb') {
+  const [row] = await db<{ originalPath: string; thumbPath: string; contentType: string }[]>`
+    select i.original_path, i.thumb_path, i.content_type from comment_images i
+    join comments c on c.id = i.comment_id and c.product_id = i.product_id and c.deleted_at is null
+    join feedback f on f.id = c.feedback_id and f.product_id = c.product_id
+    where i.id = ${imageId} and i.comment_id = ${commentId} and i.product_id = ${productId}
+      and f.deleted_at is null ${scope === 'public' ? db`and f.visibility = 'public'` : db``}
+  `;
+  return readStoredImage(row, imageId, variant);
+}
+
+async function readStoredImage(row: { originalPath: string; thumbPath: string; contentType: string } | undefined, imageId: string, variant: 'original' | 'thumb') {
   if (!row) throw new AppError('NOT_FOUND');
   const storage = getAvatarStorage();
   const objectPath = variant === 'thumb' ? row.thumbPath : row.originalPath;

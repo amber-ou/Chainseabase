@@ -10,7 +10,7 @@ import { Modal } from '@/components/modal';
 import { Tabs } from '@/components/tabs';
 import { MultiSelect } from '@/components/multiselect';
 import { useToast } from '@/components/toast';
-import { useProduct, useProductList } from '@/features/admin/shell';
+import { useProduct, useProductList, PageTitle } from '@/features/admin/shell';
 import type { Taxonomy } from '@/features/feedback/types';
 
 export function SettingsPage() {
@@ -20,7 +20,7 @@ export function SettingsPage() {
   return (
     // forms keep a reading width instead of stretching across the screen
     <div className="page-narrow">
-      <div className="page-head"><div><h1>Setting</h1></div></div>
+      <div className="page-head"><div><PageTitle><h1>Setting</h1></PageTitle></div></div>
       {product ? (
         <Tabs label="設定" value={tab} onChange={setTab} tabs={[{ id: 'me', label: '個人設定' }, { id: 'tags', label: '管理標籤' }, { id: 'people', label: '管理 Person tag' }]}>
           {tab === 'me' ? <PersonalSettings /> : tab === 'tags' ? <TagSettings /> : <PersonTagSettings />}

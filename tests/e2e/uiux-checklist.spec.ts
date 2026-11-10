@@ -110,7 +110,8 @@ test('F01–F09: Feedback toolbar, Filter popover, search and grey empty states'
   await expect(main.getByRole('button', { name: '新增第一筆' })).toHaveCount(0);
   // F02: one 新增 Feedback, in the toolbar (not in the page header)
   await expect(main.getByRole('button', { name: '新增 Feedback' })).toHaveCount(1);
-  await expect(main.locator('.page-head').getByRole('button')).toHaveCount(0);
+  // (the page head holds only the sidebar toggle, NAV-01 2026-11-10)
+  await expect(main.locator('.page-head').getByRole('button', { name: /新增/ })).toHaveCount(0);
   const title = unique('工具列搜尋');
   await addFeedback(page, product.id, title);
   await page.reload();

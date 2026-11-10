@@ -200,7 +200,7 @@ test('RM-06..09: toolbar groups — dimension | publish switch, label, settings 
   const [d, s, g, f, q] = [await x(dim), await x(sw), await x(settings), await x(filter), await x(search)];
   if (page.viewportSize()!.width > 640) {
     expect(d.x).toBeLessThan(s.x); expect(s.x).toBeLessThan(g.x); expect(g.x).toBeLessThan(f.x); expect(f.x).toBeLessThan(q.x);
-    await expect(tb.locator('.rm-toolbar-sep')).toBeVisible();
+    await expect(tb.locator('.list-toolbar-start > .toolbar-sep')).toBeVisible();
   }
   // icon-only, same size, with tooltips and names
   for (const b of [settings, filter]) expect((await b.innerText()).trim()).toBe('');
@@ -360,8 +360,10 @@ test('NAV-01..06: the desktop sidebar collapses to icons, remembers it, keeps pr
     const sheet = page.getByRole('dialog', { name: '選單' });
     await expect(sheet.getByRole('link', { name: 'Feedback' })).toBeVisible();
     await expect(sheet.getByText('Feedback', { exact: true })).toBeVisible();
-    await expect(sheet.getByRole('button', { name: /收合側邊欄|展開側邊欄/ })).toHaveCount(0);
-    await expect(sheet.locator('#product-switch')).toBeVisible();
+    await expect(page.getByRole('button', { name: /收合側邊欄|展開側邊欄/ })).toBeHidden();
+    // the drawer has the full two-line product switcher (2026-11-10 NAV-04)
+    await expect(sheet.getByRole('button', { name: /^目前產品 .+ （切換產品）$/ })).toBeVisible();
+    await expect(sheet.locator('.product-switcher-name')).toBeVisible();
     await expectNoPageOverflow(page);
     await shot(page, 'nav-mobile-drawer');
     return;
@@ -371,7 +373,8 @@ test('NAV-01..06: the desktop sidebar collapses to icons, remembers it, keeps pr
   await expect(page.getByRole('main').locator('.board-plain')).toBeVisible();
   const wide = (await main.boundingBox())!.width;
   await shot(page, 'nav-expanded');
-  const toggle = sidebar.getByRole('button', { name: '收合側邊欄' });
+  // 2026-11-10 NAV-01: the toggle sits at the left of the page title, not in the sidebar
+  const toggle = main.getByRole('button', { name: '收合側邊欄' });
   await expect(toggle).toBeVisible();
   await toggle.click();
   await expect(shell).toHaveAttribute('data-sidebar', 'collapsed');
@@ -397,11 +400,11 @@ test('NAV-01..06: the desktop sidebar collapses to icons, remembers it, keeps pr
   // NAV-04: the icon product switcher still switches products
   const other = await createProduct(page, unique('收合切換'));
   await page.reload();
-  const sw = sidebar.getByRole('button', { name: /目前產品：.*（切換產品）/ });
+  const sw = sidebar.getByRole('button', { name: /^目前產品 .+ （切換產品）$/ });
   await sw.click();
   await page.getByRole('menuitemradio', { name: other.name }).click();
   await page.waitForURL(new RegExp(`/products/${other.id}/feedback`));
-  await expect(sidebar.getByRole('button', { name: `目前產品：${other.name}（切換產品）` })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: `目前產品 ${other.name} （切換產品）` })).toBeVisible();
   // NAV-06: the notification panel stays in the viewport when opened from the narrow rail
   await sidebar.getByRole('button', { name: /Notification/ }).click();
   const panel = page.getByRole('dialog', { name: '通知' });
@@ -415,7 +418,7 @@ test('NAV-01..06: the desktop sidebar collapses to icons, remembers it, keeps pr
   await page.goto(`${ADMIN}/products`);
   await page.waitForURL(/\/products/);
   // expand again, remembered as expanded
-  await sidebar.getByRole('button', { name: '展開側邊欄' }).click();
+  await page.getByRole('main').getByRole('button', { name: '展開側邊欄' }).click();
   await expect(shell).toHaveAttribute('data-sidebar', 'expanded');
   await page.reload();
   await expect(shell).toHaveAttribute('data-sidebar', 'expanded');

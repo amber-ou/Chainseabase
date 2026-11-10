@@ -11,7 +11,7 @@ import { ConfirmModal, Modal } from '@/components/modal';
 import { MultiSelect } from '@/components/multiselect';
 import { ActionMenu } from '@/components/menu';
 import { useToast } from '@/components/toast';
-import { useProduct } from '@/features/admin/shell';
+import { useProduct, PageTitle } from '@/features/admin/shell';
 import type { Taxonomy } from '@/features/feedback/types';
 
 export interface ProductUser {
@@ -52,7 +52,7 @@ export function UsersPage() {
     <>
       <div className="page-head">
         <div>
-          <h1>User</h1>
+          <PageTitle><h1>User</h1></PageTitle>
         </div>
         <Button variant="primary" onClick={() => setInviting(true)}>Email 邀請</Button>
       </div>

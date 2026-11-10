@@ -13,11 +13,10 @@ import {
   IconBell, IconCalendar, IconFeedback, IconMenu, IconPersonal, IconPortal, IconProduct, IconRoadmap, IconSettings, IconUsers, IconX,
 } from '@/components/icons';
 import { BrandMark } from '@/components/brand';
-import { ChevronsUpDownIcon, PanelLeftCloseIcon, PanelLeftOpenIcon } from 'lucide-react';
+import { CheckIcon, ChevronsUpDownIcon, PanelLeftCloseIcon, PanelLeftOpenIcon } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui';
 import { writeSidebarCookie } from '@/client/sidebar-pref';
 
 export interface ProductItem { id: string; name: string; slug: string; revision: number; createdAt: string }
@@ -195,46 +194,23 @@ export function AdminShell({ children }: { children: ReactNode }) {
       <NavLink href={href} active={active} onNavigate={go} icon={icon}><span className="nav-label">{label}</span></NavLink>
     </SideTip>
   );
-  // NAV-01: the brand area; on the desktop sidebar its right end holds the collapse toggle (always shown)
-  const brand = (inSidebar: boolean, compact: boolean) => (
+  // the brand area (logo and name); the collapse toggle now sits in the page header (NAV-01, 2026-11-10)
+  const brand = (compact: boolean) => (
     <div className="brand-row">
       <SideTip on={compact} label="Chainseabase">
         <Link className="brand" href={product ? `/products/${product.id}/dashboard` : '/products'}><BrandMark /><span className="nav-label">Chainseabase</span></Link>
       </SideTip>
-      {inSidebar ? (
-        <SideTip on label={compact ? '展開側邊欄' : '收合側邊欄'} side={compact ? 'right' : 'bottom'}>
-          <button type="button" className="sidebar-toggle" aria-label={compact ? '展開側邊欄' : '收合側邊欄'} aria-expanded={!compact} aria-controls="admin-sidebar" onClick={toggleSidebar}>
-            {compact ? <PanelLeftOpenIcon aria-hidden="true" /> : <PanelLeftCloseIcon aria-hidden="true" />}
-          </button>
-        </SideTip>
-      ) : null}
     </div>
   );
-  // NAV-04: collapsed, the product select becomes an icon entry with the same choices (and the same
-  // unsaved-work guard); with no product it still opens and says so
-  const productSwitch = (compact: boolean) => compact ? (
-    <CompactProductSwitch product={product} list={list} onPick={(id) => product ? switchProduct(id) : go(`/products/${id}/dashboard`)} />
-  ) : product ? (
-    <div className="product-switch">
-      <label className="product-switch-label" htmlFor="product-switch">目前產品<span className="sr-only">（切換產品）</span></label>
-      <select id="product-switch" className="select" value={product.id} onChange={(e) => switchProduct(e.target.value)}>
-        {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-      </select>
-    </div>
-  ) : (
-    <div className="product-switch">
-      <label className="product-switch-label" htmlFor="product-switch">目前產品<span className="sr-only">（切換產品）</span></label>
-      <select id="product-switch" className="select" value="" disabled={!list.length} onChange={(e) => { if (e.target.value) go(`/products/${e.target.value}/dashboard`); }}>
-        <option value="" disabled>{list.length ? '尚未選取產品' : '尚無產品'}</option>
-        {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-      </select>
-    </div>
+  // NAV-02..04: the two-line product switcher; collapsed, only its product icon (with a tooltip)
+  const productSwitch = (compact: boolean) => (
+    <ProductSwitcher compact={compact} product={product} list={list} onPick={(id) => (product ? switchProduct(id) : go(`/products/${id}/dashboard`))} />
   );
   const nav = (inSidebar: boolean) => {
     const compact = inSidebar && collapsed;
     return product ? (
       <>
-        {brand(inSidebar, compact)}
+        {brand(compact)}
         {productSwitch(compact)}
         <nav className="nav" aria-label="後台導覽">
           <div className="nav-group">
@@ -252,7 +228,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       </>
     ) : (
       <>
-        {brand(inSidebar, compact)}
+        {brand(compact)}
         {productSwitch(compact)}
         <nav className="nav" aria-label="後台導覽">
           <p id="nav-need-product" className="small muted nav-need" style={{ margin: '0 10px 6px' }}>{needProduct}</p>
@@ -273,6 +249,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider value={{ product, products: list, reloadProducts: products.reload, setDirty }}>
+     <SidebarCtx.Provider value={{ collapsed, toggle: toggleSidebar }}>
       <div className="shell" data-sidebar={collapsed ? 'collapsed' : 'expanded'}>
         <aside id="admin-sidebar" className="sidebar">{nav(true)}</aside>
         <header className="topbar">
@@ -292,6 +269,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           目前的表單或草稿尚未儲存。離開後這些內容不會寫入任何產品。
         </ConfirmModal>
       ) : null}
+     </SidebarCtx.Provider>
     </Ctx.Provider>
   );
 }
@@ -309,30 +287,71 @@ function SideTip({ on, label, side = 'right', children }: { on: boolean; label: 
   );
 }
 
-/** NAV-04: the product switcher of the collapsed sidebar: an icon entry that opens the same choices. */
-function CompactProductSwitch({ product, list, onPick }: { product: ProductItem | null; list: ProductItem[]; onPick: (id: string) => void }) {
-  const label = product ? `目前產品：${product.name}（切換產品）` : list.length ? '尚未選取產品（選取產品）' : '尚無產品';
+/**
+ * NAV-02..04 (2026-11-10): the product switcher, after the shadcn Sidebar block's top switcher: a
+ * square product icon, two lines (「目前產品」 and the real product name) and an up/down chevron. The
+ * menu is as wide as the trigger and lists the products with a check on the current one. Collapsed,
+ * only the icon stays (tooltip names the product) and the menu opens beside it at a readable width.
+ * No product selected, or none at all, is said in the trigger and in the menu.
+ */
+function ProductSwitcher({ compact, product, list, onPick }: { compact: boolean; product: ProductItem | null; list: ProductItem[]; onPick: (id: string) => void }) {
+  const second = product ? product.name : list.length ? '尚未選取產品' : '尚無產品';
+  const suffix = product ? '（切換產品）' : list.length ? '（選取產品）' : '';
+  const tip = `目前產品：${second}${suffix}`;
   return (
-    <div className="product-switch product-switch-compact">
+    <div className="product-switch" data-compact={compact || undefined}>
       <DropdownMenu modal={false}>
-        <SideTip on label={label}>
+        {/* its name is its own text (目前產品, the product, then the action for screen readers), so the
+            visible text and the name always match (WCAG 2.5.3) */}
+        <SideTip on={compact} label={tip}>
           <DropdownMenuTrigger asChild>
-            <button type="button" className="product-switch-icon" aria-label={label}>
-              <span aria-hidden="true" className="product-initial">{product ? [...product.name][0]?.toUpperCase() : <IconProduct />}</span>
-              <ChevronsUpDownIcon aria-hidden="true" className="product-switch-chev" />
+            <button type="button" className="product-switcher">
+              <span aria-hidden="true" className="product-mark">{product ? [...product.name][0]?.toUpperCase() : <IconProduct />}</span>
+              <span className="product-switcher-text nav-label">
+                <span className="product-switcher-kicker">目前產品</span>
+                <span className="product-switcher-name">{second}</span>
+              </span>
+              {suffix ? <span className="sr-only">{suffix}</span> : null}
+              <ChevronsUpDownIcon aria-hidden="true" className="product-switcher-chev nav-label" />
             </button>
           </DropdownMenuTrigger>
         </SideTip>
-        <DropdownMenuContent side="right" align="start" collisionPadding={8} className="w-56">
-          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">目前產品</DropdownMenuLabel>
-          <DropdownMenuSeparator />
+        <DropdownMenuContent side={compact ? 'right' : 'bottom'} align="start" sideOffset={compact ? 8 : 4} collisionPadding={8}
+          className={compact ? 'product-menu w-60' : 'product-menu w-(--radix-dropdown-menu-trigger-width) min-w-48'}>
           {list.length ? (
-            <DropdownMenuRadioGroup value={product?.id ?? ''} onValueChange={(id) => { if (id && id !== product?.id) onPick(id); }}>
-              {list.map((p) => <DropdownMenuRadioItem key={p.id} value={p.id}>{p.name}</DropdownMenuRadioItem>)}
-            </DropdownMenuRadioGroup>
-          ) : <DropdownMenuItem disabled>尚無產品</DropdownMenuItem>}
+            <DropdownMenuPrimitive.RadioGroup value={product?.id ?? ''} onValueChange={(id) => { if (id && id !== product?.id) onPick(id); }}>
+              {list.map((p) => (
+                <DropdownMenuPrimitive.RadioItem key={p.id} value={p.id} className="product-menu-item">
+                  <span className="product-menu-name">{p.name}</span>
+                  <DropdownMenuPrimitive.ItemIndicator className="product-menu-check"><CheckIcon aria-hidden="true" /></DropdownMenuPrimitive.ItemIndicator>
+                </DropdownMenuPrimitive.RadioItem>
+              ))}
+            </DropdownMenuPrimitive.RadioGroup>
+          ) : <DropdownMenuItem disabled>尚無產品，請先在 Product 新增</DropdownMenuItem>}
         </DropdownMenuContent>
       </DropdownMenu>
+    </div>
+  );
+}
+
+/**
+ * NAV-01 (2026-11-10): the sidebar collapse toggle, at the left of each admin page's title. The same
+ * button and place in both states; it moves with the main area. Desktop only (phones use the drawer).
+ */
+const SidebarCtx = createContext<{ collapsed: boolean; toggle: () => void } | null>(null);
+
+export function PageTitle({ children }: { children: ReactNode }) {
+  const c = useContext(SidebarCtx);
+  return (
+    <div className="page-title">
+      {c ? (
+        <SideTip on label={c.collapsed ? '展開側邊欄' : '收合側邊欄'} side="bottom">
+          <button type="button" className="sidebar-toggle" aria-label={c.collapsed ? '展開側邊欄' : '收合側邊欄'} aria-expanded={!c.collapsed} aria-controls="admin-sidebar" onClick={c.toggle}>
+            {c.collapsed ? <PanelLeftOpenIcon aria-hidden="true" /> : <PanelLeftCloseIcon aria-hidden="true" />}
+          </button>
+        </SideTip>
+      ) : null}
+      {children}
     </div>
   );
 }

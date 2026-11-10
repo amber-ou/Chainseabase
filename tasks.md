@@ -661,3 +661,64 @@ UI-10 補充（2026-11-09）：
 - 視覺基準定版、更新後的完整回歸（等使用者確認）。
 - 本機 `npm test`：只改 UI，交由 CI。
 - Firefox／Safari、實機觸控與螢幕閱讀器、Windows 主機。
+
+## UI-13：追加調整：側邊欄、工具列與 Feedback 詳情（2026-11-10）
+
+狀態：**預覽完成，尚未完成完整回歸**。需求：使用者附件 `uiux-followup-feedback-detail.md` 與「Feedback 詳情與留言」附件。決定、根因、附件整合界線與待確認事項見[變更需求](docs/change-requests/sidebar-position.md)「追加調整：側邊欄、工具列與 Feedback 詳情」。延續 UI-12（`4b4bf11`）。**新增 migration 0007**（`comment_images` 資料表；`feedback_images` 排序約束改為 deferrable），套用前須依既有流程備份。
+
+| 編號 | 狀態 | 說明 |
+| --- | --- | --- |
+| NAV-01 | 完成 | 收合按鈕移到後台各功能頁 h1 左側，展開／收合同一顆、同一位置；品牌區不再有按鈕 |
+| NAV-02～04 | 完成 | 兩行產品切換器（產品 icon、「目前產品／名稱」、chevron），選單與觸發器等寬並有勾號；收合時只留 icon＋Tooltip，選單 240px；手機抽屜為完整切換器 |
+| TOOL-01～04 | 完成 | 後台 Feedback／Roadmap：設定、篩選無常態底色與外框；細灰分隔線；搜尋框透明底、灰色邊框；前台不受影響 |
+| CAL-01 | 完成 | 移除 Calendar 的「目前產品」副標題 |
+| BOARD-01～03 | 完成 | 三種看板可視區左右邊緣漸層，只在該方向有隱藏欄位時出現，不攔截操作，箭頭在上 |
+| FB-01／02 | 完成 | 根因：輸入法組字按鍵（如 Escape）被當成鍵盤導覽；`InputModality` 忽略組字事件。無框編輯區的鍵盤焦點改為 3:1 灰色 |
+| DETAIL-01～06 | 完成 | 新的唯讀詳情（標題、描述、圖片、屬性膠囊即時儲存）、⋯（編輯／刪除）與關閉；不顯示建立者與時間；編輯共用新增表單並更新同一筆（含圖片、優先級、版本、公開範圍） |
+| COMMENT-01～06 | 完成（後台） | 留言區、實際數量、氣泡旁時間、統一按讚、圖片入口＋圓形送出；留言圖片（最多 5 張、5 MB、JPEG／PNG／WebP）真實儲存並跟隨 Feedback 權限 |
+| COMMENT-07 | 完成，**待確認一項** | 後台三個入口與前台共用呈現，前台維持既有權限；**前台 tester 上傳留言圖片未開放**，待使用者確認 |
+| SCROLL-01～05 | 完成 | 詳情／留言／輸入三區；上方最高 40dvh 內部捲動；留言獨立捲動並有邊緣漸層與箭頭；輸入固定於底部；矮視窗與 320px 可用 |
+
+修改檔案：
+- 資料與 API：`db/migrations/0007_comment_images.sql`、`src/modules/feedback/{images,comments,service}.ts`、`src/server/api/routes-feedback.ts`、`src/server/adapters/storage.ts`、`docs/04-api-contracts.md`。
+- 共用：`src/app/{globals.css,layout.tsx}`、`src/components/{input-modality,list-controls}.tsx`。
+- 側邊欄與頁首：`src/features/admin/shell.tsx`，以及 8 個後台頁面的 `PageTitle`（dashboard、calendar、feedback、roadmap、personal、users、user-profile、settings）。
+- 看板：`src/features/roadmap/{board,roadmap-page}.tsx`。
+- 詳情與留言：新增 `src/features/feedback/{feedback-detail.tsx,image-uploads.ts,image-previews.tsx}`；改寫 `comments.tsx`、`feedback-modal.tsx`、`feedback-create-dialog.tsx`（編輯模式、`AttributePills`）、`types.ts`；`src/features/portal/portal-feedback.tsx`；`personal-page.tsx`、`feedback-page.tsx`、`roadmap-page.tsx` 傳入分類重新載入。
+- 測試：
+  - 新增 `tests/integration/comment-images.test.ts`、`tests/e2e/ui-followup.spec.ts`。
+  - 更新 `product-delete.test.ts`（資料集含留言圖片）與 `harness.ts`。
+  - 更新 E2E：`admin`、`calendar-page`、`portal`、`product-delete`、`shadcn`、`sidebar`、`typography`、`uiux-checklist`、`ui-refine`，以及 `helpers.ts`。原因是側邊欄切換器改為按鈕選單、Calendar 副標題移除、詳情改版、頁首多了收合按鈕。
+  - `playwright.config.ts` 加入 ui-followup。
+
+驗證（Linux 容器，隔離 e2e／test 資料庫；Google、寄信、儲存為 fake，儲存為本機磁碟替身）：
+- **修正前重現 FB-01**：開啟新增對話框後點擊標題並打字，送出組字中的 Escape，頁面切到 keyboard 模式（焦點框出現）。修正後不再切換，Tab 仍顯示焦點框。
+- **資料與權限（先驗證）**：`comment-images.test.ts` 與 `feedback-images.test.ts` 共 19 passed。涵蓋：
+  - 編輯更新同一筆、沒有建立副本；圖片保留、重排、新增、移除，被移除的檔案確實刪除。
+  - 別人的待用圖片、超過 5 張、重複、舊 revision 一律拒絕，且不寫入任何資料。
+  - 留言圖片：格式、大小、數量限制；tester 與未受邀者不能上傳；前台留言 API 不接受圖片。
+  - 讀取每次都檢查權限：後台限團隊；前台限受邀成員且 Feedback 為公開；改回內部或移除成員後立即拒絕；`no-store`。
+  - 檔案生命週期：留言移除、Feedback 刪除、產品刪除、24 小時未用的待用圖片都會刪除。
+- **ui-followup（1440／768／390）**：以實際渲染量測，涵蓋：
+  - 組字不出框；Tab 顯示灰色焦點框。
+  - 詳情不顯示建立者、新增表單元件與 Footer；屬性順序；膠囊即時儲存。
+  - 編輯更新同一筆（API 確認 id、數量與圖片順序）；取消返回且不儲存；刪除前確認。
+  - 時間在氣泡右側並垂直置中；按讚無底色，未按線框、已按實心海軍藍。
+  - 留言圖片上傳、預覽與拒絕原因；圖片讀取權限。
+  - 三區捲動：上方內部捲動；留言漸層與箭頭只在有隱藏內容時出現且不攔截點擊；輸入區固定；1440×520、320×640 仍可送出。
+  - 前台權限、側邊欄切換器與收合、工具列外觀、Calendar 副標題、看板漸層。
+- **全套 Playwright（三種寬度＋empty-last）**：242 passed、10 skipped（既有的手機／桌面專屬案例）、0 failed。
+- **npm test**（Vitest，真實 PostgreSQL）：22 個檔案、216 passed。
+- lint、typecheck、build、security:scan、`git diff --check` 皆 exit 0。
+- migration 0007 在隔離的 dev／test／e2e 資料庫套用成功；**未**在使用者 Windows 或正式資料庫執行。
+- 人工檢視截圖：
+  - 詳情與留言：1440、768、390、320、矮視窗。
+  - 編輯表單、前台詳情、工具列、產品切換器（展開與收合）、看板漸層。
+
+尚未驗證：
+- 視覺基準定版。
+- 實機軟鍵盤：`interactive-widget=resizes-content` 只在支援的瀏覽器生效，iOS Safari 需實機確認。
+- 實機觸控、螢幕閱讀器朗讀、Firefox／Safari、Windows 主機。
+- 真實 Supabase Storage（留言圖片使用與 Feedback 圖片相同的介面，只以本機替身測過）。
+
+待確認：前台 tester 是否可上傳留言圖片（見變更需求）。

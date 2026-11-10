@@ -5,7 +5,7 @@ import { decodeCursor, encodeCursor, likePattern } from '@/modules/shared/text';
 import { loadFeedbackDto, loadFeedbackDtos, lockFeedback, type FeedbackDto, type Priority } from './repo';
 import { placeFeedbackInRankedRoadmaps, removeFeedbackRanks } from '@/modules/roadmap/ranking';
 import { syncPersonalPlacements } from '@/modules/personal/cleanup';
-import { attachImages, deleteImagesOfFeedback } from './images';
+import { attachImages, deleteImagesOfFeedback, replaceFeedbackImages } from './images';
 
 export interface Actor { id: string; displayName: string; avatarPath: string | null; googlePictureUrl: string | null; revision: number }
 
@@ -147,6 +147,8 @@ export async function createFeedback(
 export interface UpdateFeedbackInput extends ClassificationInput {
   title?: string;
   description?: string;
+  /** DETAIL-03: the full, ordered list of the Feedback's images (kept ones and the editor's pending uploads) */
+  imageIds?: string[];
   expectedRevision: number;
 }
 
@@ -172,6 +174,8 @@ export async function updateFeedback(tx: Db, actor: Actor, productId: string, fe
   if (input.title !== undefined) await tx`update feedback set title = ${input.title} where id = ${feedbackId}`;
   if (input.description !== undefined) await tx`update feedback set description = ${input.description} where id = ${feedbackId}`;
   if (input.priority !== undefined) await tx`update feedback set priority = ${input.priority} where id = ${feedbackId}`;
+  // DETAIL-03: the edit form sends the full, ordered list of the Feedback's images
+  if (input.imageIds !== undefined) await replaceFeedbackImages(tx, actor.id, productId, feedbackId, input.imageIds);
   if (input.visibility !== undefined) await tx`update feedback set visibility = ${input.visibility} where id = ${feedbackId}`;
   const currentTags = (await tx<{ tagId: string }[]>`select tag_id from feedback_tags where feedback_id = ${feedbackId}`).map((r) => r.tagId);
   const tagSet = await resolveTagSet(tx, productId, { tagIds: input.tagIds, versionTagId: input.versionTagId }, currentTags);

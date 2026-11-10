@@ -23,6 +23,8 @@ export interface CommentItem {
   id: string; feedbackId: string; stream: 'general'; kind: 'normal'; body: string;
   author: UserRef; createdAt: string; editedAt: string | null; revision: number; likeCount: number; likedByMe: boolean;
   replyTo: null | { id: string; author: string; excerpt: string | null; removed: boolean };
+  /** COMMENT-06: read through routes that check the Feedback's current access */
+  images: { id: string; width: number; height: number; contentType: string }[];
 }
 
 export function versionGroup(t: Taxonomy) {

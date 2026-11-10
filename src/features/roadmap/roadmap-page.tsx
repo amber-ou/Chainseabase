@@ -14,7 +14,7 @@ import { SortableList } from '@/components/sortable-list';
 import { ConfirmModal, Modal } from '@/components/modal';
 import { IconPlus } from '@/components/icons';
 import { useToast } from '@/components/toast';
-import { useProduct } from '@/features/admin/shell';
+import { useProduct, PageTitle } from '@/features/admin/shell';
 import { FeedbackModal } from '@/features/feedback/feedback-modal';
 import type { CreateInitial } from '@/features/feedback/feedback-create-dialog';
 import { tagOptions, type Feedback, type Taxonomy } from '@/features/feedback/types';
@@ -71,7 +71,7 @@ export function RoadmapPage() {
       {/* R01: the title has no icon; the status columns keep their colour marks */}
       <div className="page-head">
         <div>
-          <h1>Roadmap</h1>
+          <PageTitle><h1>Roadmap</h1></PageTitle>
         </div>
       </div>
       {roadmaps.loading ? <LoadingState /> : roadmaps.error ? <ErrorState message={roadmaps.error.message} onRetry={roadmaps.reload} /> : (
@@ -103,7 +103,7 @@ export function RoadmapPage() {
       {creatingFeedback && tax.data ? (
         <FeedbackModal mode="create" taxonomy={tax.data} initial={creatingFeedback} onClose={() => setCreatingFeedback(null)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} onTaxonomyChanged={() => void tax.reload()} />
       ) : null}
-      {openCard && tax.data ? <FeedbackModal mode="edit" feedbackId={openCard} taxonomy={tax.data} onClose={() => setOpenCard(null)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} /> : null}
+      {openCard && tax.data ? <FeedbackModal mode="edit" feedbackId={openCard} taxonomy={tax.data} onTaxonomyChanged={() => void tax.reload()} onClose={() => setOpenCard(null)} onChanged={() => window.dispatchEvent(new Event('csb:board-refresh'))} /> : null}
     </div>
   );
 }
@@ -236,7 +236,7 @@ function RoadmapBoard({ roadmapId, dimensionLabel, taxonomy, onCreate, onOpen, o
         <div className="list-toolbar-start">
           {/* RM-FIX04 / RM-09: plain text, not a control; the dimension is chosen when a board is created and never changes */}
           {dimensionLabel ? <span className="rm-dimension">當前維度 : <span className="rm-dimension-value">{dimensionLabel}</span></span> : null}
-          {dimensionLabel ? <span className="rm-toolbar-sep" aria-hidden="true" /> : null}
+          {dimensionLabel ? <span className="toolbar-sep" aria-hidden="true" /> : null}
           <div className="rm-toolbar-group" role="group" aria-label="發佈與設定">
             <span className="publish-toggle" data-disabled={canPublish ? undefined : ''}>
               <UiSwitch id="rm-publish" checked={published} disabled={!canPublish || publishing !== null} aria-busy={publishing !== null || undefined}
@@ -246,7 +246,7 @@ function RoadmapBoard({ roadmapId, dimensionLabel, taxonomy, onCreate, onOpen, o
               {publishing !== null ? <Spinner label="儲存中" /> : null}
             </span>
             <IconTip label="看板設定">
-              <UiButton variant="outline" size="icon" className="bg-background" aria-label="看板設定" onClick={onSettings}><Settings2Icon aria-hidden="true" /></UiButton>
+              <UiButton variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" aria-label="看板設定" onClick={onSettings}><Settings2Icon aria-hidden="true" /></UiButton>
             </IconTip>
           </div>
         </div>
@@ -266,7 +266,8 @@ function RoadmapBoard({ roadmapId, dimensionLabel, taxonomy, onCreate, onOpen, o
                 options={[{ id: 'freedom', label: '自由排序' }, { id: 'create_time', label: '建立時間（新到舊）' }]} />
             </FilterSection>
           </FilterPopover>
-          <SearchBox id={`rm-search-${rm.id}`} label="搜尋看板 Feedback" value={q} onChange={setQ} className="list-toolbar-search" />
+          <span className="toolbar-sep" aria-hidden="true" />
+          <SearchBox id={`rm-search-${rm.id}`} label="搜尋看板 Feedback" value={q} onChange={setQ} className="list-toolbar-search" variant="toolbar" />
         </div>
       </div>
       {publishError ? <div className="banner banner-error" role="alert" style={{ marginBottom: 12 }}>{publishError}</div> : null}

@@ -280,15 +280,30 @@ main[tabindex="-1"]:focus { outline: none; }
 .sidebar { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 8px; padding: 16px 12px; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 10px; font-weight: var(--fw-semibold); font-size: 15px; color: var(--text); text-decoration: none; }
 /* NAV-01: brand area with the collapse toggle at its right end (desktop sidebar only) */
-.brand-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding-bottom: 10px; }
+.brand-row { display: flex; align-items: center; padding-bottom: 6px; }
 .brand-row .brand { padding-bottom: 4px; min-width: 0; }
-.sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; border-radius: var(--radius-control); color: var(--muted); cursor: pointer; }
+/* NAV-01: the collapse toggle at the left of an admin page's title (desktop only; phones use the drawer) */
+.page-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; margin-left: -6px; border-radius: var(--radius-control); color: var(--muted); cursor: pointer; }
 .sidebar-toggle:hover { background: var(--raised); color: var(--text); }
 .sidebar-toggle svg { width: 16px; height: 16px; }
-.sidebar-toggle:focus-visible, .product-switch-icon:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.sidebar-toggle:focus-visible, .product-switcher:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+@media (max-width: 1024px) { .sidebar-toggle { display: none; } }
+/* NAV-02..04: the two-line product switcher (shadcn Sidebar block's top switcher, light, real data) */
 .product-switch { margin: 0 0 8px; }
-.product-switch-label { display: block; padding: 0 2px 4px; font-size: var(--fs-small); color: var(--muted); }
-.product-switch .select { font-weight: var(--fw-medium); background-color: var(--surface); }
+.product-switcher { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 8px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.product-switcher:hover, .product-switcher[data-state="open"] { background: var(--raised); }
+.product-mark { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; border-radius: var(--radius-control); background: var(--action); color: var(--on-action); font-size: var(--fs-small); font-weight: var(--fw-semibold); }
+.product-mark svg { width: 16px; height: 16px; }
+.product-switcher-text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; line-height: 1.3; }
+.product-switcher-kicker { font-size: var(--fs-small); color: var(--muted); }
+.product-switcher-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-semibold); }
+.product-switcher-chev { flex: none; width: 16px; height: 16px; color: var(--muted); }
+.product-menu-item { position: relative; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 32px 6px 8px; border-radius: var(--radius-chip); font-size: var(--fs-body); outline: none; cursor: pointer; user-select: none; }
+.product-menu-item[data-highlighted] { background: var(--raised); }
+.product-menu-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.product-menu-check { position: absolute; right: 8px; display: inline-flex; }
+.product-menu-check svg { width: 16px; height: 16px; color: var(--text-2); }
 /* two groups: the nav fills the free height and the bottom group sits on the account area; the
    space between them is the flexible gap (it shrinks to the 12px minimum in short windows) */
 .nav { display: flex; flex-direction: column; gap: 2px; flex: 1 0 auto; }
@@ -329,18 +344,12 @@ main[tabindex="-1"]:focus { outline: none; }
 .shell[data-sidebar="collapsed"] .sidebar .nav-label,
 .shell[data-sidebar="collapsed"] .sidebar .account-text,
 .shell[data-sidebar="collapsed"] .sidebar .nav-need { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.shell[data-sidebar="collapsed"] .sidebar .brand-row { flex-direction: column; gap: 8px; }
 .shell[data-sidebar="collapsed"] .sidebar .brand { justify-content: center; padding: 4px 0; }
 .shell[data-sidebar="collapsed"] .sidebar .nav-item { justify-content: center; gap: 0; padding: 0; position: relative; }
 .shell[data-sidebar="collapsed"] .sidebar .nav-badge { position: absolute; top: 2px; right: 0; min-width: 16px; padding: 0 4px; font-size: 10px; line-height: 16px; }
 .shell[data-sidebar="collapsed"] .sidebar .account-entry { justify-content: center; padding: 6px 0; }
 .shell[data-sidebar="collapsed"] .sidebar .account-entry > svg { display: none; }
-.product-switch-compact { display: flex; justify-content: center; }
-.product-switch-icon { display: inline-flex; align-items: center; justify-content: center; gap: 0; position: relative; width: 40px; height: 36px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text); cursor: pointer; }
-.product-switch-icon:hover { background: var(--raised); }
-.product-initial { display: inline-flex; align-items: center; justify-content: center; font-weight: var(--fw-semibold); font-size: var(--fs-small); }
-.product-initial svg { width: 16px; height: 16px; color: var(--muted); }
-.product-switch-chev { position: absolute; right: 1px; bottom: 1px; width: 10px; height: 10px; color: var(--muted); }
+.shell[data-sidebar="collapsed"] .sidebar .product-switcher { justify-content: center; width: 40px; min-height: 40px; padding: 4px; margin: 0 auto; }
 /* A page that fills the height the shell gives it (RM-FIX03, Roadmap): main becomes a column and the page
    takes the space left; the board inside it grows into the rest. Only pages marked .page-fill change; the
    bottom padding there matches the board's own spacing instead of the general 48px. */
@@ -454,7 +463,10 @@ main[tabindex="-1"]:focus { outline: none; }
 .fbc-banner { margin-bottom: 12px; }
 .fbc-title, .fbc-description { display: block; width: 100%; border: 0; background: transparent; color: var(--text); resize: none; padding: 2px 4px; margin: 0 -4px; border-radius: var(--radius-control); font-family: inherit; overflow-wrap: anywhere; }
 .fbc-title::placeholder, .fbc-description::placeholder { color: var(--muted); opacity: 1; }
-.fbc-title:focus-visible, .fbc-description:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* FB-02: on these borderless editors the keyboard ring is quieter (the 3:1 grey control border instead
+   of the dark slate ring) but still clear; a click hides it (html[data-input="pointer"]), and the caret
+   and the error outline are unchanged */
+.fbc-title:focus-visible, .fbc-description:focus-visible { outline: 2px solid var(--control); outline-offset: 3px; }
 .fbc-title { min-height: 34px; font-size: 21px; line-height: 1.5; font-weight: var(--fw-semibold); field-sizing: content; }
 .fbc-title::placeholder { font-weight: var(--fw-medium); }
 .fbc-title[aria-invalid="true"] { outline: 2px solid var(--negative); outline-offset: 2px; }
@@ -498,6 +510,123 @@ main[tabindex="-1"]:focus { outline: none; }
   .fbc-title { font-size: 19px; }
   .fbc-description { min-height: 120px; }
 }
+/* edit mode (DETAIL-04): the settings row under the attributes; compact previews in the composer */
+.fbc-settings { margin-top: 0; padding-top: 0; }
+.fbc-previews[data-size="sm"] .fbc-preview { width: 64px; height: 52px; }
+.fbc-pill:disabled, .fbc-pills[aria-disabled="true"] .fbc-pill { cursor: progress; opacity: .7; }
+
+/* Feedback detail and comments (follow-up batch 2026-11-10, DETAIL / COMMENT / SCROLL). Layout from the
+   「Feedback 詳情與留言」 reference (STYLE_SPEC.md) mapped to Chainseabase tokens and fonts; only `.fd-*`
+   elements use these rules. Three parts within the visible height: detail (own scroll when long),
+   comment list (own scroll, edge fades and arrows), composer (fixed at the bottom). */
+.fd-dialog { max-height: calc(100dvh - 2rem); }
+.fd-top-actions { position: absolute; top: 18px; right: 16px; z-index: 2; display: flex; gap: 4px; }
+.fd-icon-btn { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--muted); cursor: pointer; }
+.fd-icon-btn svg { width: 16px; height: 16px; }
+.fd-icon-btn:hover { background: var(--raised); color: var(--text); }
+.fd-head-btn { width: 32px; height: 32px; }
+.fd-head-btn svg { width: 18px; height: 18px; }
+.fd-top { flex: 0 0 auto; min-height: 72px; max-height: min(40dvh, 420px); overflow-y: auto; padding: 24px 96px 16px 24px; outline: none; }
+.fd-title { margin: 0; font-size: 21px; line-height: 1.5; font-weight: var(--fw-semibold); color: var(--text); overflow-wrap: anywhere; }
+.fd-banner { margin-top: 10px; }
+.fd-description { margin-top: 10px; font-size: var(--fs-body); line-height: 1.85; color: var(--text-2); overflow-wrap: anywhere; }
+.fd-description .markdown > :first-child { margin-top: 0; }
+.fd-description .markdown > :last-child { margin-bottom: 0; }
+.fd-images { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
+.fd-images a { display: block; border-radius: var(--radius-control); }
+.fd-images img { display: block; width: 104px; height: 80px; object-fit: cover; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--sunken); }
+.fd-top .fbc-pills { margin-top: 16px; padding-bottom: 0; }
+.fd-pill-static { cursor: default; }
+.fd-private { margin-top: 16px; }
+.fd-portal-edit { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.fd-state { padding: 8px 24px 24px; }
+
+.fd-comments { flex: 1 1 auto; min-height: 120px; display: flex; flex-direction: column; border-top: 1px solid var(--rule); padding: 12px 0 0; }
+.fd-comments-head { display: flex; align-items: center; gap: 6px; padding: 0 24px 10px; }
+.fd-comments-head h3 { margin: 0; font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-semibold); }
+.fd-count { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--raised); color: var(--muted); font-size: 11px; line-height: 18px; text-align: center; }
+.fd-comments-frame { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
+.fd-comment-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 20px; padding: 6px 24px 12px; outline-offset: -2px; }
+.fd-empty { margin: 0; color: var(--muted); }
+.fd-more { display: flex; justify-content: center; }
+/* SCROLL-03: fades at the edges where comments are hidden; they never catch input */
+.fd-fade { position: absolute; left: 0; right: 0; height: 28px; pointer-events: none; opacity: 0; transition: opacity .15s ease; }
+.fd-fade[data-on] { opacity: 1; }
+.fd-fade-top { top: 0; background: linear-gradient(to bottom, var(--surface), rgb(255 255 255 / 0)); }
+.fd-fade-bottom { bottom: 0; background: linear-gradient(to top, var(--surface), rgb(255 255 255 / 0)); }
+.fd-scroll-btn { position: absolute; left: 50%; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; margin-left: -14px; padding: 0; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--text-2); box-shadow: var(--shadow-float); cursor: pointer; }
+.fd-scroll-btn svg { width: 16px; height: 16px; }
+.fd-scroll-btn:hover { color: var(--text); background: var(--raised); }
+.fd-scroll-up { top: 2px; }
+.fd-scroll-down { bottom: 2px; }
+@media (prefers-reduced-motion: reduce) { .fd-fade { transition: none; } }
+
+/* COMMENT-01..03: avatar, name, grey bubble with the time right beside it, then like / reply / more */
+.fd-msg { display: flex; align-items: center; gap: 10px; }
+.fd-msg-main { flex: 1 1 0; min-width: 0; }
+.fd-msg-name { margin-bottom: 6px; font-size: 11px; line-height: 16px; font-weight: var(--fw-medium); color: var(--muted); }
+.fd-edited { margin-left: 4px; font-weight: 400; }
+.fd-quote { margin: 0 0 6px; padding: 2px 8px; border-left: 3px solid var(--border); color: var(--muted); font-size: var(--fs-small); overflow-wrap: anywhere; }
+.fd-msg-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fd-bubble { min-width: 0; padding: 10px 13px; border-radius: 10px; background: var(--raised); color: var(--text-2); font-size: var(--fs-body); line-height: 1.8; }
+.fd-bubble p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fd-msg-images { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.fd-msg-images a { display: block; border-radius: 6px; }
+.fd-msg-images img { display: block; width: 72px; height: 56px; object-fit: cover; border-radius: 6px; background: var(--surface); }
+.fd-time { flex: none; font-size: 10px; line-height: 18px; color: var(--muted); white-space: nowrap; }
+.fd-msg-actions { flex: none; display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.fd-like { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 6px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
+.fd-like svg { width: 16px; height: 16px; }
+.fd-like:hover { color: var(--text); }
+.fd-like[aria-pressed="true"] { color: var(--primary); }
+.fd-edit { display: flex; flex-direction: column; gap: 6px; }
+.fd-edit-input { width: 100%; min-height: 64px; max-height: 200px; field-sizing: content; padding: 8px 10px; border: 1px solid var(--control); border-radius: var(--radius-control); background: var(--surface); font: inherit; line-height: 1.7; resize: vertical; }
+.fd-edit-actions { display: flex; justify-content: flex-end; gap: 6px; }
+
+/* COMMENT-04, SCROLL-05: the composer, fixed at the bottom; input and previews are capped in height */
+.fd-composer { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 12px 24px 20px; border-top: 1px solid var(--rule); background: var(--surface); }
+.fd-note { margin: 0; font-size: var(--fs-small); line-height: var(--lh-small); color: var(--muted); }
+.fd-replying { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 2px 8px; border-left: 3px solid var(--border); color: var(--muted); font-size: var(--fs-small); }
+.fd-replying-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd-input-box { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; background: var(--sunken); }
+.fd-input-box:focus-within { border-color: var(--control); }
+.fd-input { display: block; width: 100%; min-height: 56px; max-height: 120px; field-sizing: content; padding: 12px 14px 0; border: 0; background: transparent; color: var(--text); font: inherit; line-height: 1.8; resize: none; }
+.fd-input::placeholder { color: var(--muted); opacity: 1; }
+.fd-input:focus-visible { outline: none; }
+html:not([data-input="pointer"]) .fd-input-box:has(.fd-input:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.fd-input-previews { max-height: 136px; overflow-y: auto; padding: 0 14px; }
+.fd-input-previews:empty { display: none; }
+.fd-input-bar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 8px 12px 10px 14px; }
+.fd-image-btn { display: grid; place-items: center; width: 30px; height: 30px; margin-right: auto; padding: 0; border: 0; border-radius: 5px; background: var(--raised); color: var(--text-2); cursor: pointer; }
+.fd-image-btn svg { width: 18px; height: 18px; }
+.fd-image-btn:hover { background: var(--active); color: var(--primary); }
+.fd-image-btn[aria-disabled="true"] { color: var(--muted); cursor: not-allowed; }
+.fd-send { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: var(--action); color: var(--on-action); cursor: pointer; }
+.fd-send svg { width: 16px; height: 16px; }
+.fd-send:hover { background: var(--action-hover); }
+.fd-send[aria-disabled="true"] { background: var(--disabled-bg); color: var(--disabled-ink); cursor: not-allowed; }
+.fd-error { margin: 0; font-size: var(--fs-small); color: var(--negative); }
+
+@media (max-width: 640px) {
+  .fd-dialog { max-height: calc(100dvh - 1rem); }
+  .fd-top { padding: 20px 88px 12px 18px; max-height: 38dvh; }
+  .fd-top-actions { top: 14px; right: 10px; }
+  .fd-title { font-size: 19px; }
+  .fd-comments-head, .fd-comment-list { padding-left: 18px; padding-right: 18px; }
+  .fd-composer { padding: 10px 18px 14px; }
+  /* the like / reply row takes its own line, on the right (reference, mobile) */
+  .fd-msg { flex-wrap: wrap; row-gap: 4px; }
+  .fd-msg-actions { flex-basis: 100%; justify-content: flex-end; }
+  .fd-icon-btn, .fd-like { min-width: 32px; min-height: 32px; }
+}
+/* SCROLL-02/05: short windows (and an open on-screen keyboard) keep all three parts usable */
+@media (max-height: 640px) {
+  .fd-top { max-height: 32dvh; padding-top: 16px; padding-bottom: 10px; }
+  .fd-comments { min-height: 72px; padding-top: 8px; }
+  .fd-input { min-height: 40px; max-height: 72px; padding-top: 8px; }
+  .fd-input-bar { padding-top: 4px; padding-bottom: 6px; }
+  .fd-composer { padding-top: 8px; padding-bottom: 12px; gap: 6px; }
+}
 /* the images of a created Feedback (detail view, IM03) */
 .fb-images { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .fb-images a { display: block; border-radius: var(--radius-control); }
@@ -529,13 +658,20 @@ main[tabindex="-1"]:focus { outline: none; }
    switch's text is muted and not a pointer target, so it does not look operable */
 .rm-toolbar .list-toolbar-start { gap: 8px 12px; }
 .rm-toolbar-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
-.rm-toolbar-sep { width: 1px; height: 20px; background: var(--border); flex: none; }
+.toolbar-sep { width: 1px; height: 20px; background: var(--border-strong); flex: none; }
 .publish-toggle[data-disabled] label { cursor: default; }
-@media (max-width: 640px) { .rm-toolbar-sep { display: none; } .rm-toolbar .list-toolbar-start { gap: 8px; } }
+@media (max-width: 640px) { .list-toolbar-start > .toolbar-sep { display: none; } .rm-toolbar .list-toolbar-start { gap: 8px; } }
 /* Roadmap board (phase 3 III-R03 to III-R07; reference docs/design-references/phase3-roadmap, mapped to
    tokens). One continuous white surface with thin vertical rules between columns: no gaps, no per-column
    box. A card is at least 300px, so a column at least 300 + 16 + 16 + 1 = 333px; more room is shared.
    The container scrolls sideways (scrollbar hidden; arrows, wheel, keys and touch move it). */
+.board-wrap { position: relative; }
+/* BOARD-01..03: edge fades of every board's visible area, shown only while columns are hidden that way */
+.board-fade { position: absolute; top: 0; bottom: 0; z-index: 1; width: 28px; pointer-events: none; opacity: 0; transition: opacity .15s ease; }
+.board-fade[data-on] { opacity: 1; }
+.board-fade-left { left: 0; background: linear-gradient(to right, var(--surface), rgb(255 255 255 / 0)); }
+.board-fade-right { right: 0; background: linear-gradient(to left, var(--surface), rgb(255 255 255 / 0)); }
+@media (prefers-reduced-motion: reduce) { .board-fade { transition: none; } }
 .board-frame { position: relative; flex: 1 0 auto; display: flex; flex-direction: column; min-width: 0; min-height: 200px; }
 /* the container scrolls sideways and fills the frame's height; the board stretches to it (RM-FIX03) */
 .board-frame .board-scroll { flex: 1 0 auto; display: flex; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-bottom: 0; scroll-snap-type: none; }

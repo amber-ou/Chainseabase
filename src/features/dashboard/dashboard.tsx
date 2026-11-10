@@ -16,7 +16,7 @@ import { Card } from '@/components/ui/card';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { useToast } from '@/components/toast';
-import { useProductList, writeLastProduct, type ProductItem } from '@/features/admin/shell';
+import { useProductList, writeLastProduct, type ProductItem, PageTitle } from '@/features/admin/shell';
 
 // the product chosen from the list: the page remounts for the new product, and focus goes back to its row
 let focusRowAfterSwitch: string | null = null;
@@ -106,7 +106,7 @@ export function ProductListPage() {
     <div className="flex flex-col">
       <div className="page-head">
         <div>
-          <h1 ref={headingRef} tabIndex={-1} className="outline-none">Product</h1>
+          <PageTitle><h1 ref={headingRef} tabIndex={-1} className="outline-none">Product</h1></PageTitle>
         </div>
         {products.length ? create : null}
       </div>

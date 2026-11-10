@@ -324,4 +324,18 @@ before 表示放在該卡之前，after 表示放在該卡之後；兩者皆 nul
 | `GET /products/:p/feedback/:f/images/:i/(original｜thumb)` | team | 圖片內容。 |
 | `GET /public/products/:slug/feedback/:f/images[/:i/(original｜thumb)]` | 受邀成員，且 Feedback 為公開 | 前台讀取；內部、已刪除或不在受邀產品內一律 404。 |
 
+## Feedback 編輯圖片與留言圖片（2026-11-10，追加調整 DETAIL-03、COMMENT-05／06；migration 0007）
+
+| 端點 | 權限 | 規則 |
+| --- | --- | --- |
+| `PATCH /products/:p/feedback/:f` 的 `imageIds` | team | 編輯後的完整圖片清單（依順序，最多 5 個）：保留的既有圖片、以及編輯者本人在同一產品的待用圖片；未列入的既有圖片連同檔案刪除（檔案於 commit 後由 `storage.delete` 刪除）。不符合時回 400，整筆修改不寫入。版本檢查同其他欄位。 |
+| `POST /products/:p/comment-images` | team，後台 | 與 Feedback 圖片相同：原始位元組、JPEG／PNG／WebP 依實際內容判斷、每張 ≤ 5 MB、移除中繼資料；回傳待用圖片（201）。待用上限與 24 小時清除規則相同（各自計算）。 |
+| `DELETE /products/:p/comment-images/:i` | 上傳者本人，後台 | 只能移除自己的待用留言圖片；已關聯者回 404。 |
+| `POST /products/:p/feedback/:f/comments` 的 `imageIds` | team | 最多 5 個，必須是自己在同一產品的待用留言圖片；不符合時回 400，留言不建立。前台留言 API 不接受 `imageIds`（未開放 tester 上傳，待使用者確認）。 |
+| 留言 DTO 的 `images` | 同留言清單 | `[{ id, width, height, contentType }]`，依順序。 |
+| `GET /products/:p/comments/:c/images/:i/(original｜thumb)` | team | 留言未移除、所屬 Feedback 未刪除。 |
+| `GET /public/products/:slug/comments/:c/images/:i/(original｜thumb)` | 受邀成員，且 Feedback 為公開 | 內部、已刪除、留言已移除或不在受邀產品內一律 404。 |
+
+留言移除、Feedback 刪除、產品刪除時，留言圖片的資料列與檔案一併刪除。
+
 圖片回應一律為 `Cache-Control: private, no-store, max-age=0`、`Vary: Cookie`、`X-Content-Type-Options: nosniff`，每次讀取都重新檢查權限。舊的 `/products/:p/feedback/:f/schedule*` 路由回 404，訊息為「Schedule 功能已移除。」，不讀寫任何資料。

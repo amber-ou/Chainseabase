@@ -121,7 +121,8 @@ test('delete the selected product: selection cleared, back to Product, old URLs 
   // Setting is the account entry below the navigation and stays open without a product (checklist A04)
   await expect(nav.locator('.sidebar-foot').getByRole('link', { name: /開啟 Setting/ })).toHaveAttribute('href', '/products/settings');
   await expect(navigation.getByRole('link')).toHaveText(['Product']);
-  await expect(nav.locator('#product-switch')).toHaveValue('');
+  // the switcher says nothing is selected (2026-11-10 NAV-03)
+  await expect(nav.locator('.product-switcher-name')).toHaveText('尚未選取產品');
   await expectNoPageOverflow(page);
   await page.screenshot({ path: test.info().outputPath('deleted-current.png'), fullPage: true });
   await expectNoAxeViolations(page, 'product list with nothing selected');

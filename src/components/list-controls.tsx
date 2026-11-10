@@ -14,11 +14,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
  */
 
 /** Search with a leading icon. The placeholder is a hint only; the field keeps its own accessible name. */
-export function SearchBox({ id, label, value, onChange, placeholder = '搜尋標題或描述…', maxLength = 200, className }: {
+export function SearchBox({ id, label, value, onChange, placeholder = '搜尋標題或描述…', maxLength = 200, className, variant = 'default' }: {
   id: string; label: string; value: string; onChange: (value: string) => void; placeholder?: string; maxLength?: number; className?: string;
+  /** TOOL-03: 'toolbar' (admin Feedback and Roadmap) has no fill, only the shared grey border */
+  variant?: 'default' | 'toolbar';
 }) {
   return (
-    <InputGroup className={`bg-background ${className ?? ''}`}>
+    <InputGroup className={`${variant === 'toolbar' ? 'bg-transparent' : 'bg-background'} ${className ?? ''}`}>
       <InputGroupAddon><SearchIcon aria-hidden="true" /></InputGroupAddon>
       <InputGroupInput id={id} type="search" aria-label={label} placeholder={placeholder} maxLength={maxLength} value={value}
         onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape' && value) { e.preventDefault(); onChange(''); } }} />
@@ -36,6 +38,7 @@ export function SearchBox({ id, label, value, onChange, placeholder = '搜尋標
  * applied. The popover holds the given filter sections and a 清除篩選 action.
  */
 export function FilterPopover({ active, onClear, children }: { active: boolean; onClear: () => void; children: ReactNode }) {
+  // TOOL-01: no resting fill or border; hover and keyboard focus still show it, the tooltip names it
   const titleId = useId();
   return (
     <Popover>
@@ -43,7 +46,7 @@ export function FilterPopover({ active, onClear, children }: { active: boolean; 
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
-            <Button variant="outline" size="icon" className="relative bg-background" aria-label={active ? '篩選（已套用篩選）' : '篩選'}>
+            <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground data-[state=open]:bg-accent" aria-label={active ? '篩選（已套用篩選）' : '篩選'}>
               <ListFilterIcon aria-hidden="true" />
               {active ? <span aria-hidden="true" className="absolute top-1.5 right-1.5 size-2 rounded-full bg-primary ring-2 ring-background" /> : null}
             </Button>

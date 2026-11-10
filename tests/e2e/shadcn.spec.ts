@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { ADMIN, login, openFirstProduct, unique, expectNoPageOverflow } from './helpers';
+import { ADMIN, login, openFirstProduct, unique, expectNoPageOverflow, switchProduct } from './helpers';
 
 /**
  * Product page as a product list (docs/change-requests/sidebar-position.md, phase 3): fixed title,
@@ -9,8 +9,9 @@ import { ADMIN, login, openFirstProduct, unique, expectNoPageOverflow } from './
 const list = (page: Page) => page.getByRole('list', { name: '產品' });
 const row = (page: Page, name: string) => list(page).getByRole('link', { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) });
 const actions = (page: Page, name: string) => list(page).getByRole('button', { name: `${name} 的操作`, exact: true });
-// the sidebar's own switcher is always in the DOM (hidden on phones, where the menu sheet shows a copy)
-const sidebarSwitch = (page: Page) => page.locator('aside.sidebar #product-switch');
+// the sidebar's own switcher is always in the DOM (hidden on phones, where the menu sheet shows a copy);
+// since 2026-11-10 it is the two-line switcher, whose second line is the current product's name
+const sidebarSwitch = (page: Page) => page.locator('aside.sidebar .product-switcher-name');
 const idOf = (url: string) => url.match(/\/products\/([0-9a-f-]{36})/)![1];
 async function slugOf(page: Page, id: string) {
   const r = await page.request.get(`${ADMIN}/api/v1/products`);
@@ -45,7 +46,6 @@ test('Product lists the products with a fixed title; header switcher, rename but
 test('create, rename from the row menu and select from the list stay in sync with the sidebar switcher', async ({ page }) => {
   await login(page, 'admin', 'lead@e2e.test', '專案負責人');
   const original = await openFirstProduct(page);
-  const originalId = idOf(original);
   // create: the new product becomes the selected one everywhere
   await page.getByRole('button', { name: '新增產品', exact: true }).click();
   const create = page.getByRole('dialog', { name: '新增產品' });
@@ -57,7 +57,7 @@ test('create, rename from the row menu and select from the list stay in sync wit
   await expect(row(page, name)).toHaveAttribute('aria-current', 'true');
   const created = page.url();
   const createdId = idOf(created);
-  await expect(sidebarSwitch(page)).toHaveValue(createdId);
+  await expect(sidebarSwitch(page)).toHaveText(name);
   const slug = await slugOf(page, createdId);
 
   // rename from the row menu: current name shown, saved name in the list and the switcher, slug unchanged
@@ -71,7 +71,7 @@ test('create, rename from the row menu and select from the list stay in sync wit
   await rename.getByRole('button', { name: '儲存', exact: true }).click();
   await expect(rename).toBeHidden();
   await expect(row(page, name + ' 更新')).toBeVisible();
-  await expect(sidebarSwitch(page).locator('option:checked')).toHaveText(name + ' 更新');
+  await expect(sidebarSwitch(page)).toHaveText(name + ' 更新');
   await expect(actions(page, name + ' 更新')).toBeFocused();
   expect(page.url()).toBe(created);
   expect(await slugOf(page, createdId)).toBe(slug);
@@ -88,10 +88,10 @@ test('create, rename from the row menu and select from the list stay in sync wit
   await row(page, '產品1').click();
   await expect(page).toHaveURL(original + '/dashboard');
   await expect(row(page, '產品1')).toHaveAttribute('aria-current', 'true');
-  await expect(sidebarSwitch(page)).toHaveValue(originalId);
+  await expect(sidebarSwitch(page)).toHaveText('產品1');
   // ...and the other way round on desktop, where the sidebar switcher is shown
   if (page.viewportSize()!.width > 1024) {
-    await sidebarSwitch(page).selectOption(createdId);
+    await switchProduct(page, name + ' 二次');
     await expect(page).toHaveURL(created);
     await expect(row(page, name + ' 二次')).toHaveAttribute('aria-current', 'true');
   }

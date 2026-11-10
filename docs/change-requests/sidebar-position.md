@@ -497,6 +497,51 @@ Setting
 - **Horizontal Scroll**：三種看板只在看板內捲動，不撐寬頁面。
 - **Taste**：工具列以間距與單一細分隔線建立層級，不加外框或新色彩；沿用既有 tokens。
 
+## 追加調整：側邊欄、工具列與 Feedback 詳情（2026-11-10）
+
+需求來源：使用者附件 `uiux-followup-feedback-detail.md`（2026-11-10）與「Feedback 詳情與留言」附件（AI_HANDOFF、STYLE_SPEC、README、MANIFEST、App.tsx、index.css，及桌面／手機／產品切換器參考圖）。延續 UI-12。狀態：**預覽完成，尚未完成完整回歸**；證據見 tasks.md UI-13。本批**取代** UI-12 的兩項規格：收合按鈕位於品牌區（改到頁首），以及 Calendar 保留「目前產品」副標題（改為移除）。
+
+### 決定與實作位置
+
+| 編號 | 決定 | 位置 |
+| --- | --- | --- |
+| NAV-01 | 收合按鈕從品牌區移到各後台功能頁 h1 左側（`PageTitle`）。展開與收合是同一顆按鈕、同一位置，隨主內容移動；Tooltip、`aria-expanded`、鍵盤操作保留。≤1024px 不顯示（手機用抽屜） | `shell.tsx`、8 個後台頁面、`globals.css` |
+| NAV-02/03 | 產品下拉改為 shadcn Sidebar 頂部切換器結構：方形產品 icon（產品首字）、兩行「目前產品／實際名稱」、上下 chevron。選單與觸發器等寬，選中項目右側勾號；長名稱省略不溢出。可及性名稱來自可見文字（WCAG 2.5.3）。未選取與無產品時，觸發器與選單如實說明，切換沿用未儲存提醒 | `shell.tsx`（`ProductSwitcher`） |
+| NAV-04 | 收合時只保留產品 icon 與 Tooltip「目前產品：〔名稱〕」，選單在右側以 240px 寬開啟；手機抽屜使用完整切換器；收合偏好（cookie）與帳號直達 Setting 不變 | 同上 |
+| TOOL-01～04 | 只限後台 Feedback 與 Roadmap：設定、篩選改為 ghost icon（無常態底色與外框，保留 36px／手機 44px 點擊範圍、hover、焦點、Tooltip）；群組間以 1px 灰色垂直線分隔（Feedback：篩選｜搜尋；Roadmap：維度｜發佈＋設定，篩選｜搜尋，Switch 與文字不拆開）；搜尋框透明底、沿用 `--control` 邊框。`SearchBox` 新增 `variant="toolbar"`，前台搜尋不受影響 | `list-controls.tsx`、`feedback-page.tsx`、`roadmap-page.tsx` |
+| CAL-01 | 移除 Calendar h1 下的「目前產品：…」；保留「產品日曆」區塊 | `calendar-page.tsx` |
+| BOARD-01～03 | 三種看板的可視區左右邊緣各一條 28px 白色至透明漸層，固定於可視區、只在該方向有未顯示欄位時出現；`pointer-events: none`，箭頭在其上。邊界判斷沿用看板的 scroll／ResizeObserver（尺寸改變、側邊欄收合都會重算）；滾輪對應仍只在後台 Roadmap | `board.tsx`、`globals.css` |
+| FB-01 | 根因：輸入法組字時的按鍵（Escape 取消候選字等）被當成鍵盤導覽，頁面切到 keyboard 模式，點擊後打字途中出現焦點框。修正 `InputModality`：組字事件（`isComposing`／keyCode 229）不計；文字欄位內的 Escape 視為打字 | `input-modality.tsx` |
+| FB-02 | 無框標題／描述的鍵盤焦點改為 2px `--control` 灰（3:1），較原本深色框低調；點擊時仍隱藏。未全站移除 outline；編輯模式共用同一表單 | `globals.css` |
+| DETAIL-01/05/06 | 新的詳情：實際標題、描述（基本 Markdown）、圖片縮圖、屬性膠囊（狀態、類別、Person tag、已選標籤、＋）。唯讀、依內容自然高度。不顯示新增表單標題列、新增多筆、取消／建立，也不顯示 Feedback 建立者與建立時間（伺服器紀錄不變）。膠囊變更立即以該筆 revision 儲存，衝突時重新載入並說明 | `feedback-detail.tsx`、`feedback-modal.tsx`、`feedback-create-dialog.tsx`（`AttributePills`） |
+| DETAIL-02 | 右上「⋯」（編輯、刪除）與關閉。刪除先確認，說明留言與圖片（含留言圖片）一併處理；沿用既有軟刪除，不擴大範圍 | `feedback-modal.tsx` |
+| DETAIL-03/04 | 「編輯」切換到與新增共用的表單（編輯模式）：帶入標題、描述、屬性與既有圖片（可移除、可新增），另含優先級、版本、公開範圍。按「儲存」只送出變更欄位，以 PATCH 更新同一筆（含 `imageIds` 完整清單），版本衝突保留輸入；「取消」返回詳情，有變更時先確認。沒有新增路由。既有詳情沒有獨立「歷程」入口，因此無需收納；Personal 的私人 Tag 列保留在詳情 | 同上，`image-uploads.ts`、`image-previews.tsx` |
+| COMMENT-01～03 | 細線分隔的留言區，「留言」與 Feedback 的實際留言數（`commentCount`，非已載入數）。每則：頭像、名稱、灰底氣泡、緊鄰氣泡右側並垂直置中的時間；按讚統一無底色、未按為線框、已按為實心＋海軍藍；回覆（既有引用回覆）與「⋯」（編輯、移除，依權限）。長文字與網址換行；≤640px 時操作列獨占一列靠右 | `comments.tsx` |
+| COMMENT-04/05 | 底部輸入框：左下圖片入口、右下圓形送出（黑底，停用時灰底）。空白、上傳中時為停用狀態；送出失敗保留文字與圖片並可重送；不可重複送出。每則最多 5 張、每張 5 MB、JPEG／PNG／WebP，預覽、移除、上傳中與失敗重試；伺服器依實際內容再驗證 | 同上 |
+| COMMENT-06 | 新資料表 `comment_images`（migration 0007），與 Feedback 圖片相同的私有儲存、待用→關聯流程與檔案生命週期（`comment-images/` 資料夾）。原檔與縮圖每次讀取都檢查：留言未移除、Feedback 未刪除、後台為團隊、前台為受邀成員且 Feedback 為公開；`no-store`。留言移除、Feedback 刪除、產品刪除時資料列與檔案一併刪除；24 小時未用的待用圖片在下次上傳時清除 | `db/migrations/0007_comment_images.sql`、`images.ts`、`comments.ts`、`routes-feedback.ts`、`storage.ts` |
+| COMMENT-07 | 後台 Feedback、Roadmap、Personal 與前台使用同一詳情與留言呈現。前台維持既有權限：作者（或團隊）可編輯文字、無刪除；可按讚、回覆、編輯自己的留言，**不能移除留言，也不能上傳留言圖片**（前台留言 API 不接受 `imageIds`，見下方待確認） | `portal-feedback.tsx` |
+| SCROLL-01～05 | 彈窗限制在可視高度，三區：上方詳情（最高 40dvh，內部捲動；⋯ 與關閉在區外，永遠可按）、中間留言（獨立捲動，上下邊緣漸層與箭頭，只在有隱藏內容時出現，不攔截操作，尊重減少動態效果，內容與尺寸變化會重算）、底部輸入（固定，輸入框最高 120px、預覽區最高 136px）。矮視窗（≤640px 高）收緊間距；viewport 設 `interactive-widget=resizes-content`，支援的瀏覽器在軟鍵盤開啟時縮小版面 | `feedback-detail.tsx`、`comments.tsx`、`globals.css`、`layout.tsx` |
+| Edit images（DETAIL-03 必要 API） | `PATCH /products/:p/feedback/:f` 接受 `imageIds`（完整清單）；`feedback_images (feedback_id, position)` 唯一約束改為 deferrable，以便重排 | migration 0007、`images.ts`、`service.ts` |
+
+### 附件整合界線
+
+- 沒有複製附件的假標題、假留言、固定作者與時間、兩則限制、checkbox 0／1 計數、readOnly 輸入框或停用按鈕；也沒有照搬兩則不同的按讚外觀，依需求文件統一。
+- 沒有載入附件的 `index.css`、Tailwind import 或 Google Fonts；樣式只在 `.fd-*` 範圍，對應既有 tokens 與 Inter／Noto Sans TC。附件的紫色焦點框與送出配色未採用（送出改用專案黑色主要操作）。
+- 使用既有 shadcn Dialog（Portal、overlay、focus trap、Escape、焦點返回），不以示範 section 冒充 modal。
+- 附件沒有「名片」功能，本批未加入。
+
+### 待使用者確認
+
+- **前台 tester 是否可上傳留言圖片**：COMMENT-05 未限定後台，但 tester 目前不能上傳任何圖片（前台建立 Feedback 也不能附圖），開放即擴大前台權限與儲存寫入。本批先只開放團隊（後台）上傳；前台可查看公開 Feedback 留言上的圖片。若要開放，後端只需在前台留言 API 加入同樣的 `imageIds` 與上傳端點。
+
+### UI/UX Pro Max 與 Taste
+
+- **Touch Target Size**：去底框的 icon 按鈕仍為 36px（手機 44px）。
+- **Focus States**：去底色後仍保留鍵盤焦點框；無框編輯區的焦點框改為較淡但符合 3:1 的灰色。
+- **Disabled States**：送出與圖片入口的停用以灰底／游標表達，並以 `aria-disabled` 保留可聚焦說明。
+- **Horizontal / Vertical Scroll**：看板與留言的漸層只在有隱藏內容的方向出現，不攔截操作。
+- **Taste**：沿用既有 tokens；以細線與留白建立層級，沒有新增色彩或外框。
+
 ## 開發文件參照與影響範圍
 
 | 文件 | CC 要參照或調整的部分 |

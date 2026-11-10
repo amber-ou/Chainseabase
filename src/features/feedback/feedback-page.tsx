@@ -8,7 +8,7 @@ import { relativeTime, PRIORITY_LABEL } from '@/client/format';
 import { Avatar, Button, ErrorState, LoadingState, Spinner } from '@/components/ui';
 import { CheckChoices, FilterPopover, FilterSection, QuietEmpty, RadioChoices, SearchBox } from '@/components/list-controls';
 import { IconGlobe, IconPlus } from '@/components/icons';
-import { useProduct } from '@/features/admin/shell';
+import { useProduct, PageTitle } from '@/features/admin/shell';
 import { FeedbackModal } from './feedback-modal';
 import { tagOptions, type Feedback, type Taxonomy } from './types';
 
@@ -78,7 +78,7 @@ export function FeedbackPage() {
     <>
       <div className="page-head">
         <div>
-          <h1>Feedback</h1>
+          <PageTitle><h1>Feedback</h1></PageTitle>
         </div>
       </div>
       {/* F01/F06/F09: one toolbar on the page background; create on the left, Filter and search on the right */}
@@ -95,7 +95,9 @@ export function FeedbackPage() {
               <CheckChoices value={tagIds} onChange={setTagIds} options={tax.data ? tagOptions(tax.data).map((o) => ({ id: o.id, label: o.label, group: o.group })) : []} emptyLabel="這個產品尚無標籤" />
             </FilterSection>
           </FilterPopover>
-          <SearchBox id="fb-search" label="搜尋 Feedback" value={q} onChange={setQ} className="list-toolbar-search" />
+          {/* TOOL-02: a thin rule between the filter and the search */}
+          <span className="toolbar-sep" aria-hidden="true" />
+          <SearchBox id="fb-search" label="搜尋 Feedback" value={q} onChange={setQ} className="list-toolbar-search" variant="toolbar" />
         </div>
       </div>
 
@@ -119,7 +121,7 @@ export function FeedbackPage() {
         <FeedbackModal mode="create" taxonomy={tax.data} onClose={() => setCreating(false)} onChanged={() => void list.reload()} onTaxonomyChanged={() => void tax.reload()} />
       ) : null}
       {item && tax.data ? (
-        <FeedbackModal mode="edit" feedbackId={item} taxonomy={tax.data} onClose={() => openItem(null)} onChanged={() => void list.reload()} />
+        <FeedbackModal mode="edit" feedbackId={item} taxonomy={tax.data} onTaxonomyChanged={() => void tax.reload()} onClose={() => openItem(null)} onChanged={() => void list.reload()} />
       ) : null}
     </>
   );

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ADMIN, login, openFirstProduct, unique } from './helpers';
+import { ADMIN, login, openEdit, openFirstProduct, switchProduct, unique } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -50,11 +50,13 @@ test('FB: create dialog keeps the defaults; continuous creation keeps the classi
   // the hidden fields kept their defaults: internal, P0, no version
   await page.getByLabel('搜尋 Feedback').fill(title);
   await page.getByRole('button', { name: new RegExp(title) }).first().click();
-  const edit = page.getByRole('dialog', { name: title });
-  await expect(edit.getByLabel('狀態').locator('option:checked')).toHaveText('進行中');
-  await expect(edit.getByLabel('優先級')).toHaveValue('P0');
-  await expect(edit.getByLabel('公開範圍')).toHaveValue('internal');
-  await expect(edit.getByLabel('版本').locator('option:checked')).toHaveText('未歸類');
+  // the detail shows the status; the edit form (⋯ → 編輯, 2026-11-10) shows the kept settings
+  const detail = page.getByRole('dialog', { name: title });
+  await expect(detail.getByRole('button', { name: '狀態：進行中' })).toBeVisible();
+  const edit = await openEdit(page, detail);
+  await expect(edit.getByRole('button', { name: '優先級：P0 非常重要' })).toBeVisible();
+  await expect(edit.getByRole('button', { name: '公開範圍：內部' })).toBeVisible();
+  await expect(edit.getByRole('button', { name: '版本：未歸類' })).toBeVisible();
   await expect(edit.getByRole('tab', { name: 'Schedule' })).toHaveCount(0);
 });
 
@@ -89,7 +91,7 @@ test('FB04/IM: a new tag and images are saved with the Feedback and shown in its
   const img = detail.getByRole('img', { name: '圖片 1' });
   await expect(img).toBeVisible();
   await expect.poll(() => img.evaluate((e: HTMLImageElement) => e.complete && e.naturalWidth)).toBeGreaterThan(0);
-  await expect(detail.getByRole('button', { name: new RegExp(`標籤：.*${tagName}`) })).toBeVisible();
+  await expect(detail.getByRole('button', { name: `取消選取：${tagName}` })).toBeVisible();
 });
 
 test('cancelling a create with input and an image asks first and stores nothing', async ({ page }) => {
@@ -128,8 +130,8 @@ test('R06/R10: roadmap move via keyboard-accessible menu changes only the status
   await expect(page.locator('[aria-live="polite"]').filter({ hasText: '已將' })).toHaveText(new RegExp(`已將「${title}」移到「進行中」`));
   await page.getByRole('listitem', { name: /^進行中/ }).getByRole('button', { name: title, exact: true }).click();
   const dlg = page.getByRole('dialog', { name: title });
-  await expect(dlg.getByLabel('狀態').locator('option:checked')).toHaveText('進行中');
-  await expect(dlg.getByLabel('優先級')).toHaveValue('P0');
+  await expect(dlg.getByRole('button', { name: '狀態：進行中' })).toBeVisible();
+  await expect((await openEdit(page, dlg)).getByRole('button', { name: '優先級：P0 非常重要' })).toBeVisible();
 });
 
 test('P03/P05: personal private column with autosave, feedback fields untouched', async ({ page }) => {
@@ -195,7 +197,7 @@ test('A08: a slow response from the previous product never overwrites the newly 
     await route.continue();
   });
   await page.goto(`${base}/feedback`);
-  await page.getByLabel('切換產品').first().selectOption(created.id);
+  await switchProduct(page, name);
   await page.waitForURL(new RegExp(`/products/${created.id}/feedback`));
   await expect(page.getByText('這個產品還沒有 Feedback')).toBeVisible();
   await page.waitForTimeout(3500);

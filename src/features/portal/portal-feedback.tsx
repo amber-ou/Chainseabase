@@ -5,14 +5,15 @@ import { useRef, useState } from 'react';
 import { api, ApiError, errorMessage, newKey } from '@/client/api';
 import { useDebounced, useResource } from '@/client/hooks';
 import { loginHref, useSite } from '@/client/site';
-import { formatDateTime, relativeTime } from '@/client/format';
+import { relativeTime } from '@/client/format';
 import { Avatar, Button, EmptyState, ErrorState, Field, LoadingState } from '@/components/ui';
 import { Modal } from '@/components/modal';
-import { Markdown } from '@/components/markdown';
 import { IconPlus, IconUp } from '@/components/icons';
 import { SearchBox } from '@/components/list-controls';
 import { useToast } from '@/components/toast';
 import { CommentThread, type CommentEndpoints } from '@/features/feedback/comments';
+import { DetailDescription, DetailDialog, DetailImages } from '@/features/feedback/feedback-detail';
+import { CircleDotIcon } from 'lucide-react';
 import { usePortalProduct } from './portal-shell';
 
 export interface PublicFeedback {
@@ -123,11 +124,16 @@ function PortalFeedbackModal({ id, onClose, onChanged, onRequire }: { id: string
   const { product } = usePortalProduct();
   const { me } = useSite();
   const res = useResource<PublicFeedback>(`/public/products/${product.slug}/feedback/${id}`);
+  const imgs = useResource<{ id: string; width: number; height: number }[]>(`/public/products/${product.slug}/feedback/${id}/images`);
   const [editing, setEditing] = useState<{ title: string; description: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  if (res.loading) return <Modal title="Feedback" onClose={onClose}><LoadingState /></Modal>;
-  if (res.error || !res.data) return <Modal title="Feedback" onClose={onClose}><ErrorState title="找不到內容" message="此回饋不存在、已改為內部或已移除。" next={<Button onClick={onClose}>回到清單</Button>} /></Modal>;
+  const [saving, setSaving] = useState(false);
+  if (res.loading) return <DetailDialog title="Feedback" onClose={onClose}><div className="fd-state"><LoadingState /></div></DetailDialog>;
+  if (res.error || !res.data) return <DetailDialog title="Feedback" onClose={onClose}><div className="fd-state"><ErrorState title="找不到內容" message="此回饋不存在、已改為內部或已移除。" next={<Button onClick={onClose}>回到清單</Button>} /></div></DetailDialog>;
   const f = res.data;
+  const base = `/api/v1/public/products/${product.slug}`;
+  // COMMENT-07: the same comment presentation with the portal's own permissions: like and reply as an
+  // invited member, edit own comments; no remove and no image upload
   const endpoints: CommentEndpoints = {
     list: `/public/products/${product.slug}/feedback/${f.id}/comments`,
     create: `/portal/products/${product.id}/feedback/${f.id}/comments`,
@@ -135,43 +141,50 @@ function PortalFeedbackModal({ id, onClose, onChanged, onRequire }: { id: string
     edit: (cid) => `/portal/products/${product.id}/comments/${cid}`,
     remove: null,
     canEdit: (c) => product.viewer.canInteract && c.author.id === me?.id,
+    image: (cid, iid, v) => `${base}/comments/${cid}/images/${iid}/${v}`,
+  };
+  const save = async () => {
+    if (!editing || saving) return;
+    setSaving(true);
+    try {
+      await api.patch(`/portal/products/${product.id}/feedback/${f.id}`, { body: { ...editing, expectedRevision: f.revision } });
+      setEditing(null);
+      setError(null);
+      await res.reload();
+      onChanged();
+    } catch (e) { setError(e instanceof ApiError && e.status === 409 ? '內容已被更新，請重新整理後再編輯。（輸入內容仍保留）' : errorMessage(e)); } finally { setSaving(false); }
   };
   return (
-    <Modal wide title={f.title} onClose={onClose}>
-      <div className="fb-author">
-        <Avatar name={f.author.displayName} url={f.author.avatarUrl} id={f.author.id} size={28} />
-        <span>{f.author.displayName}</span><span className="small">· {formatDateTime(f.createdAt)}</span>
-        <span className="chip">{f.status.name}</span>
-        <span style={{ marginLeft: 'auto' }}><VoteButton productId={product.id} feedback={f} canInteract={product.viewer.canInteract} onRequire={onRequire} onChanged={onChanged} /></span>
-      </div>
-      {error ? <div className="banner banner-error" role="alert">{error}</div> : null}
-      {editing ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Field label="標題">{(p) => <input {...p} className="input" maxLength={200} value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />}</Field>
-          <Field label="描述">{(p) => <textarea {...p} className="textarea" rows={6} maxLength={20000} value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />}</Field>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button variant="primary" onClick={async () => {
-              try {
-                await api.patch(`/portal/products/${product.id}/feedback/${f.id}`, { body: { ...editing, expectedRevision: f.revision } });
-                setEditing(null);
-                await res.reload();
-                onChanged();
-              } catch (e) { setError(e instanceof ApiError && e.status === 409 ? '內容已被更新，請重新整理後再編輯。' : errorMessage(e)); }
-            }}>儲存</Button>
-            <Button variant="cancel" onClick={() => setEditing(null)}>取消</Button>
+    <DetailDialog title={f.title} onClose={onClose}
+      // the portal keeps its own rights: only the author (or team) edits the text; there is no delete here
+      menu={f.canEdit && !editing ? [{ label: '編輯', onSelect: () => setEditing({ title: f.title, description: f.description }) }] : undefined}
+      top={<>
+        {error ? <div className="banner banner-error fd-banner" role="alert">{error}</div> : null}
+        {editing ? (
+          <div className="fd-portal-edit">
+            <Field label="標題">{(p) => <input {...p} className="input" maxLength={200} value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />}</Field>
+            <Field label="描述" hint="支援基本 Markdown（段落、清單、粗體、連結）">{(p) => <textarea {...p} className="textarea" rows={5} maxLength={20000} value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />}</Field>
+            <div className="fd-edit-actions">
+              <Button variant="cancel" onClick={() => { setEditing(null); setError(null); }}>取消</Button>
+              <Button variant="primary" pending={saving} onClick={() => void save()}>儲存</Button>
+            </div>
           </div>
+        ) : (
+          <>
+            <DetailDescription text={f.description} />
+            <DetailImages images={imgs.data ?? []} url={(iid, v) => `${base}/feedback/${f.id}/images/${iid}/${v}`} />
+          </>
+        )}
+        <div className="fbc-pills" role="group" aria-label="Feedback 屬性">
+          <span className="fbc-pill fbc-pill-status fd-pill-static" aria-label={`狀態：${f.status.name}`}><CircleDotIcon aria-hidden="true" /><span className="fbc-pill-text">{f.status.name}</span></span>
+          <VoteButton productId={product.id} feedback={f} canInteract={product.viewer.canInteract} onRequire={onRequire} onChanged={onChanged} />
         </div>
-      ) : (
-        <>
-          <Markdown text={f.description} />
-          {f.canEdit ? <div><Button size="sm" onClick={() => setEditing({ title: f.title, description: f.description })}>編輯內容</Button></div> : null}
-        </>
-      )}
-      <section aria-label="留言">
-        <h3 style={{ marginBottom: 8 }}>留言</h3>
-        {!product.viewer.canInteract ? <p className="small muted" style={{ marginBottom: 8 }}>{product.viewer.loggedIn ? '你尚未受邀參與此產品，只能閱讀留言。' : <>需要 <a href={loginHref(`/p/${product.slug}/feedback?item=${f.id}`)}>登入</a> 並受邀後才能留言。</>}</p> : null}
-        <CommentThread productId={product.id} feedbackId={f.id} isPublic endpoints={endpoints} canInteract={product.viewer.canInteract} onLoginRequired={onRequire} />
-      </section>
-    </Modal>
+      </>}>
+      <CommentThread feedbackId={f.id} isPublic endpoints={endpoints} canInteract={product.viewer.canInteract} onLoginRequired={onRequire}
+        total={f.commentCount} onCountChanged={() => { void res.reload(); onChanged(); }}
+        notice={!product.viewer.canInteract
+          ? <p className="fd-note">{product.viewer.loggedIn ? '你尚未受邀參與此產品，只能閱讀留言。' : <>需要 <a href={loginHref(`/p/${product.slug}/feedback?item=${f.id}`)}>登入</a> 並受邀後才能留言。</>}</p>
+          : undefined} />
+    </DetailDialog>
   );
 }

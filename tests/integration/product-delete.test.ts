@@ -91,7 +91,7 @@ async function connectCalendar(u: TestUser) {
 
 const timed = { summary: '刪除驗收', allDay: false, startDateTime: '2026-11-03T14:00:00+08:00', endDateTime: '2026-11-03T15:00:00+08:00', timeZone: 'Asia/Taipei' };
 
-/** Feedback with tags, comments, likes, votes, images, Personal, notifications, calendar link, invitation. */
+/** Feedback with tags, comments, likes, votes, images (Feedback and comment), Personal, notifications, calendar link, invitation. */
 async function populate(productId: string, calendarId: string, extra: { personTagIds?: string[]; tagIds?: string[]; versionTagId?: string; tester?: TestUser } = {}) {
   const P = `/products/${productId}`;
   let personTagIds = extra.personTagIds;
@@ -108,7 +108,10 @@ async function populate(productId: string, calendarId: string, extra: { personTa
   const attached = expectOk(await uploadImage(w.teamA, productId, png), 201);
   expectOk(await uploadImage(w.teamB, productId, png), 201);
   const f = await createFeedback(w, { title: '要刪的回饋', visibility: 'public', personTagIds, tagIds: extra.tagIds ?? [], imageIds: [attached.id], ...(extra.versionTagId ? { versionTagId: extra.versionTagId } : {}) }, w.teamA, productId);
-  const c = expectOk(await api.post(`${P}/feedback/${f.id}/comments`, { as: w.teamA, body: { body: '團隊留言' } }), 201);
+  // a comment image attached to the comment, and a pending one (2026-11-10, migration 0007)
+  const commentImage = expectOk(await uploadImage(w.teamA, productId, png, 'image/png', 'comment-images'), 201);
+  expectOk(await uploadImage(w.teamB, productId, png, 'image/png', 'comment-images'), 201);
+  const c = expectOk(await api.post(`${P}/feedback/${f.id}/comments`, { as: w.teamA, body: { body: '團隊留言', imageIds: [commentImage.id] } }), 201);
   expectOk(await api.put(`${P}/comments/${c.id}/like`, { as: w.teamB }));
   expectOk(await api.post(`${P}/feedback/${f.id}/comments`, { as: w.teamB, body: { body: '回覆', replyToId: c.id } }), 201);
   if (extra.tester) expectOk(await api.put(`/portal/products/${productId}/feedback/${f.id}/vote`, { site: 'portal', as: extra.tester }));

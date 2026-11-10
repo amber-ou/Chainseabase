@@ -3,6 +3,7 @@ import { AppError, assertRevision, invalid } from '@/server/errors';
 import { emitNotificationEvent } from '@/server/events';
 import { iso } from '@/modules/shared/text';
 import { userRef, type UserRef } from '@/modules/shared/users';
+import { attachCommentImages, deleteImagesOfComment, listCommentImages, type ImageDto } from './images';
 
 /** The acting user (id only is needed here). */
 export interface Actor { id: string }
@@ -21,6 +22,8 @@ export interface CommentDto {
   likeCount: number;
   likedByMe: boolean;
   replyTo: null | { id: string; author: string; excerpt: string | null; removed: boolean };
+  /** COMMENT-06: the comment's images, read through routes that check the Feedback's access */
+  images: ImageDto[];
 }
 
 interface Row {
@@ -31,7 +34,7 @@ interface Row {
   seq: number;
 }
 
-function toDto(r: Row): CommentDto {
+function toDto(r: Row, images: ImageDto[] = []): CommentDto {
   return {
     id: r.id,
     feedbackId: r.feedbackId,
@@ -47,6 +50,7 @@ function toDto(r: Row): CommentDto {
     replyTo: r.replyToId
       ? { id: r.replyToId, author: r.parentAuthor ?? '', removed: Boolean(r.parentDeleted), excerpt: r.parentDeleted ? null : (r.parentBody ?? '').slice(0, 120) }
       : null,
+    images,
   };
 }
 
@@ -69,8 +73,9 @@ async function queryComments(db: Db, where: ReturnType<Db>, viewerId: string | n
     limit ${limit + 1}
   `;
   const page = rows.slice(0, limit);
+  const images = await listCommentImages(db, page.map((r) => r.id));
   return {
-    items: page.map(toDto),
+    items: page.map((r) => toDto(r, images.get(r.id))),
     nextCursor: rows.length > limit ? String(page[page.length - 1].seq) : null,
   };
 }
@@ -100,7 +105,7 @@ async function lockLiveFeedback(tx: Db, productId: string, feedbackId: string) {
 }
 
 export async function createGeneralComment(
-  tx: Db, actor: Actor, productId: string, feedbackId: string, input: { body: string; replyToId?: string | null }, mode: 'team' | 'portal',
+  tx: Db, actor: Actor, productId: string, feedbackId: string, input: { body: string; replyToId?: string | null; imageIds?: string[] }, mode: 'team' | 'portal',
 ) {
   const f = await lockLiveFeedback(tx, productId, feedbackId);
   if (mode === 'portal' && f.visibility !== 'public') throw new AppError('NOT_FOUND');
@@ -117,6 +122,7 @@ export async function createGeneralComment(
     values (${productId}, ${feedbackId}, 'general', 'normal', ${input.body}, ${actor.id}, ${input.replyToId ?? null}, ${quotedAuthorId})
     returning id
   `;
+  await attachCommentImages(tx, actor.id, productId, c.id, input.imageIds ?? []);
   await emitNotificationEvent(tx, {
     productId, actorId: actor.id, feedbackId, type: 'comment.created',
     intents: [{ recipientId: f.authorId, reason: 'comment' }],
@@ -157,6 +163,8 @@ export async function deleteComment(tx: Db, productId: string, commentId: string
   const c = await lockComment(tx, productId, commentId);
   assertRevision(c.revision, expectedRevision);
   await tx`update comments set deleted_at = now(), revision = revision + 1 where id = ${commentId}`;
+  // nothing shows a removed comment any more, so its images (rows now, files after commit) go too
+  await deleteImagesOfComment(tx, commentId);
 }
 
 /** PUT/DELETE semantics: set the like to exist or not exist. */

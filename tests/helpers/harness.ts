@@ -108,8 +108,8 @@ export function expectOk(r: ApiResult, status?: number) {
 }
 
 /** Upload a pending Feedback image (raw body) as a team member, like the create dialog does. */
-export async function uploadImage(as: TestUser, productId: string, data: Buffer, type = 'image/png') {
-  const res = await handleApiRequest(new Request(`${ADMIN}/api/v1/products/${productId}/feedback-images`, {
+export async function uploadImage(as: TestUser, productId: string, data: Buffer, type = 'image/png', kind: 'feedback-images' | 'comment-images' = 'feedback-images') {
+  const res = await handleApiRequest(new Request(`${ADMIN}/api/v1/products/${productId}/${kind}`, {
     method: 'POST', body: new Uint8Array(data),
     headers: { host: new URL(ADMIN).host, origin: ADMIN, cookie: `csb_session=${as.admin}`, 'content-type': type },
   }));
